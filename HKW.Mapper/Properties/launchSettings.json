@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "HKW.Mapper": {
+      "commandName": "Project"
+    },
+    "HKW.Mapper.SourceGenerator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "..\\HKW.Mapper.Demo\\HKW.Mapper.Demo.csproj"
+    }
+  }
+}
