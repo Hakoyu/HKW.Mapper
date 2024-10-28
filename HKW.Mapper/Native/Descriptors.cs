@@ -7,7 +7,7 @@ namespace HKW.HKWMapper;
 
 internal static class Descriptors
 {
-    public static readonly DiagnosticDescriptor SameMethodNameDescriptor =
+    public static readonly DiagnosticDescriptor SameMethodName =
         new(
             id: "M0001",
             title: "Same method name exists",
@@ -16,7 +16,7 @@ internal static class Descriptors
             DiagnosticSeverity.Error,
             isEnabledByDefault: true
         );
-    public static readonly DiagnosticDescriptor SameTargetNameDescriptor =
+    public static readonly DiagnosticDescriptor SameTargetName =
         new(
             id: "M0002",
             title: "Same target property name exists",
@@ -26,7 +26,7 @@ internal static class Descriptors
             isEnabledByDefault: true
         );
 
-    public static readonly DiagnosticDescriptor ConverterDescriptor =
+    public static readonly DiagnosticDescriptor ConverterError =
         new(
             id: "M0003",
             title: "Converter not implemented IConverter interface",

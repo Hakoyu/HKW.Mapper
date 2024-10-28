@@ -9,6 +9,29 @@ namespace HKW.HKWMapper;
 internal static class NativeExtensions
 {
     /// <summary>
+    /// 从当前类以及父类中获取成员
+    /// </summary>
+    /// <typeparam name="TMemberType">成员类型</typeparam>
+    /// <param name="symbol">当前类</param>
+    /// <param name="memberName">成员名称</param>
+    /// <returns>成员</returns>
+    public static TMemberType? GetMember<TMemberType>(
+        this INamedTypeSymbol symbol,
+        string memberName
+    )
+        where TMemberType : ISymbol
+    {
+        var temp = symbol;
+        var member = temp.GetMembers(memberName).OfType<TMemberType>().FirstOrDefault();
+        while (member is null && temp.BaseType is not null)
+        {
+            temp = temp.BaseType;
+            member = temp.GetMembers(memberName).OfType<TMemberType>().FirstOrDefault();
+        }
+        return member;
+    }
+
+    /// <summary>
     /// 获取全名
     /// </summary>
     /// <param name="typeSymbol"></param>

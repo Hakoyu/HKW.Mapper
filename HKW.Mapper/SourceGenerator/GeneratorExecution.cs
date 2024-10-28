@@ -105,13 +105,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     /// ConverterType
     /// </summary>
     public Type? ConverterType {{ get; set; }}
-}}
-/// <summary>
-/// {mapMethod}IgnorePropertyAttribute
-/// <para>This attribute is only used in <c>{mapMethod}</c></para>
-/// </summary>
-[AttributeUsage(AttributeTargets.Property)]
-public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
+}}"
             );
         }
 
@@ -160,7 +154,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                     if (mapMethods.Add(methodName!) is false)
                     {
                         var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameMethodNameDescriptor,
+                            Descriptors.SameMethodName,
                             attribute.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                                 attribute.ApplicationSyntaxReference.Span
                             ),
@@ -185,7 +179,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                     if (mapMethods.Add(methodName!) is false)
                     {
                         var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameMethodNameDescriptor,
+                            Descriptors.SameMethodName,
                             classSymbol.Locations[0],
                             methodName
                         );
@@ -306,7 +300,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                 x.AttributeClass!.GetFullName() == mapPropertyAttributeName
             );
             // 如果没有特性,则直接使用同名属性
-            if (attributeDatas?.Any() is null)
+            if (attributeDatas.Any() is not true)
             {
                 // 如果目标属性不存在或者没有Set方法或者是静态属性,则跳过
                 if (
@@ -372,7 +366,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                             )
                             {
                                 var errorDiagnostic = Diagnostic.Create(
-                                    Descriptors.ConverterDescriptor,
+                                    Descriptors.ConverterError,
                                     attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                                         attributeData.ApplicationSyntaxReference.Span
                                     ),
@@ -387,7 +381,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                     if (targetPropertys.Add(targetPropertyName!) is false)
                     {
                         var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameTargetNameDescriptor,
+                            Descriptors.SameTargetName,
                             attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                                 attributeData.ApplicationSyntaxReference.Span
                             ),
@@ -398,13 +392,11 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                 }
                 // 如果目标类型不存在属性名或者是静态属性,则跳过
                 if (
-                    target
-                        .Type.GetMembers(targetPropertyName!)
-                        .OfType<IPropertySymbol>()
-                        .FirstOrDefault()
+                    target.Type.GetMember<IPropertySymbol>(targetPropertyName!)
                         is not IPropertySymbol targetProperty
                     || targetProperty.SetMethod is null
                     || targetProperty.IsStatic
+                    || targetProperty.SetMethod.DeclaredAccessibility < Accessibility.Internal
                 )
                     continue;
                 propertyAction ??= $"target.{targetPropertyName}";
@@ -467,7 +459,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                 x.AttributeClass!.GetFullName() == mapPropertyAttributeName
             );
             // 如果没有特性,则直接使用同名属性
-            if (attributeDatas?.Any() is null)
+            if (attributeDatas.Any() is not true)
             {
                 // 如果目标属性不存在或者没有Set方法或者是静态属性,则跳过
                 if (
@@ -508,7 +500,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                     {
                         var action = actionData.Value?.Value?.ToString();
                         if (string.IsNullOrWhiteSpace(action) is false)
-                            propertyAction = action!.Replace("{value}", targetPropertyName);
+                            propertyAction = action!.Replace("{value}", property.Name);
                     }
                     if (
                         datas.TryGetValue(
@@ -533,7 +525,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                             )
                             {
                                 var errorDiagnostic = Diagnostic.Create(
-                                    Descriptors.ConverterDescriptor,
+                                    Descriptors.ConverterError,
                                     attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                                         attributeData.ApplicationSyntaxReference.Span
                                     ),
@@ -548,7 +540,7 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                     if (targetPropertys.Add(targetPropertyName!) is false)
                     {
                         var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameTargetNameDescriptor,
+                            Descriptors.SameTargetName,
                             attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                                 attributeData.ApplicationSyntaxReference.Span
                             ),
@@ -559,13 +551,11 @@ public sealed class {mapMethod}IgnorePropertyAttribute : Attribute {{ }}"
                 }
                 // 如果目标属性不存在或者没有Set方法或者是静态属性,则跳过
                 if (
-                    target
-                        .Type.GetMembers(targetPropertyName!)
-                        .OfType<IPropertySymbol>()
-                        .FirstOrDefault()
+                    target.Type.GetMember<IPropertySymbol>(targetPropertyName!)
                         is not IPropertySymbol targetProperty
                     || targetProperty.SetMethod is null
                     || targetProperty.IsStatic
+                    || targetProperty.SetMethod.DeclaredAccessibility < Accessibility.Internal
                 )
                     continue;
                 propertyAction ??= $"source.{property.Name}";
