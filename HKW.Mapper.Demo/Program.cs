@@ -23,7 +23,6 @@ internal class Program
 
 [MapTo(typeof(Test2))]
 [MapFrom(typeof(Test2))]
-//[MapTo(typeof(Test2), "ToTestXXX")]
 internal class Test1
 {
     [Test1MapToTest2Property(typeof(TestConverter))]
@@ -65,14 +64,14 @@ internal class Test3
     public string? Value4 { get; set; }
 }
 
-internal class TestConverter : MapConverter<int, string>
+internal class TestConverter : IMapConverter<int, string>
 {
-    public override string Convert(object source, int value)
+    public string Convert(object source, int value)
     {
         return value.ToString();
     }
 
-    public override int ConvertBack(object source, string value)
+    public int ConvertBack(object source, string value)
     {
         return int.Parse(value);
     }

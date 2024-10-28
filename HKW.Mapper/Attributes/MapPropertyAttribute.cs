@@ -20,6 +20,7 @@ internal sealed class MapPropertyAttribute : Attribute
 
     /// <summary>
     /// PropertyName
+    /// <para>Default is current property name</para>
     /// </summary>
     public string? PropertyName { get; set; }
 
