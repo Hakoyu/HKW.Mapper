@@ -15,18 +15,17 @@ internal class Program
 
     static void Main(string[] args)
     {
-        var test = new Test1();
+        var test = new Test2();
         //test.Value ??= 1;
         //test.
     }
 }
 
-[MapTo(typeof(Test2))]
+[MapTo(typeof(Test2), ScrutinyMode = true)]
 [MapFrom(typeof(Test2))]
 internal class Test1
 {
-    [Test1MapToTest2Property(typeof(TestConverter))]
-    [Test1MapFromTest2Property(typeof(TestConverter))]
+    [Test1MapToTest2Property(nameof(Test2.Value), PropertyAction = "source.{value}")]
     public int Value { get; set; }
 
     [Test1MapToTest2Property(typeof(TestConverter))]
@@ -48,7 +47,7 @@ internal class Test1
 
 internal class Test2
 {
-    internal string? Value { get; set; }
+    internal int Value { get; set; }
     public string? Value1 { get; set; }
     public string? Value2 { get; set; }
     public string? Value3 { get; set; }

@@ -36,7 +36,7 @@ internal static class NativeExtensions
     /// </summary>
     /// <param name="typeSymbol"></param>
     /// <returns></returns>
-    public static string GetFullName(this INamedTypeSymbol typeSymbol)
+    public static string GetFullName(this ITypeSymbol typeSymbol)
     {
         return $"{typeSymbol.ContainingNamespace}.{typeSymbol.Name}";
     }

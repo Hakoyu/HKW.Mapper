@@ -27,4 +27,9 @@ public sealed class MapToAttribute : Attribute
     /// 方法名称, 默认名称为 <c>MapTo{TargetClassName}</c>
     /// </summary>
     public string? MethodName { get; set; }
+
+    /// <summary>
+    /// 严格模式
+    /// </summary>
+    public bool ScrutinyMode { get; set; }
 }
