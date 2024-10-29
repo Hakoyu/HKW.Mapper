@@ -48,7 +48,7 @@ internal class Test1
 
 internal class Test2
 {
-    public string? Value { get; set; }
+    internal string? Value { get; set; }
     public string? Value1 { get; set; }
     public string? Value2 { get; set; }
     public string? Value3 { get; set; }
