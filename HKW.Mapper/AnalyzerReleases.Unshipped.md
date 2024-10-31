@@ -15,3 +15,5 @@ M0007 | HKWMapper | Error | Descriptors
 M0008 | HKWMapper | Error | Descriptors
 M0009 | HKWMapper | Error | Descriptors
 M0010 | HKWMapper | Error | Descriptors
+M0011 | HKWMapper | Error | Descriptors
+M0012 | HKWMapper | Error | Descriptors

@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Numerics;
 using System.Windows.Input;
 using HKW.HKWMapper;
@@ -15,17 +16,44 @@ internal class Program
 
     static void Main(string[] args)
     {
-        var test = new Test2();
+        var test1 = new Test1();
+        var test2 = test1.MapToTest2(new());
+        //var test = new Test2();
+        //var c = new TestMapConfig();
         //test.Value ??= 1;
         //test.
     }
 }
 
-[MapTo(typeof(Test2), ScrutinyMode = true)]
+internal class TestMapConfig : MapConfig<Test1, Test2>
+{
+    public TestMapConfig()
+    {
+        AddMap(
+            x => x.Value,
+            (s, t) =>
+            {
+                s.Value = t.Value;
+            }
+        );
+    }
+
+    public override void BeginMapAction(Test1 source, Test2 target)
+    {
+        return;
+    }
+
+    public override void EndMapAction(Test1 source, Test2 target)
+    {
+        return;
+    }
+}
+
+[MapTo(typeof(Test2), MapConfig = typeof(TestMapConfig))]
 [MapFrom(typeof(Test2))]
 internal class Test1
 {
-    [Test1MapToTest2Property(nameof(Test2.Value), PropertyAction = "source.{value}")]
+    [Test1MapToTest2Property(nameof(Test2.Value))]
     public int Value { get; set; }
 
     [Test1MapToTest2Property(typeof(TestConverter))]
@@ -54,13 +82,12 @@ internal class Test2
     public string? Value4 { get; set; }
 }
 
-internal class Test3
+internal static class Test3
 {
-    public int Value { get; set; }
-    public string? Value1 { get; set; }
-    public string? Value2 { get; set; }
-    public string? Value3 { get; set; }
-    public string? Value4 { get; set; }
+    public class Test33
+    {
+        public int Value { get; set; }
+    }
 }
 
 internal class TestConverter : IMapConverter<int, string>

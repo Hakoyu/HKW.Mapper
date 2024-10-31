@@ -48,13 +48,17 @@ internal static class NativeExtensions
     /// <param name="replaceGenericSign">将泛型符号 <c>&lt;&gt;</c> 替换为 <c>{}</c></param>
     /// <returns></returns>
     public static string GetNameAndGeneric(
-        this INamedTypeSymbol typeSymbol,
+        this ITypeSymbol typeSymbol,
         bool replaceGenericSign = false
     )
     {
-        if (replaceGenericSign)
-            return $"{typeSymbol.Name}{(typeSymbol.TypeParameters.Length > 0 ? $"{{{string.Join(", ", typeSymbol.TypeParameters)}}}" : string.Empty)}";
-        return $"{typeSymbol.Name}{(typeSymbol.TypeParameters.Length > 0 ? $"<{string.Join(", ", typeSymbol.TypeParameters)}>" : string.Empty)}";
+        if (typeSymbol is INamedTypeSymbol namedTypeSymbol)
+        {
+            if (replaceGenericSign)
+                return $"{namedTypeSymbol.Name}{(namedTypeSymbol.TypeParameters.Length > 0 ? $"{{{string.Join(", ", namedTypeSymbol.TypeParameters)}}}" : string.Empty)}";
+            return $"{namedTypeSymbol.Name}{(namedTypeSymbol.TypeParameters.Length > 0 ? $"<{string.Join(", ", namedTypeSymbol.TypeParameters)}>" : string.Empty)}";
+        }
+        return typeSymbol.GetFullName();
     }
 
     /// <summary>
@@ -64,13 +68,17 @@ internal static class NativeExtensions
     /// <param name="replaceGenericSign">将泛型符号 <c>&lt;&gt;</c> 替换为 <c>{}</c></param>
     /// <returns></returns>
     public static string GetFullNameAndGeneric(
-        this INamedTypeSymbol typeSymbol,
+        this ITypeSymbol typeSymbol,
         bool replaceGenericSign = false
     )
     {
-        if (replaceGenericSign)
-            return $"{typeSymbol.ContainingNamespace}.{typeSymbol.Name}{(typeSymbol.TypeParameters.Length > 0 ? $"{{{string.Join(", ", typeSymbol.TypeParameters)}}}" : string.Empty)}";
-        return $"{typeSymbol.ContainingNamespace}.{typeSymbol.Name}{(typeSymbol.TypeParameters.Length > 0 ? $"<{string.Join(", ", typeSymbol.TypeParameters)}>" : string.Empty)}";
+        if (typeSymbol is INamedTypeSymbol namedTypeSymbol)
+        {
+            if (replaceGenericSign)
+                return $"{namedTypeSymbol}{(namedTypeSymbol.TypeParameters.Length > 0 ? $"{{{string.Join(", ", namedTypeSymbol.TypeParameters)}}}" : string.Empty)}";
+            return $"{namedTypeSymbol}{(namedTypeSymbol.TypeParameters.Length > 0 ? $"<{string.Join(", ", namedTypeSymbol.TypeParameters)}>" : string.Empty)}";
+        }
+        return typeSymbol.GetFullName();
     }
 
     /// <summary>
@@ -144,11 +152,20 @@ internal static class NativeExtensions
             // 如果是多值 (params) 则添加多值
             if (info.Kind is TypedConstantKind.Array)
             {
-                attributeValues.Add(name, new TypeAndValue(info.Values));
+                if (
+                    attributeValues.ContainsKey(name)
+                    && attributeValues[name].Values?.Any() is not true
+                )
+                    attributeValues[name] = new TypeAndValue(info.Values);
+                else
+                    attributeValues.Add(name, new TypeAndValue(info.Values));
             }
             else
             {
-                attributeValues.Add(name, new TypeAndValue(info));
+                if (attributeValues.ContainsKey(name) && attributeValues[name].Value?.Value is null)
+                    attributeValues[name] = new TypeAndValue(info);
+                else
+                    attributeValues.Add(name, new TypeAndValue(info));
             }
         }
         if (attributeValues.Count == 0)

@@ -25,13 +25,6 @@ internal sealed class MapPropertyAttribute : Attribute
     public string? PropertyName { get; set; }
 
     /// <summary>
-    /// PropertyAction
-    /// <para>Default is <c>[source|target].{value}</c></para>
-    /// <para>e.g. <c>source.{value}.ToString()</c>, <c>int.Parse(target.{value})</c> etc.</para>
-    /// </summary>
-    public string? PropertyAction { get; set; }
-
-    /// <summary>
     /// ConverterType
     /// </summary>
     public Type? ConverterType { get; set; }

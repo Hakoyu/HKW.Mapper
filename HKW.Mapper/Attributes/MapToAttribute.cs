@@ -11,11 +11,11 @@ public sealed class MapToAttribute : Attribute
 {
     /// <inheritdoc/>
     /// <param name="TargetType">目标类型</param>
-    /// <param name="MethodName">方法名称, 默认名称为 <c>MapTo{TargetClassName}</c></param>
-    public MapToAttribute(Type TargetType, string? MethodName = null)
+    /// <param name="MapConfig">映射设置</param>
+    public MapToAttribute(Type TargetType, Type? MapConfig = null)
     {
         this.TargetType = TargetType;
-        this.MethodName = MethodName;
+        this.MapConfig = MapConfig;
     }
 
     /// <summary>
@@ -32,4 +32,9 @@ public sealed class MapToAttribute : Attribute
     /// 严格模式
     /// </summary>
     public bool ScrutinyMode { get; set; }
+
+    /// <summary>
+    /// 映射设置
+    /// </summary>
+    public Type? MapConfig { get; set; }
 }

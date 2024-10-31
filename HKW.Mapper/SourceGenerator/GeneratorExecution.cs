@@ -17,6 +17,9 @@ internal partial class GeneratorExecution
     public Compilation Compilation { get; private set; } = null!;
 
     public INamedTypeSymbol IMapConverterType { get; private set; } = null!;
+    public INamedTypeSymbol MapConfigType { get; private set; } = null!;
+    public Dictionary<INamedTypeSymbol, MapConfigInfo> MapConfigInfoByType { get; private set; } =
+        null!;
 
     public void Execute()
     {
@@ -25,6 +28,10 @@ internal partial class GeneratorExecution
             return;
         Compilation = compilation;
         IMapConverterType = Compilation.GetTypeByMetadataName(typeof(IMapConverter<,>).FullName)!;
+        MapConfigType = Compilation.GetTypeByMetadataName(typeof(MapConfig<,>).FullName)!;
+
+        MapConfigInfoByType = GetMapConfigInfos(ExecutionContext);
+
         foreach (var compilationSyntaxTree in compilation.SyntaxTrees)
         {
             ParseSyntaxTree(compilationSyntaxTree);
@@ -78,9 +85,12 @@ internal partial class GeneratorExecution
 /// {mapMethod}PropertyAttribute
 /// <para>This attribute is only used in <c>{mapMethod}</c></para>
 /// </summary>
-[AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Property)]
 public sealed class {mapMethod}PropertyAttribute : Attribute
 {{
+    /// <inheritdoc/>
+    public {mapMethod}PropertyAttribute() {{ }}
+
     /// <inheritdoc/>
     public {mapMethod}PropertyAttribute(string PropertyName)
     {{
@@ -100,13 +110,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     public string? PropertyName {{ get; set; }}
 
     /// <summary>
-    /// PropertyAction
-    /// <para>Default is <c>[source|traget].{{value}}</c></para>
-    /// <para>e.g. <c>source.{{value}}.ToString()</c>, <c>int.Parse(source.{{value}})</c> etc.</para>
-    /// </summary>
-    public string? PropertyAction {{ get; set; }}
-
-    /// <summary>
     /// ConverterType
     /// </summary>
     public Type? ConverterType {{ get; set; }}
@@ -119,83 +122,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         return stringStream;
     }
 
-    private HashSet<string> GetMapMethods(SyntaxTree compilationSyntaxTree)
-    {
-        var mapMethods = new HashSet<string>();
-        var semanticModel = ExecutionContext.Compilation.GetSemanticModel(compilationSyntaxTree);
-        var declaredClasses = compilationSyntaxTree
-            .GetRoot()
-            .DescendantNodesAndSelf()
-            .OfType<ClassDeclarationSyntax>();
-        foreach (var declaredClass in declaredClasses)
-        {
-            var classSymbol = (INamedTypeSymbol)
-                ModelExtensions.GetDeclaredSymbol(semanticModel, declaredClass)!;
-            var attributeDatas = classSymbol
-                .GetAttributes()
-                .Where(x =>
-                    x.AttributeClass!.ToString() is string name
-                    && (
-                        name == typeof(MapToAttribute).FullName
-                        || name == typeof(MapFromAttribute).FullName
-                    )
-                );
-            foreach (var attribute in attributeDatas)
-            {
-                var attributeName = attribute.AttributeClass!.GetFullName();
-                if (attributeName == typeof(MapToAttribute).FullName)
-                {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
-                        continue;
-                    if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
-                    )
-                        continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var methodData);
-                    var methodName = methodData.Value?.Value?.ToString();
-                    var type = (INamedTypeSymbol)value.Value!.Value.Value!;
-                    if (string.IsNullOrWhiteSpace(methodName))
-                        methodName = $"{classSymbol.Name}MapTo{type.Name}";
-                    if (mapMethods.Add(methodName!) is false)
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameMethodName,
-                            attribute.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                                attribute.ApplicationSyntaxReference.Span
-                            ),
-                            methodName
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                    }
-                }
-                else if (attributeName == typeof(MapFromAttribute).FullName)
-                {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
-                        continue;
-                    if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
-                    )
-                        continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var methodData);
-                    var methodName = methodData.Value?.Value?.ToString();
-                    var type = (INamedTypeSymbol)value.Value!.Value.Value!;
-                    if (string.IsNullOrWhiteSpace(methodName))
-                        methodName = $"{classSymbol.Name}MapFrom{type.Name}";
-                    if (mapMethods.Add(methodName!) is false)
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameMethodName,
-                            classSymbol.Locations[0],
-                            methodName
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                    }
-                }
-            }
-        }
-        return mapMethods;
-    }
-
     private void ParseSyntaxTree(SyntaxTree syntaxTree)
     {
         var semanticModel = Compilation.GetSemanticModel(syntaxTree);
@@ -206,20 +132,27 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
 
         var mapMethodsByType = GetMapTargetAndMethod(semanticModel, declaredClasses);
         var converters = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-        foreach (var map in mapMethodsByType)
+        var configs = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        foreach (var pair in mapMethodsByType)
         {
-            GenerateMap(syntaxTree, converters, map);
+            GenerateMap(syntaxTree, converters, configs, pair);
         }
 
         if (converters.Count > 0)
         {
             GenerateComverter(syntaxTree, converters);
         }
+
+        if (configs.Count > 0)
+        {
+            GenerateConfig(syntaxTree, configs);
+        }
     }
 
     private void GenerateMap(
         SyntaxTree syntaxTree,
         HashSet<INamedTypeSymbol> converters,
+        HashSet<INamedTypeSymbol> configs,
         KeyValuePair<
             INamedTypeSymbol,
             (HashSet<MapInfo> ToMethods, HashSet<MapInfo> FromMethods)
@@ -243,12 +176,12 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         writer.Indent++;
         foreach (var target in pair.Value.ToMethods)
         {
-            GenerateToMethod(converters, pair.Key, writer, target);
+            GenerateToMethod(converters, configs, pair.Key, writer, target);
         }
 
         foreach (var target in pair.Value.FromMethods)
         {
-            GenerateFromMethod(converters, pair.Key, writer, target);
+            GenerateFromMethod(converters, configs, pair.Key, writer, target);
         }
 
         writer.Indent--;
@@ -263,158 +196,51 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
 
     private void GenerateToMethod(
         HashSet<INamedTypeSymbol> converters,
+        HashSet<INamedTypeSymbol> configs,
         INamedTypeSymbol sourceType,
         IndentedTextWriter writer,
-        MapInfo target
+        MapInfo mapInfo
     )
     {
-        var accessibility = sourceType.GetLowestAccessibility(target.Type);
+        var accessibility = sourceType.GetLowestAccessibility(mapInfo.TargetType);
         writer.WriteLine(
-            $"{accessibility} static {target.Type.GetFullNameAndGeneric()} {target.MethodName}(this {sourceType.GetFullNameAndGeneric()} source, {target.Type.GetFullNameAndGeneric()} target)"
+            $"{accessibility} static {mapInfo.TargetType.GetFullNameAndGeneric()} {mapInfo.MethodName}(this {sourceType.GetFullNameAndGeneric()} source, {mapInfo.TargetType.GetFullNameAndGeneric()} target)"
         );
         writer.WriteLine("{");
         writer.Indent++;
         var mapPropertyAttributeName = NativeUtils.GetMapPropertyAttributeName(
             sourceType,
-            target.MethodName
+            mapInfo.MethodName
         );
         var mapIgnorePropertyAttributeName = NativeUtils.GetMapIgnorePropertyAttributeName(
             sourceType,
-            target.MethodName
+            mapInfo.MethodName
         );
+        // 添加映射开始行动
+        if (mapInfo.MapConfigType is not null)
+        {
+            writer.WriteLine(
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.BeginMapAction)}(source,target);"
+            );
+            configs.Add(mapInfo.MapConfigType);
+        }
         foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
         {
-            var attributes = property.GetAttributes();
-            // 如果是静态属性,则跳过
-            if (property.IsStatic)
-                continue;
-            // 如果是被忽略的属性,则跳过
-            if (
-                attributes.Any(x =>
-                    x.AttributeClass?.GetFullName() == mapIgnorePropertyAttributeName
-                    || x.AttributeClass?.GetFullName()
-                        == typeof(MapIgnorePropertyAttribute).FullName
-                )
-            )
-                continue;
-            var attributeDatas = attributes.Where(x =>
-                x.AttributeClass!.GetFullName() == mapPropertyAttributeName
+            GenerateToMethodProperty(
+                converters,
+                writer,
+                mapInfo,
+                mapPropertyAttributeName,
+                mapIgnorePropertyAttributeName,
+                property
             );
-            // 如果没有特性,则直接使用同名属性
-            if (attributeDatas.Any() is not true)
-            {
-                // 检查目标属性
-                if (
-                    CheckProperty(target, property, property.Name) is IPropertySymbol targetProperty
-                )
-                {
-                    // 比较当前属性与目标属性的类型
-                    if (
-                        SymbolEqualityComparer.Default.Equals(targetProperty.Type, property.Type)
-                        is false
-                    )
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.TargetPropertyTypeDifferent,
-                            property.Locations[0],
-                            targetProperty.ToString(),
-                            targetProperty.Type.ToDisplayString(
-                                SymbolDisplayFormat.FullyQualifiedFormat
-                            ),
-                            target.MethodName
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                        continue;
-                    }
-                    writer.WriteLine($"target.{property.Name} = source.{property.Name};");
-                }
-                continue;
-            }
-            var targetPropertys = new HashSet<string>();
-            foreach (var attributeData in attributeDatas)
-            {
-                var targetPropertyName = property.Name;
-                string? propertyAction = null;
-                INamedTypeSymbol? converterType = null;
-                // 从特性获取数据
-                GetDataFromAttribute(
-                    converters,
-                    targetPropertys,
-                    attributeData,
-                    ref targetPropertyName,
-                    ref converterType,
-                    out var attributeValues
-                );
-                // 设置属性行动
-                if (
-                    attributeValues.TryGetValue(
-                        nameof(MapPropertyAttribute.PropertyAction),
-                        out var actionData
-                    )
-                )
-                {
-                    var action = actionData.Value?.Value?.ToString();
-                    if (string.IsNullOrWhiteSpace(action) is false)
-                        propertyAction = action!.Replace("{value}", property.Name);
-                }
-                // 检查属性
-                if (
-                    CheckProperty(target, property, targetPropertyName)
-                    is not IPropertySymbol targetProperty
-                )
-                    continue;
-                if (propertyAction is not null)
-                {
-                    // 如果手动设置了行动, 则跳过类型检查
-                    if (converterType is not null)
-                    {
-                        writer.WriteLine(
-                            $"target.{targetPropertyName} = {converterType.Name}.{nameof(IMapConverter.Convert)}(source, {propertyAction});"
-                        );
-                    }
-                    else
-                    {
-                        writer.WriteLine($"target.{targetPropertyName} = {propertyAction};");
-                    }
-                }
-                else
-                {
-                    propertyAction = $"source.{property.Name}";
-                    if (converterType is not null)
-                    {
-                        if (CheckConverter(property, targetProperty, attributeData, converterType))
-                            writer.WriteLine(
-                                $"target.{targetPropertyName} = {converterType.Name}.{nameof(IMapConverter.Convert)}(source, {propertyAction});"
-                            );
-                    }
-                    else
-                    {
-                        // 比较当前属性与目标属性的类型
-                        if (
-                            SymbolEqualityComparer.Default.Equals(
-                                targetProperty.Type,
-                                property.Type
-                            )
-                            is false
-                        )
-                        {
-                            var errorDiagnostic = Diagnostic.Create(
-                                Descriptors.TargetPropertyTypeDifferentNoMethod,
-                                attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                                    attributeData.ApplicationSyntaxReference.Span
-                                ),
-                                targetProperty.ToString(),
-                                targetProperty.Type.ToDisplayString(
-                                    SymbolDisplayFormat.FullyQualifiedFormat
-                                )
-                            );
-                            ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                            continue;
-                        }
-                        writer.WriteLine($"target.{targetPropertyName} = {propertyAction};");
-                    }
-                }
-            }
+        }
+        // 添加映射结束行动
+        if (mapInfo.MapConfigType is not null)
+        {
+            writer.WriteLine(
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.EndMapAction)}(source,target);"
+            );
         }
         writer.WriteLine("return target;");
         writer.Indent--;
@@ -422,159 +248,163 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         writer.WriteLine();
     }
 
-    private void GenerateFromMethod(
+    void GenerateToMethodProperty(
         HashSet<INamedTypeSymbol> converters,
-        INamedTypeSymbol sourceType,
         IndentedTextWriter writer,
-        MapInfo target
+        MapInfo mapInfo,
+        string mapPropertyAttributeName,
+        string mapIgnorePropertyAttributeName,
+        IPropertySymbol property
     )
     {
-        var accessibility = sourceType.GetLowestAccessibility(target.Type);
+        var attributes = property.GetAttributes();
+        // 如果是静态属性,则跳过
+        if (property.IsStatic)
+            return;
+        // 如果是被忽略的属性,则跳过
+        if (
+            attributes.Any(x =>
+                x.AttributeClass?.GetFullName() == mapIgnorePropertyAttributeName
+                || x.AttributeClass?.GetFullName() == typeof(MapIgnorePropertyAttribute).FullName
+            )
+        )
+            return;
+        // 如果这个属性在映射设置中有添加
+        if (
+            mapInfo.MapConfigType is not null
+            && MapConfigInfoByType.TryGetValue(mapInfo.MapConfigType, out var mapConfigInfo)
+            && mapConfigInfo.AddedMapProperties.Contains(property.Name)
+        )
+        {
+            writer.WriteLine(
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
+            );
+            return;
+        }
+
+        var attributeData = attributes.FirstOrDefault(x =>
+            x.AttributeClass!.GetFullName() == mapPropertyAttributeName
+        );
+        // 如果没有特性,则直接使用同名属性
+        if (attributeData is null)
+        {
+            // 检查目标属性
+            if (
+                CheckProperty(mapInfo, property, property.Name)
+                is not IPropertySymbol targetProperty
+            )
+                return;
+            // 比较当前属性与目标属性的类型
+            if (SymbolEqualityComparer.Default.Equals(targetProperty.Type, property.Type) is false)
+            {
+                var errorDiagnostic = Diagnostic.Create(
+                    Descriptors.TargetPropertyTypeDifferent,
+                    property.Locations[0],
+                    targetProperty.ToString(),
+                    targetProperty.Type.GetFullNameAndGeneric(),
+                    mapInfo.MethodName
+                );
+                ExecutionContext.ReportDiagnostic(errorDiagnostic);
+                return;
+            }
+            writer.WriteLine($"target.{property.Name} = source.{property.Name};");
+        }
+        else
+        {
+            var targetPropertyName = property.Name;
+            INamedTypeSymbol? converterType = null;
+            // 从特性获取数据
+            GetDataFromPropertyAttribute(
+                converters,
+                attributeData,
+                ref targetPropertyName,
+                ref converterType,
+                out var attributeValues
+            );
+            // 检查属性
+            if (
+                CheckProperty(mapInfo, property, targetPropertyName)
+                is not IPropertySymbol targetProperty
+            )
+                return;
+            if (converterType is not null)
+            {
+                if (CheckConverter(property, targetProperty, attributeData, converterType))
+                    writer.WriteLine(
+                        $"target.{targetPropertyName} = {converterType.Name}.{nameof(IMapConverter.Convert)}(source, source.{property.Name});"
+                    );
+            }
+            else
+            {
+                // 比较当前属性与目标属性的类型
+                if (
+                    SymbolEqualityComparer.Default.Equals(targetProperty.Type, property.Type)
+                    is false
+                )
+                {
+                    var errorDiagnostic = Diagnostic.Create(
+                        Descriptors.TargetPropertyTypeDifferentNoMethod,
+                        attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                            attributeData.ApplicationSyntaxReference.Span
+                        ),
+                        targetProperty.ToString(),
+                        targetProperty.Type.GetFullNameAndGeneric()
+                    );
+                    ExecutionContext.ReportDiagnostic(errorDiagnostic);
+                    return;
+                }
+                writer.WriteLine($"target.{targetPropertyName} = source.{property.Name};");
+            }
+        }
+    }
+
+    private void GenerateFromMethod(
+        HashSet<INamedTypeSymbol> converters,
+        HashSet<INamedTypeSymbol> configs,
+        INamedTypeSymbol sourceType,
+        IndentedTextWriter writer,
+        MapInfo mapInfo
+    )
+    {
+        var accessibility = sourceType.GetLowestAccessibility(mapInfo.TargetType);
         writer.WriteLine(
-            $"{accessibility} static {sourceType.GetFullNameAndGeneric()} {target.MethodName}(this {sourceType.GetFullNameAndGeneric()} source, {target.Type.GetFullNameAndGeneric()} target)"
+            $"{accessibility} static {sourceType.GetFullNameAndGeneric()} {mapInfo.MethodName}(this {sourceType.GetFullNameAndGeneric()} source, {mapInfo.TargetType.GetFullNameAndGeneric()} target)"
         );
         writer.WriteLine("{");
         writer.Indent++;
         var mapPropertyAttributeName = NativeUtils.GetMapPropertyAttributeName(
             sourceType,
-            target.MethodName
+            mapInfo.MethodName
         );
         var mapIgnorePropertyAttributeName = NativeUtils.GetMapIgnorePropertyAttributeName(
             sourceType,
-            target.MethodName
+            mapInfo.MethodName
         );
+        // 添加映射开始行动
+        if (mapInfo.MapConfigType is not null)
+        {
+            writer.WriteLine(
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.BeginMapAction)}(source,target);"
+            );
+            configs.Add(mapInfo.MapConfigType);
+        }
         foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
         {
-            // 如果是静态属性,则跳过
-            if (property.IsStatic)
-                continue;
-            var attributes = property.GetAttributes();
-            if (
-                attributes.Any(x =>
-                    x.AttributeClass?.GetFullName() == mapIgnorePropertyAttributeName
-                    || x.AttributeClass?.GetFullName()
-                        == typeof(MapIgnorePropertyAttribute).FullName
-                )
-            )
-                continue;
-            var attributeDatas = attributes.Where(x =>
-                x.AttributeClass!.GetFullName() == mapPropertyAttributeName
+            GenerateFromMethodProperty(
+                converters,
+                writer,
+                mapInfo,
+                mapPropertyAttributeName,
+                mapIgnorePropertyAttributeName,
+                property
             );
-            // 如果没有特性,则直接使用同名属性
-            if (attributeDatas.Any() is not true)
-            {
-                // 检查目标属性
-                if (
-                    CheckProperty(target, property, property.Name) is IPropertySymbol targetProperty
-                )
-                {
-                    // 比较当前属性与目标属性的类型
-                    if (
-                        SymbolEqualityComparer.Default.Equals(targetProperty.Type, property.Type)
-                        is false
-                    )
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.TargetPropertyTypeDifferent,
-                            property.Locations[0],
-                            targetProperty.ToString(),
-                            targetProperty.Type.ToDisplayString(
-                                SymbolDisplayFormat.FullyQualifiedFormat
-                            ),
-                            target.MethodName
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                        continue;
-                    }
-                    writer.WriteLine($"target.{property.Name} = source.{property.Name};");
-                }
-                continue;
-            }
-            var targetPropertys = new HashSet<string>();
-            foreach (var attributeData in attributeDatas)
-            {
-                var targetPropertyName = property.Name;
-                string? propertyAction = null;
-                INamedTypeSymbol? converterType = null;
-                // 从特性获取信息
-                GetDataFromAttribute(
-                    converters,
-                    targetPropertys,
-                    attributeData,
-                    ref targetPropertyName,
-                    ref converterType,
-                    out var attributeValues
-                );
-                // 检查属性
-                if (
-                    CheckProperty(target, property, targetPropertyName)
-                    is not IPropertySymbol targetProperty
-                )
-                    continue;
-                // 设置属性行动
-                if (
-                    attributeValues.TryGetValue(
-                        nameof(MapPropertyAttribute.PropertyAction),
-                        out var actionData
-                    )
-                )
-                {
-                    var action = actionData.Value?.Value?.ToString();
-                    if (string.IsNullOrWhiteSpace(action) is false)
-                        propertyAction = action!.Replace("{value}", targetPropertyName);
-                }
-                if (propertyAction is not null)
-                {
-                    // 如果手动设置了行动, 则跳过类型检查
-                    if (converterType is not null)
-                    {
-                        writer.WriteLine(
-                            $"source.{property.Name} = {converterType.Name}.{nameof(IMapConverter.ConvertBack)}(target, {propertyAction});"
-                        );
-                    }
-                    else
-                    {
-                        writer.WriteLine($"source.{property.Name} = {propertyAction};");
-                    }
-                }
-                else
-                {
-                    propertyAction = $"target.{targetPropertyName}";
-                    if (converterType is not null)
-                    {
-                        if (CheckConverter(property, targetProperty, attributeData, converterType))
-                            writer.WriteLine(
-                                $"source.{property.Name} = {converterType.Name}.{nameof(IMapConverter.ConvertBack)}(target, {propertyAction});"
-                            );
-                    }
-                    else
-                    {
-                        // 比较当前属性与目标属性的类型
-                        if (
-                            SymbolEqualityComparer.Default.Equals(
-                                targetProperty.Type,
-                                property.Type
-                            )
-                            is false
-                        )
-                        {
-                            var errorDiagnostic = Diagnostic.Create(
-                                Descriptors.TargetPropertyTypeDifferentNoMethod,
-                                attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                                    attributeData.ApplicationSyntaxReference.Span
-                                ),
-                                targetProperty.ToString(),
-                                targetProperty.Type.ToDisplayString(
-                                    SymbolDisplayFormat.FullyQualifiedFormat
-                                )
-                            );
-                            ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                            continue;
-                        }
-                        writer.WriteLine($"source.{property.Name} = {propertyAction};");
-                    }
-                }
-            }
+        }
+        // 添加映射结束行动
+        if (mapInfo.MapConfigType is not null)
+        {
+            writer.WriteLine(
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.EndMapAction)}(source,target);"
+            );
         }
         writer.WriteLine("return source;");
         writer.Indent--;
@@ -582,214 +412,114 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         writer.WriteLine();
     }
 
-    private IPropertySymbol? CheckProperty(
-        MapInfo target,
-        IPropertySymbol property,
-        string? targetPropertyName
-    )
-    {
-        // 目标属性不存在
-        if (
-            target.Type.GetMember<IPropertySymbol>(targetPropertyName!)
-            is not IPropertySymbol targetProperty
-        )
-        {
-            if (target.Scrutiny)
-            {
-                var errorDiagnostic = Diagnostic.Create(
-                    Descriptors.TargetPropertyNotExists,
-                    property.Locations[0],
-                    target.Type.GetFullNameAndGeneric() + "." + property.Name
-                );
-                ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            }
-            return null;
-        }
-        // 只读属性
-        if (targetProperty.SetMethod is null)
-        {
-            if (target.Scrutiny)
-            {
-                var errorDiagnostic = Diagnostic.Create(
-                    Descriptors.TargetPropertyIsReadOnly,
-                    property.Locations[0],
-                    targetProperty.ToString()
-                );
-                ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            }
-            return null;
-        }
-        // 静态属性
-        if (targetProperty.IsStatic)
-        {
-            if (target.Scrutiny)
-            {
-                var errorDiagnostic = Diagnostic.Create(
-                    Descriptors.TargetPropertyIsStatic,
-                    property.Locations[0],
-                    targetProperty.ToString()
-                );
-                ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            }
-            return null;
-        }
-        if (targetProperty.SetMethod.DeclaredAccessibility == Accessibility.Public)
-            return targetProperty;
-        // 可访问性为本地或保护本地
-        if (
-            (
-                targetProperty.SetMethod.DeclaredAccessibility == Accessibility.Internal
-                || targetProperty.SetMethod.DeclaredAccessibility
-                    == Accessibility.ProtectedOrInternal
-            )
-        )
-        {
-            // 在主程序集
-            if (
-                SymbolEqualityComparer.Default.Equals(
-                    targetProperty.SetMethod.ContainingAssembly,
-                    Compilation.Assembly
-                )
-            )
-                return targetProperty;
-            if (target.Scrutiny)
-            {
-                var errorDiagnostic = Diagnostic.Create(
-                    Descriptors.TargetPropertyInsufficientAccessibility,
-                    property.Locations[0],
-                    targetProperty.ToString()
-                );
-                ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            }
-            return null;
-        }
-        // 更低的可访问性
-        if (targetProperty.SetMethod.DeclaredAccessibility < Accessibility.Internal)
-        {
-            if (target.Scrutiny)
-            {
-                var errorDiagnostic = Diagnostic.Create(
-                    Descriptors.TargetPropertyInsufficientAccessibility,
-                    property.Locations[0],
-                    targetProperty.ToString()
-                );
-                ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            }
-            return null;
-        }
-        return targetProperty;
-    }
-
-    private bool CheckConverter(
-        IPropertySymbol property,
-        IPropertySymbol targetProperty,
-        AttributeData attributeData,
-        INamedTypeSymbol converterType
-    )
-    {
-        var iconverter = converterType.Interfaces.First(x =>
-            SymbolEqualityComparer.Default.Equals(x.OriginalDefinition, IMapConverterType)
-        );
-        var converterCurrentType = iconverter.TypeArguments[0];
-        // 比较转换器当前属性与当前属性的类型
-        if (SymbolEqualityComparer.Default.Equals(property.Type, converterCurrentType) is false)
-        {
-            var errorDiagnostic = Diagnostic.Create(
-                Descriptors.ConverterCurrentTypeDifferentNoMethod,
-                attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                    attributeData.ApplicationSyntaxReference.Span
-                ),
-                converterCurrentType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-            );
-            ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            return false;
-        }
-        var converterTargetType = iconverter.TypeArguments[1];
-        // 比较转换器目标属性与目标属性的类型
-        if (
-            SymbolEqualityComparer.Default.Equals(targetProperty.Type, converterTargetType) is false
-        )
-        {
-            var errorDiagnostic = Diagnostic.Create(
-                Descriptors.ConverterTargetTypeDifferentNoMethod,
-                attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                    attributeData.ApplicationSyntaxReference.Span
-                ),
-                converterTargetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                targetProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-            );
-            ExecutionContext.ReportDiagnostic(errorDiagnostic);
-            return false;
-        }
-        return true;
-    }
-
-    private void GetDataFromAttribute(
+    private void GenerateFromMethodProperty(
         HashSet<INamedTypeSymbol> converters,
-        HashSet<string> targetPropertys,
-        AttributeData attributeData,
-        ref string? targetPropertyName,
-        ref INamedTypeSymbol? converterType,
-        out Dictionary<string, TypeAndValue> attributeValues
+        IndentedTextWriter writer,
+        MapInfo mapInfo,
+        string mapPropertyAttributeName,
+        string mapIgnorePropertyAttributeName,
+        IPropertySymbol property
     )
     {
-        if (attributeData.TryGetAttributeAndValues(out attributeValues) is true)
+        // 如果是静态属性,则跳过
+        if (property.IsStatic)
+            return;
+        var attributes = property.GetAttributes();
+        if (
+            attributes.Any(x =>
+                x.AttributeClass?.GetFullName() == mapIgnorePropertyAttributeName
+                || x.AttributeClass?.GetFullName() == typeof(MapIgnorePropertyAttribute).FullName
+            )
+        )
+            return;
+
+        // 如果这个属性在映射设置中有添加
+        if (
+            mapInfo.MapConfigType is not null
+            && MapConfigInfoByType.TryGetValue(mapInfo.MapConfigType, out var mapConfigInfo)
+            && mapConfigInfo.AddedMapProperties.Contains(property.Name)
+        )
         {
+            writer.WriteLine(
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
+            );
+            return;
+        }
+
+        var attributeData = attributes.FirstOrDefault(x =>
+            x.AttributeClass!.GetFullName() == mapPropertyAttributeName
+        );
+        // 如果没有特性,则直接使用同名属性
+        if (attributeData is null)
+        {
+            // 检查目标属性
             if (
-                attributeValues.TryGetValue(
-                    nameof(MapPropertyAttribute.PropertyName),
-                    out var nameData
-                )
+                CheckProperty(mapInfo, property, property.Name)
+                is not IPropertySymbol targetProperty
             )
-            {
-                var name = nameData.Value?.Value?.ToString();
-                if (string.IsNullOrWhiteSpace(name) is false)
-                    targetPropertyName = name;
-            }
-            if (
-                attributeValues.TryGetValue(
-                    nameof(MapPropertyAttribute.ConverterType),
-                    out var converterData
-                )
-            )
-            {
-                converterType = converterData.Value?.Value as INamedTypeSymbol;
-                if (converterType is not null)
-                {
-                    if (
-                        converterType.Interfaces.Any(x =>
-                            SymbolEqualityComparer.Default.Equals(
-                                x.OriginalDefinition,
-                                IMapConverterType
-                            )
-                        )
-                        is false
-                    )
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.ConverterError,
-                            attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                                attributeData.ApplicationSyntaxReference.Span
-                            ),
-                            converterType.Name
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                    }
-                    converters.Add(converterType);
-                }
-            }
-            // 两个特性使用了相同的目标属性
-            if (targetPropertys.Add(targetPropertyName!) is false)
+                return;
+            // 比较当前属性与目标属性的类型
+            if (SymbolEqualityComparer.Default.Equals(targetProperty.Type, property.Type) is false)
             {
                 var errorDiagnostic = Diagnostic.Create(
-                    Descriptors.SameTargetName,
-                    attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                        attributeData.ApplicationSyntaxReference.Span
-                    ),
-                    targetPropertyName
+                    Descriptors.TargetPropertyTypeDifferent,
+                    property.Locations[0],
+                    targetProperty.ToString(),
+                    targetProperty.Type.GetFullNameAndGeneric(),
+                    mapInfo.MethodName
                 );
                 ExecutionContext.ReportDiagnostic(errorDiagnostic);
+                return;
+            }
+            writer.WriteLine($"target.{property.Name} = source.{property.Name};");
+            return;
+        }
+        else
+        {
+            var targetPropertyName = property.Name;
+            INamedTypeSymbol? converterType = null;
+            // 从特性获取信息
+            GetDataFromPropertyAttribute(
+                converters,
+                attributeData,
+                ref targetPropertyName,
+                ref converterType,
+                out var attributeValues
+            );
+            // 检查属性
+            if (
+                CheckProperty(mapInfo, property, targetPropertyName)
+                is not IPropertySymbol targetProperty
+            )
+                return;
+
+            if (converterType is not null)
+            {
+                if (CheckConverter(property, targetProperty, attributeData, converterType))
+                    writer.WriteLine(
+                        $"source.{property.Name} = {converterType.Name}.{nameof(IMapConverter.ConvertBack)}(target, target.{targetPropertyName});"
+                    );
+            }
+            else
+            {
+                // 比较当前属性与目标属性的类型
+                if (
+                    SymbolEqualityComparer.Default.Equals(targetProperty.Type, property.Type)
+                    is false
+                )
+                {
+                    var errorDiagnostic = Diagnostic.Create(
+                        Descriptors.TargetPropertyTypeDifferentNoMethod,
+                        attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                            attributeData.ApplicationSyntaxReference.Span
+                        ),
+                        targetProperty.ToString(),
+                        targetProperty.Type.GetFullNameAndGeneric()
+                    );
+                    ExecutionContext.ReportDiagnostic(errorDiagnostic);
+                    return;
+                }
+                writer.WriteLine($"source.{property.Name} = target.{targetPropertyName};");
             }
         }
     }
@@ -825,68 +555,34 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         ExecutionContext.AddSource($"MapperConverters.g.cs", stringStream.ToString());
     }
 
-    private Dictionary<
-        INamedTypeSymbol,
-        (HashSet<MapInfo> ToMethods, HashSet<MapInfo> FromMethods)
-    > GetMapTargetAndMethod(
-        SemanticModel semanticModel,
-        IEnumerable<ClassDeclarationSyntax> declaredClasses
-    )
+    private void GenerateConfig(SyntaxTree syntaxTree, HashSet<INamedTypeSymbol> configs)
     {
-        var mapMethodsByType = new Dictionary<
-            INamedTypeSymbol,
-            (HashSet<MapInfo> ToMethods, HashSet<MapInfo> FromMethods)
-        >(SymbolEqualityComparer.Default);
-        foreach (var declaredClass in declaredClasses)
+        var usings = ((CompilationUnitSyntax)syntaxTree.GetRoot()).Usings;
+        var stringStream = new StringWriter();
+        var writer = new IndentedTextWriter(stringStream, "\t");
+        writer.WriteLine("// <auto-generated>");
+        writer.WriteLine("#nullable enable");
+        writer.WriteLine(usings);
+        writer.WriteLine();
+        writer.WriteLine($"namespace HKW.HKWMapper");
+        writer.WriteLine("{");
+        writer.Indent++;
+        writer.WriteLine($"public static partial class MapperExtensions");
+        writer.WriteLine("{");
+        writer.Indent++;
+        foreach (var config in configs)
         {
-            var classSymbol = (INamedTypeSymbol)
-                ModelExtensions.GetDeclaredSymbol(semanticModel, declaredClass)!;
-            var attributeDatas = classSymbol
-                .GetAttributes()
-                .Where(x =>
-                    x.AttributeClass!.ToString() is string name
-                    && (
-                        name == typeof(MapToAttribute).FullName
-                        || name == typeof(MapFromAttribute).FullName
-                    )
-                );
-            foreach (var attribute in attributeDatas)
-            {
-                var attributeName = attribute.AttributeClass!.GetFullName();
-                if (attributeName == typeof(MapToAttribute).FullName)
-                {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
-                        continue;
-                    if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
-                    )
-                        continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
-                    datas.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
-                    var type = (INamedTypeSymbol)value.Value!.Value.Value!;
-                    var methodName = method?.Value?.Value?.ToString() ?? $"MapTo{type.Name}";
-                    if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
-                        targets = mapMethodsByType[classSymbol] = ([], []);
-                    targets.ToMethods.Add(new(type, methodName, scrutiny?.Value?.Value is true));
-                }
-                else if (attributeName == typeof(MapFromAttribute).FullName)
-                {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
-                        continue;
-                    if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
-                    )
-                        continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
-                    datas.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
-                    var type = (INamedTypeSymbol)value.Value!.Value.Value!;
-                    var methodName = method?.Value?.Value?.ToString() ?? $"MapFrom{type.Name}";
-                    if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
-                        targets = mapMethodsByType[type] = ([], []);
-                    targets.FromMethods.Add(new(type, methodName, scrutiny?.Value?.Value is true));
-                }
-            }
+            var typeFullName = config.GetFullName();
+            var fieldName = $"_{config.Name.FirstLetterToLower()}";
+            writer.WriteLine($"private static {typeFullName}? {fieldName};");
+            writer.WriteLine(
+                $"{config.GetAccessibilityString()} static {typeFullName} {config.Name} => {fieldName} ?? ({fieldName} = new {typeFullName}()); "
+            );
         }
-        return mapMethodsByType;
+        writer.Indent--;
+        writer.WriteLine("}");
+        writer.Indent--;
+        writer.WriteLine("}");
+        ExecutionContext.AddSource($"MapperConfigs.g.cs", stringStream.ToString());
     }
 }

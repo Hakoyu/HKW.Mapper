@@ -107,4 +107,22 @@ internal static class Descriptors
             DiagnosticSeverity.Error,
             isEnabledByDefault: true
         );
+    public static readonly DiagnosticDescriptor MapConfigSourceTypeDifferent =
+        new(
+            id: "M0011",
+            title: "Map config source type is different",
+            messageFormat: "Map config source type \"{0}\" is different to source type \"{1}\", please check your map config",
+            category: "HKWMapper",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true
+        );
+    public static readonly DiagnosticDescriptor MapConfigTargetTypeDifferent =
+        new(
+            id: "M0012",
+            title: "Map config target type is different",
+            messageFormat: "Map config target type \"{0}\" is different to target type \"{1}\", please check your map config",
+            category: "HKWMapper",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true
+        );
 }
