@@ -1,4 +1,5 @@
-﻿using System.Linq.Expressions;
+﻿using System.Collections.Frozen;
+using System.Linq.Expressions;
 
 namespace HKW.HKWMapper;
 
@@ -9,7 +10,8 @@ namespace HKW.HKWMapper;
 /// <typeparam name="TTarget">目标类型</typeparam>
 public abstract class MapConfig<TSource, TTarget>
 {
-    private readonly Dictionary<string, Action<TSource, TTarget>> _propertyActions = [];
+    private Dictionary<string, Action<TSource, TTarget>> _propertyActions = [];
+    private FrozenDictionary<string, Action<TSource, TTarget>> _frozenPropertyActions = null!;
 
     /// <summary>
     /// 添加映射
@@ -39,7 +41,19 @@ public abstract class MapConfig<TSource, TTarget>
     /// <returns>映射行动</returns>
     public Action<TSource, TTarget> GetMapAction(string propertyName)
     {
-        return _propertyActions[propertyName];
+        return _frozenPropertyActions[propertyName];
+    }
+
+    /// <summary>
+    /// 将已添加的映射冻结,以提高性能
+    /// </summary>
+    /// <returns></returns>
+    public MapConfig<TSource, TTarget> Frozen()
+    {
+        _frozenPropertyActions = FrozenDictionary.ToFrozenDictionary(_propertyActions);
+        _propertyActions.Clear();
+        _propertyActions = null!;
+        return this;
     }
 
     /// <summary>

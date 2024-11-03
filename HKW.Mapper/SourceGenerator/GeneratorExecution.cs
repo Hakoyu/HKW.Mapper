@@ -581,7 +581,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             var fieldName = $"_{config.Name.FirstLetterToLower()}";
             writer.WriteLine($"private static {typeFullName}? {fieldName};");
             writer.WriteLine(
-                $"{config.GetAccessibilityString()} static {typeFullName} {config.Name} => {fieldName} ?? ({fieldName} = new {typeFullName}()); "
+                $"{config.GetAccessibilityString()} static {typeFullName} {config.Name} => {fieldName} ?? ({fieldName} = ({typeFullName})new {typeFullName}().Frozen()); "
             );
         }
         writer.Indent--;
