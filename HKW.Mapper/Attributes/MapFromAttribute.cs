@@ -37,4 +37,10 @@ public sealed class MapFromAttribute : Attribute
     /// 映射设置
     /// </summary>
     public Type? MapConfig { get; set; }
+
+    /// <summary>
+    /// 方法调用状态
+    /// <para>会根据设置来生成对应的方法</para>
+    /// </summary>
+    public MapMethodInvokeState MethodInvokeState { get; set; }
 }

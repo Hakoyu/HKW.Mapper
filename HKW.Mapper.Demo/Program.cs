@@ -30,7 +30,31 @@ internal class TestMapConfig : MapConfig<Test1, Test2>
     public TestMapConfig()
     {
         AddMap(
-            x => x.Value,
+            x => x.Value == x.Value1,
+            (s, t) =>
+            {
+                s.Value = t.Value;
+            }
+        );
+    }
+
+    public override void BeginMapAction(Test1 source, Test2 target)
+    {
+        return;
+    }
+
+    public override void EndMapAction(Test1 source, Test2 target)
+    {
+        return;
+    }
+}
+
+internal class TestMap1Config : MapConfig<Test1, Test2>
+{
+    public TestMap1Config()
+    {
+        AddMap(
+            x => x.Value == x.Value1,
             (s, t) =>
             {
                 s.Value = t.Value;
@@ -50,7 +74,7 @@ internal class TestMapConfig : MapConfig<Test1, Test2>
 }
 
 [MapTo(typeof(Test2), MapConfig = typeof(TestMapConfig))]
-[MapFrom(typeof(Test2))]
+[MapFrom(typeof(Test2), MapConfig = typeof(TestMap1Config))]
 internal class Test1
 {
     [Test1MapToTest2Property(nameof(Test2.Value))]

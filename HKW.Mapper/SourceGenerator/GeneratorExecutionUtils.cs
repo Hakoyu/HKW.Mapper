@@ -284,7 +284,6 @@ internal partial class GeneratorExecution
     }
 
     private void GetDataFromPropertyAttribute(
-        HashSet<INamedTypeSymbol> converters,
         AttributeData attributeData,
         ref string? targetPropertyName,
         ref INamedTypeSymbol? converterType,
@@ -333,7 +332,7 @@ internal partial class GeneratorExecution
                         );
                         ExecutionContext.ReportDiagnostic(errorDiagnostic);
                     }
-                    converters.Add(converterType);
+                    Converters.Add(converterType);
                 }
             }
         }

@@ -21,6 +21,9 @@ internal partial class GeneratorExecution
     public Dictionary<INamedTypeSymbol, MapConfigInfo> MapConfigInfoByType { get; private set; } =
         null!;
 
+    public HashSet<INamedTypeSymbol> Converters { get; private set; } = [];
+    public HashSet<INamedTypeSymbol> Configs { get; private set; } = [];
+
     public void Execute()
     {
         var compilation = LoadMapMethod();
@@ -31,10 +34,19 @@ internal partial class GeneratorExecution
         MapConfigType = Compilation.GetTypeByMetadataName(typeof(MapConfig<,>).FullName)!;
 
         MapConfigInfoByType = GetMapConfigInfos(ExecutionContext);
-
         foreach (var compilationSyntaxTree in compilation.SyntaxTrees)
         {
             ParseSyntaxTree(compilationSyntaxTree);
+        }
+
+        if (Converters.Count > 0)
+        {
+            GenerateComverter(Converters);
+        }
+
+        if (Configs.Count > 0)
+        {
+            GenerateConfig(Configs);
         }
     }
 
@@ -89,9 +101,6 @@ internal partial class GeneratorExecution
 public sealed class {mapMethod}PropertyAttribute : Attribute
 {{
     /// <inheritdoc/>
-    public {mapMethod}PropertyAttribute() {{ }}
-
-    /// <inheritdoc/>
     public {mapMethod}PropertyAttribute(string PropertyName)
     {{
         this.PropertyName = PropertyName;
@@ -131,28 +140,14 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             .OfType<ClassDeclarationSyntax>();
 
         var mapMethodsByType = GetMapTargetAndMethod(semanticModel, declaredClasses);
-        var converters = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-        var configs = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var pair in mapMethodsByType)
         {
-            GenerateMap(syntaxTree, converters, configs, pair);
-        }
-
-        if (converters.Count > 0)
-        {
-            GenerateComverter(syntaxTree, converters);
-        }
-
-        if (configs.Count > 0)
-        {
-            GenerateConfig(syntaxTree, configs);
+            GenerateMap(syntaxTree, pair);
         }
     }
 
     private void GenerateMap(
         SyntaxTree syntaxTree,
-        HashSet<INamedTypeSymbol> converters,
-        HashSet<INamedTypeSymbol> configs,
         KeyValuePair<
             INamedTypeSymbol,
             (HashSet<MapInfo> ToMethods, HashSet<MapInfo> FromMethods)
@@ -176,12 +171,12 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         writer.Indent++;
         foreach (var target in pair.Value.ToMethods)
         {
-            GenerateToMethod(converters, configs, pair.Key, writer, target);
+            GenerateToMethod(pair.Key, writer, target);
         }
 
         foreach (var target in pair.Value.FromMethods)
         {
-            GenerateFromMethod(converters, configs, pair.Key, writer, target);
+            GenerateFromMethod(pair.Key, writer, target);
         }
 
         writer.Indent--;
@@ -195,8 +190,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     }
 
     private void GenerateToMethod(
-        HashSet<INamedTypeSymbol> converters,
-        HashSet<INamedTypeSymbol> configs,
         INamedTypeSymbol sourceType,
         IndentedTextWriter writer,
         MapInfo mapInfo
@@ -222,12 +215,11 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             writer.WriteLine(
                 $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.BeginMapAction)}(source,target);"
             );
-            configs.Add(mapInfo.MapConfigType);
+            Configs.Add(mapInfo.MapConfigType);
         }
         foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
         {
             GenerateToMethodProperty(
-                converters,
                 writer,
                 mapInfo,
                 mapPropertyAttributeName,
@@ -249,7 +241,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     }
 
     void GenerateToMethodProperty(
-        HashSet<INamedTypeSymbol> converters,
         IndentedTextWriter writer,
         MapInfo mapInfo,
         string mapPropertyAttributeName,
@@ -269,6 +260,11 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             )
         )
             return;
+        // 获取特性
+        var attributeData = attributes.FirstOrDefault(x =>
+            x.AttributeClass!.GetFullName() == mapPropertyAttributeName
+        );
+
         // 如果这个属性在映射设置中有添加
         if (
             mapInfo.MapConfigType is not null
@@ -279,12 +275,20 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             writer.WriteLine(
                 $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
             );
+            if (attributeData is not null)
+            {
+                var errorDiagnostic = Diagnostic.Create(
+                    Descriptors.MapHasBeenAdded,
+                    attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                        attributeData.ApplicationSyntaxReference.Span
+                    ),
+                    mapInfo.MapConfigType.GetFullNameAndGeneric()
+                );
+                ExecutionContext.ReportDiagnostic(errorDiagnostic);
+            }
             return;
         }
 
-        var attributeData = attributes.FirstOrDefault(x =>
-            x.AttributeClass!.GetFullName() == mapPropertyAttributeName
-        );
         // 如果没有特性,则直接使用同名属性
         if (attributeData is null)
         {
@@ -315,7 +319,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             INamedTypeSymbol? converterType = null;
             // 从特性获取数据
             GetDataFromPropertyAttribute(
-                converters,
                 attributeData,
                 ref targetPropertyName,
                 ref converterType,
@@ -359,8 +362,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     }
 
     private void GenerateFromMethod(
-        HashSet<INamedTypeSymbol> converters,
-        HashSet<INamedTypeSymbol> configs,
         INamedTypeSymbol sourceType,
         IndentedTextWriter writer,
         MapInfo mapInfo
@@ -386,12 +387,11 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             writer.WriteLine(
                 $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.BeginMapAction)}(source,target);"
             );
-            configs.Add(mapInfo.MapConfigType);
+            Configs.Add(mapInfo.MapConfigType);
         }
         foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
         {
             GenerateFromMethodProperty(
-                converters,
                 writer,
                 mapInfo,
                 mapPropertyAttributeName,
@@ -413,7 +413,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     }
 
     private void GenerateFromMethodProperty(
-        HashSet<INamedTypeSymbol> converters,
         IndentedTextWriter writer,
         MapInfo mapInfo,
         string mapPropertyAttributeName,
@@ -433,6 +432,10 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         )
             return;
 
+        // 获取特性
+        var attributeData = attributes.FirstOrDefault(x =>
+            x.AttributeClass!.GetFullName() == mapPropertyAttributeName
+        );
         // 如果这个属性在映射设置中有添加
         if (
             mapInfo.MapConfigType is not null
@@ -443,12 +446,19 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             writer.WriteLine(
                 $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
             );
+            if (attributeData is not null)
+            {
+                var errorDiagnostic = Diagnostic.Create(
+                    Descriptors.MapHasBeenAdded,
+                    attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                        attributeData.ApplicationSyntaxReference.Span
+                    ),
+                    mapInfo.MapConfigType.GetFullNameAndGeneric()
+                );
+                ExecutionContext.ReportDiagnostic(errorDiagnostic);
+            }
             return;
         }
-
-        var attributeData = attributes.FirstOrDefault(x =>
-            x.AttributeClass!.GetFullName() == mapPropertyAttributeName
-        );
         // 如果没有特性,则直接使用同名属性
         if (attributeData is null)
         {
@@ -480,7 +490,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
             INamedTypeSymbol? converterType = null;
             // 从特性获取信息
             GetDataFromPropertyAttribute(
-                converters,
                 attributeData,
                 ref targetPropertyName,
                 ref converterType,
@@ -524,14 +533,12 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         }
     }
 
-    private void GenerateComverter(SyntaxTree syntaxTree, HashSet<INamedTypeSymbol> converters)
+    private void GenerateComverter(HashSet<INamedTypeSymbol> converters)
     {
-        var usings = ((CompilationUnitSyntax)syntaxTree.GetRoot()).Usings;
         var stringStream = new StringWriter();
         var writer = new IndentedTextWriter(stringStream, "\t");
         writer.WriteLine("// <auto-generated>");
         writer.WriteLine("#nullable enable");
-        writer.WriteLine(usings);
         writer.WriteLine();
         writer.WriteLine($"namespace HKW.HKWMapper");
         writer.WriteLine("{");
@@ -555,14 +562,12 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         ExecutionContext.AddSource($"MapperConverters.g.cs", stringStream.ToString());
     }
 
-    private void GenerateConfig(SyntaxTree syntaxTree, HashSet<INamedTypeSymbol> configs)
+    private void GenerateConfig(HashSet<INamedTypeSymbol> configs)
     {
-        var usings = ((CompilationUnitSyntax)syntaxTree.GetRoot()).Usings;
         var stringStream = new StringWriter();
         var writer = new IndentedTextWriter(stringStream, "\t");
         writer.WriteLine("// <auto-generated>");
         writer.WriteLine("#nullable enable");
-        writer.WriteLine(usings);
         writer.WriteLine();
         writer.WriteLine($"namespace HKW.HKWMapper");
         writer.WriteLine("{");

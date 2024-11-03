@@ -45,10 +45,10 @@ public abstract class MapConfig<TSource, TTarget>
     /// <summary>
     /// 开始映射行动
     /// </summary>
-    public abstract void BeginMapAction(TSource source, TTarget target);
+    public virtual void BeginMapAction(TSource source, TTarget target) { }
 
     /// <summary>
     /// 结束映射行动
     /// </summary>
-    public abstract void EndMapAction(TSource source, TTarget target);
+    public virtual void EndMapAction(TSource source, TTarget target) { }
 }
