@@ -25,11 +25,15 @@ public abstract class MapConfig<TSource, TTarget>
         Action<TSource, TTarget> action
     )
     {
-        if (
-            expression.Body is UnaryExpression unary
-            && unary.Operand is MemberExpression unaryMember
-        )
-            _propertyActions.Add(unaryMember.Member.Name, action);
+        if (expression.Body is MemberExpression member)
+        {
+            _propertyActions.Add(member.Member.Name, action);
+        }
+        else if (expression.Body is UnaryExpression unary)
+        {
+            if (unary.Operand is MemberExpression unaryMember)
+                _propertyActions.Add(unaryMember.Member.Name, action);
+        }
         else
             throw new ArgumentException("Expression error", nameof(expression));
     }

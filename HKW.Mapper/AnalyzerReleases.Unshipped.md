@@ -18,3 +18,4 @@ M0010 | HKWMapper | Error | Descriptors
 M0011 | HKWMapper | Error | Descriptors
 M0012 | HKWMapper | Error | Descriptors
 M0013 | HKWMapper | Info | Descriptors
+M0014 | HKWMapper | Error | Descriptors

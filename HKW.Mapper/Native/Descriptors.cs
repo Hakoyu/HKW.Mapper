@@ -134,4 +134,13 @@ internal static class Descriptors
             DiagnosticSeverity.Info,
             isEnabledByDefault: true
         );
+    public static readonly DiagnosticDescriptor SameMapPropertyConfig =
+        new(
+            id: "M0014",
+            title: "Same map property config",
+            messageFormat: "Map property config \"{0}\" is exists, please check your map property config",
+            category: "HKWMapper",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true
+        );
 }

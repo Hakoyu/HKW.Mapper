@@ -30,7 +30,7 @@ internal class TestMapConfig : MapConfig<Test1, Test2>
     public TestMapConfig()
     {
         AddMap(
-            x => x.Value == x.Value1,
+            x => x.Value,
             (s, t) =>
             {
                 s.Value = t.Value;
@@ -54,7 +54,7 @@ internal class TestMap1Config : MapConfig<Test1, Test2>
     public TestMap1Config()
     {
         AddMap(
-            x => x.Value == x.Value1,
+            x => x.Value,
             (s, t) =>
             {
                 s.Value = t.Value;

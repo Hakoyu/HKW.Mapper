@@ -56,7 +56,15 @@ internal partial class GeneratorExecution
                 if (lambdaExpression.Body is MemberAccessExpressionSyntax body)
                 {
                     var memberName = body.Name.ToString();
-                    mapConfigInfo.AddedMapProperties.Add(memberName);
+                    if (mapConfigInfo.AddedMapProperties.Add(memberName) is false)
+                    {
+                        var errorDiagnostic = Diagnostic.Create(
+                            Descriptors.SameMapPropertyConfig,
+                            lambdaExpression.Body.GetLocation(),
+                            memberName
+                        );
+                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
+                    }
                 }
             }
         }
