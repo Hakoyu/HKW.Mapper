@@ -73,6 +73,7 @@ internal class TestMap1Config : MapConfig<Test1, Test2>
     }
 }
 
+[MapFrom(typeof(Test1))]
 [MapTo(typeof(Test2), MapConfig = typeof(TestMapConfig))]
 [MapFrom(typeof(Test2), MapConfig = typeof(TestMap1Config))]
 internal class Test1

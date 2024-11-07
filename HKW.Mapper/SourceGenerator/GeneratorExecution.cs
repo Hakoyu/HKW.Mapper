@@ -481,7 +481,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
                 ExecutionContext.ReportDiagnostic(errorDiagnostic);
                 return;
             }
-            writer.WriteLine($"target.{property.Name} = source.{property.Name};");
+            writer.WriteLine($"source.{property.Name} = target.{property.Name};");
             return;
         }
         else
