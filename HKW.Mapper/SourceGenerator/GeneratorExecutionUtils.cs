@@ -53,18 +53,28 @@ internal partial class GeneratorExecution
                 {
                     continue;
                 }
+                var memberName = string.Empty;
                 if (lambdaExpression.Body is MemberAccessExpressionSyntax body)
                 {
-                    var memberName = body.Name.ToString();
-                    if (mapConfigInfo.AddedMapProperties.Add(memberName) is false)
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.SameMapPropertyConfig,
-                            lambdaExpression.Body.GetLocation(),
-                            memberName
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                    }
+                    memberName = body.Name.ToString();
+                }
+                if (lambdaExpression.Body is PostfixUnaryExpressionSyntax postfix)
+                {
+                    if (postfix.Operand is not MemberAccessExpressionSyntax member)
+                        continue;
+                    memberName = member.Name.ToString();
+                }
+                if (
+                    string.IsNullOrWhiteSpace(memberName) is false
+                    && mapConfigInfo.AddedMapProperties.Add(memberName) is false
+                )
+                {
+                    var errorDiagnostic = Diagnostic.Create(
+                        Descriptors.SameMapPropertyConfig,
+                        lambdaExpression.Body.GetLocation(),
+                        memberName
+                    );
+                    ExecutionContext.ReportDiagnostic(errorDiagnostic);
                 }
             }
         }

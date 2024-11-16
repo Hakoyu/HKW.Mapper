@@ -30,7 +30,7 @@ internal class TestMapConfig : MapConfig<Test1, Test2>
     public TestMapConfig()
     {
         AddMap(
-            x => x.Value,
+            x => x.Value!,
             (s, t) =>
             {
                 s.Value = t.Value;
@@ -78,7 +78,7 @@ internal class TestMap1Config : MapConfig<Test1, Test2>
 [MapFrom(typeof(Test2), MapConfig = typeof(TestMap1Config))]
 internal class Test1
 {
-    [Test1MapToTest2Property(nameof(Test2.Value))]
+    [MapIgnoreProperty]
     public int Value { get; set; }
 
     [Test1MapToTest2Property(typeof(TestConverter))]
