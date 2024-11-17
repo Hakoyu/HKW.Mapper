@@ -128,10 +128,10 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor MapHasBeenAdded =
         new(
             id: "M0013",
-            title: "Map has been added",
+            title: "Map config has been added",
             messageFormat: "Map has been added in \"{0}\", please check your map config or remove property attribute",
             category: "HKWMapper",
-            DiagnosticSeverity.Info,
+            DiagnosticSeverity.Warning,
             isEnabledByDefault: true
         );
     public static readonly DiagnosticDescriptor SameMapPropertyConfig =

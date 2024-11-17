@@ -1,6 +1,6 @@
 ﻿namespace HKW.HKWMapper.SourceGenerator;
 
-internal class MapConfigInfo
+internal class MapperConfigInfo
 {
     public HashSet<string> AddedMapProperties { get; } = [];
 }

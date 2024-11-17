@@ -8,7 +8,7 @@ namespace HKW.HKWMapper;
 /// </summary>
 /// <typeparam name="TSource">源类型</typeparam>
 /// <typeparam name="TTarget">目标类型</typeparam>
-public abstract class MapConfig<TSource, TTarget>
+public abstract class MapperConfig<TSource, TTarget>
 {
     private Dictionary<string, Action<TSource, TTarget>> _propertyActions = [];
     private FrozenDictionary<string, Action<TSource, TTarget>> _frozenPropertyActions = null!;
@@ -52,7 +52,7 @@ public abstract class MapConfig<TSource, TTarget>
     /// 将已添加的映射冻结,以提高性能
     /// </summary>
     /// <returns></returns>
-    public MapConfig<TSource, TTarget> Frozen()
+    public MapperConfig<TSource, TTarget> Frozen()
     {
         _frozenPropertyActions = FrozenDictionary.ToFrozenDictionary(_propertyActions);
         _propertyActions.Clear();

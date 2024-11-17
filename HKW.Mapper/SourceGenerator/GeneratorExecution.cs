@@ -18,8 +18,11 @@ internal partial class GeneratorExecution
 
     public INamedTypeSymbol IMapConverterType { get; private set; } = null!;
     public INamedTypeSymbol MapConfigType { get; private set; } = null!;
-    public Dictionary<INamedTypeSymbol, MapConfigInfo> MapConfigInfoByType { get; private set; } =
-        null!;
+    public Dictionary<INamedTypeSymbol, MapperConfigInfo> MapConfigInfoByType
+    {
+        get;
+        private set;
+    } = null!;
 
     public HashSet<INamedTypeSymbol> Converters { get; private set; } = [];
     public HashSet<INamedTypeSymbol> Configs { get; private set; } = [];
@@ -31,7 +34,7 @@ internal partial class GeneratorExecution
             return;
         Compilation = compilation;
         IMapConverterType = Compilation.GetTypeByMetadataName(typeof(IMapConverter<,>).FullName)!;
-        MapConfigType = Compilation.GetTypeByMetadataName(typeof(MapConfig<,>).FullName)!;
+        MapConfigType = Compilation.GetTypeByMetadataName(typeof(MapperConfig<,>).FullName)!;
 
         MapConfigInfoByType = GetMapConfigInfos(ExecutionContext);
         foreach (var compilationSyntaxTree in compilation.SyntaxTrees)
@@ -211,7 +214,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         if (mapInfo.MapConfigType is not null)
         {
             writer.WriteLine(
-                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.BeginMapAction)}(source,target);"
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapperConfig<int, int>.BeginMapAction)}(source,target);"
             );
             Configs.Add(mapInfo.MapConfigType);
         }
@@ -223,7 +226,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         if (mapInfo.MapConfigType is not null)
         {
             writer.WriteLine(
-                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.EndMapAction)}(source,target);"
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapperConfig<int, int>.EndMapAction)}(source,target);"
             );
         }
         writer.WriteLine("return target;");
@@ -256,7 +259,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         )
         {
             writer.WriteLine(
-                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapperConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
             );
             if (attributeData is not null)
             {
@@ -372,7 +375,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         if (mapInfo.MapConfigType is not null)
         {
             writer.WriteLine(
-                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.BeginMapAction)}(source,target);"
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapperConfig<int, int>.BeginMapAction)}(source,target);"
             );
             Configs.Add(mapInfo.MapConfigType);
         }
@@ -384,7 +387,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         if (mapInfo.MapConfigType is not null)
         {
             writer.WriteLine(
-                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.EndMapAction)}(source,target);"
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapperConfig<int, int>.EndMapAction)}(source,target);"
             );
         }
         writer.WriteLine("return source;");
@@ -417,7 +420,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         )
         {
             writer.WriteLine(
-                $"{mapInfo.MapConfigType.Name}.{nameof(MapConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
+                $"{mapInfo.MapConfigType.Name}.{nameof(MapperConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);"
             );
             if (attributeData is not null)
             {

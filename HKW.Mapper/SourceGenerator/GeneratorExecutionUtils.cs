@@ -8,11 +8,11 @@ namespace HKW.HKWMapper.SourceGenerator;
 
 internal partial class GeneratorExecution
 {
-    private Dictionary<INamedTypeSymbol, MapConfigInfo> GetMapConfigInfos(
+    private Dictionary<INamedTypeSymbol, MapperConfigInfo> GetMapConfigInfos(
         GeneratorExecutionContext context
     )
     {
-        var mapConfigInfoByType = new Dictionary<INamedTypeSymbol, MapConfigInfo>(
+        var mapConfigInfoByType = new Dictionary<INamedTypeSymbol, MapperConfigInfo>(
             SymbolEqualityComparer.Default
         );
         if (context.SyntaxReceiver is not SyntaxReceiver receiver)
@@ -29,7 +29,7 @@ internal partial class GeneratorExecution
                 is false
             )
                 continue;
-            var mapConfigInfo = new MapConfigInfo();
+            var mapConfigInfo = new MapperConfigInfo();
             mapConfigInfoByType.Add(classSymbol!, mapConfigInfo);
             var ctor = classDeclaration
                 .Members.OfType<ConstructorDeclarationSyntax>()

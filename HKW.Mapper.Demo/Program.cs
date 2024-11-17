@@ -25,7 +25,7 @@ internal class Program
     }
 }
 
-internal class TestMapConfig : MapConfig<Test1, Test2>
+internal class TestMapConfig : MapperConfig<Test1, Test2>
 {
     public TestMapConfig()
     {
@@ -49,7 +49,7 @@ internal class TestMapConfig : MapConfig<Test1, Test2>
     }
 }
 
-internal class TestMap1Config : MapConfig<Test1, Test2>
+internal class TestMap1Config : MapperConfig<Test1, Test2>
 {
     public TestMap1Config()
     {
