@@ -4,8 +4,8 @@
 		<Version>0.1.0</Version>
 		<Company>HKW</Company>
 		<Authors>HKW</Authors>
-		<PackageDescription>Noop</PackageDescription>
-		<PackageTags>mapper;SourceGenerator</PackageTags>
+		<PackageDescription>High-performance Mapper with SourceGenerator</PackageDescription>
+		<PackageTags>Mapper;SourceGenerator</PackageTags>
 		<TargetFramework>netstandard2.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<RootNamespace>HKW.HKWMapper</RootNamespace>

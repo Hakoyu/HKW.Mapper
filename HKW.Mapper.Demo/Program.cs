@@ -16,8 +16,8 @@ internal class Program
 
     static void Main(string[] args)
     {
-        var test1 = new Test1();
-        var test2 = test1.MapToTest2(new());
+        var test1 = new TestSource();
+        var test2 = test1.MapToTestTarget(new());
         //var test = new Test2();
         //var c = new TestMapConfig();
         //test.Value ??= 1;
@@ -25,7 +25,7 @@ internal class Program
     }
 }
 
-internal class TestMapConfig : MapperConfig<Test1, Test2>
+internal class TestMapConfig : MapperConfig<TestSource, TestTarget>
 {
     public TestMapConfig()
     {
@@ -38,18 +38,18 @@ internal class TestMapConfig : MapperConfig<Test1, Test2>
         );
     }
 
-    public override void BeginMapAction(Test1 source, Test2 target)
+    public override void BeginMapAction(TestSource source, TestTarget target)
     {
         return;
     }
 
-    public override void EndMapAction(Test1 source, Test2 target)
+    public override void EndMapAction(TestSource source, TestTarget target)
     {
         return;
     }
 }
 
-internal class TestMap1Config : MapperConfig<Test1, Test2>
+internal class TestMap1Config : MapperConfig<TestSource, TestTarget>
 {
     public TestMap1Config()
     {
@@ -62,43 +62,43 @@ internal class TestMap1Config : MapperConfig<Test1, Test2>
         );
     }
 
-    public override void BeginMapAction(Test1 source, Test2 target)
+    public override void BeginMapAction(TestSource source, TestTarget target)
     {
         return;
     }
 
-    public override void EndMapAction(Test1 source, Test2 target)
+    public override void EndMapAction(TestSource source, TestTarget target)
     {
         return;
     }
 }
 
-[MapFrom(typeof(Test1))]
-[MapTo(typeof(Test2), MapConfig = typeof(TestMapConfig))]
-[MapFrom(typeof(Test2), MapConfig = typeof(TestMap1Config))]
-internal class Test1
+[MapFrom(typeof(TestSource))]
+[MapTo(typeof(TestTarget), MapperConfig = typeof(TestMapConfig))]
+[MapFrom(typeof(TestTarget), MapperConfig = typeof(TestMap1Config))]
+internal class TestSource
 {
     [MapIgnoreProperty]
     public int Value { get; set; }
 
-    [Test1MapToTest2Property(typeof(TestConverter))]
-    [Test1MapFromTest2Property(typeof(TestConverter))]
+    [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
+    [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
     public int Value1 { get; set; }
 
-    [Test1MapToTest2Property(typeof(TestConverter))]
-    [Test1MapFromTest2Property(typeof(TestConverter))]
+    [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
+    [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
     public int Value2 { get; set; }
 
-    [Test1MapToTest2Property(typeof(TestConverter))]
-    [Test1MapFromTest2Property(typeof(TestConverter))]
+    [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
+    [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
     public int Value3 { get; set; }
 
-    [Test1MapToTest2Property(typeof(TestConverter))]
-    [Test1MapFromTest2Property(typeof(TestConverter))]
+    [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
+    [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
     public int Value4 { get; set; }
 }
 
-internal class Test2
+internal class TestTarget
 {
     internal int Value { get; set; }
     public string? Value1 { get; set; }

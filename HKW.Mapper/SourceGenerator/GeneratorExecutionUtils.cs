@@ -8,15 +8,15 @@ namespace HKW.HKWMapper.SourceGenerator;
 
 internal partial class GeneratorExecution
 {
-    private Dictionary<INamedTypeSymbol, MapperConfigInfo> GetMapConfigInfos(
+    private Dictionary<INamedTypeSymbol, MapperConfigInfo> GetMapperConfigInfos(
         GeneratorExecutionContext context
     )
     {
-        var mapConfigInfoByType = new Dictionary<INamedTypeSymbol, MapperConfigInfo>(
+        var mapperConfigInfoByType = new Dictionary<INamedTypeSymbol, MapperConfigInfo>(
             SymbolEqualityComparer.Default
         );
         if (context.SyntaxReceiver is not SyntaxReceiver receiver)
-            return mapConfigInfoByType;
+            return mapperConfigInfoByType;
         foreach (var classDeclaration in receiver.CandidateClasses)
         {
             var semanticModel = Compilation.GetSemanticModel(classDeclaration.SyntaxTree);
@@ -30,7 +30,7 @@ internal partial class GeneratorExecution
             )
                 continue;
             var mapConfigInfo = new MapperConfigInfo();
-            mapConfigInfoByType.Add(classSymbol!, mapConfigInfo);
+            mapperConfigInfoByType.Add(classSymbol!, mapConfigInfo);
             var ctor = classDeclaration
                 .Members.OfType<ConstructorDeclarationSyntax>()
                 .FirstOrDefault(x => x.ParameterList.Parameters.Count == 0);
@@ -78,7 +78,7 @@ internal partial class GeneratorExecution
                 }
             }
         }
-        return mapConfigInfoByType;
+        return mapperConfigInfoByType;
     }
 
     private HashSet<string> GetMapMethods(SyntaxTree compilationSyntaxTree)
@@ -394,7 +394,7 @@ internal partial class GeneratorExecution
                         continue;
                     datas.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
                     datas.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
-                    datas.TryGetValue(nameof(MapToAttribute.MapConfig), out var mapConfig);
+                    datas.TryGetValue(nameof(MapToAttribute.MapperConfig), out var mapConfig);
                     var targetType = (INamedTypeSymbol)value.Value!.Value.Value!;
                     var methodName = method?.Value?.Value?.ToString() ?? $"MapTo{targetType.Name}";
                     var mapConfigType = mapConfig?.Value?.Value as INamedTypeSymbol;
@@ -420,7 +420,7 @@ internal partial class GeneratorExecution
                         continue;
                     datas.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
                     datas.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
-                    datas.TryGetValue(nameof(MapToAttribute.MapConfig), out var mapConfig);
+                    datas.TryGetValue(nameof(MapToAttribute.MapperConfig), out var mapConfig);
                     var targetType = (INamedTypeSymbol)value.Value!.Value.Value!;
                     var mapConfigType = mapConfig?.Value?.Value as INamedTypeSymbol;
                     var methodName =

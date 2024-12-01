@@ -11,11 +11,11 @@ public sealed class MapToAttribute : Attribute
 {
     /// <inheritdoc/>
     /// <param name="TargetType">目标类型</param>
-    /// <param name="MapConfig">映射设置</param>
-    public MapToAttribute(Type TargetType, Type? MapConfig = null)
+    /// <param name="MapperConfig">映射设置</param>
+    public MapToAttribute(Type TargetType, Type? MapperConfig = null)
     {
         this.TargetType = TargetType;
-        this.MapConfig = MapConfig;
+        this.MapperConfig = MapperConfig;
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public sealed class MapToAttribute : Attribute
     /// <summary>
     /// 映射设置
     /// </summary>
-    public Type? MapConfig { get; set; }
+    public Type? MapperConfig { get; set; }
 
     /// <summary>
     /// 方法调用状态

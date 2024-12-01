@@ -30,8 +30,9 @@ class SyntaxReceiver : ISyntaxReceiver
         if (
             syntaxNode is ClassDeclarationSyntax classDeclarationSyntax
             && classDeclarationSyntax.BaseList?.Types.Any(type =>
-                type.ToString().Contains("MapConfig<")
-            ) == true
+                type.ToString().Contains(nameof(MapperConfig<int, int>) + "<")
+            )
+                is true
         )
         {
             CandidateClasses.Add(classDeclarationSyntax);
