@@ -172,9 +172,6 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         writer.WriteLine("{");
         writer.Indent++;
         writer.WriteLine("/// <summary>MapperExtensions</summary>");
-        writer.WriteLine(
-            $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-        );
         writer.WriteLine($"public static partial class MapperExtensions");
         writer.WriteLine("{");
         writer.Indent++;
