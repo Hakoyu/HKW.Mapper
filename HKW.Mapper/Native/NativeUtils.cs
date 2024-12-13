@@ -11,12 +11,4 @@ internal static class NativeUtils
     {
         return $"HKW.HKWMapper.{sourceType.Name}{methodName}PropertyAttribute";
     }
-
-    public static string GetMapIgnorePropertyAttributeName(
-        INamedTypeSymbol sourceType,
-        string methodName
-    )
-    {
-        return $"HKW.HKWMapper.{sourceType.Name}{methodName}IgnorePropertyAttribute";
-    }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using HKW.SourceGeneratorUtils;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -107,15 +108,17 @@ internal partial class GeneratorExecution
                 var attributeName = attribute.AttributeClass!.GetFullName();
                 if (attributeName == typeof(MapToAttribute).FullName)
                 {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
+                    var parameters = attribute.GetAttributeParameters();
+                    if (parameters.Count == 0)
                         continue;
                     if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
+                        parameters.TryGetValue(nameof(MapToAttribute.TargetType), out var value)
+                        is false
                     )
                         continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var methodData);
-                    var methodName = methodData?.Value?.Value?.ToString();
-                    var type = (INamedTypeSymbol)value.Value!.Value.Value!;
+                    parameters.TryGetValue(nameof(MapToAttribute.MethodName), out var methodData);
+                    var methodName = methodData?.Value?.ToString();
+                    var type = (INamedTypeSymbol)value.Value!;
                     if (string.IsNullOrWhiteSpace(methodName))
                         methodName = $"{classSymbol.Name}MapTo{type.Name}";
                     if (mapMethods.Add(methodName!) is false)
@@ -132,15 +135,15 @@ internal partial class GeneratorExecution
                 }
                 else if (attributeName == typeof(MapFromAttribute).FullName)
                 {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
-                        continue;
+                    var parameters = attribute.GetAttributeParameters();
                     if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
+                        parameters.TryGetValue(nameof(MapToAttribute.TargetType), out var value)
+                        is false
                     )
                         continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var methodData);
-                    var methodName = methodData?.Value?.Value?.ToString();
-                    var type = (INamedTypeSymbol)value.Value!.Value.Value!;
+                    parameters.TryGetValue(nameof(MapToAttribute.MethodName), out var methodData);
+                    var methodName = methodData?.Value?.ToString();
+                    var type = (INamedTypeSymbol)value.Value!;
                     if (string.IsNullOrWhiteSpace(methodName))
                         methodName = $"{classSymbol.Name}MapFrom{type.Name}";
                     if (mapMethods.Add(methodName!) is false)
@@ -305,53 +308,49 @@ internal partial class GeneratorExecution
         AttributeData attributeData,
         ref string? targetPropertyName,
         ref INamedTypeSymbol? converterType,
-        out Dictionary<string, TypeAndValue> attributeValues
+        out Dictionary<string, AttributeParameterValue> parameters
     )
     {
-        if (attributeData.TryGetAttributeAndValues(out attributeValues) is true)
+        parameters = attributeData.GetAttributeParameters();
+        if (parameters.Count == 0)
+            return;
+
+        if (parameters.TryGetValue(nameof(MapPropertyAttribute.PropertyName), out var nameData))
         {
-            if (
-                attributeValues.TryGetValue(
-                    nameof(MapPropertyAttribute.PropertyName),
-                    out var nameData
-                )
+            var name = nameData.Value?.ToString();
+            if (string.IsNullOrWhiteSpace(name) is false)
+                targetPropertyName = name;
+        }
+        if (
+            parameters.TryGetValue(
+                nameof(MapPropertyAttribute.ConverterType),
+                out var converterData
             )
+        )
+        {
+            converterType = converterData.Value as INamedTypeSymbol;
+            if (converterType is not null)
             {
-                var name = nameData.Value?.Value?.ToString();
-                if (string.IsNullOrWhiteSpace(name) is false)
-                    targetPropertyName = name;
-            }
-            if (
-                attributeValues.TryGetValue(
-                    nameof(MapPropertyAttribute.ConverterType),
-                    out var converterData
-                )
-            )
-            {
-                converterType = converterData.Value?.Value as INamedTypeSymbol;
-                if (converterType is not null)
-                {
-                    if (
-                        converterType.Interfaces.Any(x =>
-                            SymbolEqualityComparer.Default.Equals(
-                                x.OriginalDefinition,
-                                IMapConverterType
-                            )
+                if (
+                    converterType.Interfaces.Any(x =>
+                        SymbolEqualityComparer.Default.Equals(
+                            x.OriginalDefinition,
+                            IMapConverterType
                         )
-                        is false
                     )
-                    {
-                        var errorDiagnostic = Diagnostic.Create(
-                            Descriptors.ConverterError,
-                            attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                                attributeData.ApplicationSyntaxReference.Span
-                            ),
-                            converterType.Name
-                        );
-                        ExecutionContext.ReportDiagnostic(errorDiagnostic);
-                    }
-                    Converters.Add(converterType);
+                    is false
+                )
+                {
+                    var errorDiagnostic = Diagnostic.Create(
+                        Descriptors.ConverterError,
+                        attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                            attributeData.ApplicationSyntaxReference.Span
+                        ),
+                        converterType.Name
+                    );
+                    ExecutionContext.ReportDiagnostic(errorDiagnostic);
                 }
+                Converters.Add(converterType);
             }
         }
     }
@@ -386,18 +385,20 @@ internal partial class GeneratorExecution
                 var attributeName = attribute.AttributeClass!.GetFullName();
                 if (attributeName == typeof(MapToAttribute).FullName)
                 {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
+                    var parameters = attribute.GetAttributeParameters();
+                    if (parameters.Count == 0)
                         continue;
                     if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
+                        parameters.TryGetValue(nameof(MapToAttribute.TargetType), out var value)
+                        is false
                     )
                         continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
-                    datas.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
-                    datas.TryGetValue(nameof(MapToAttribute.MapperConfig), out var mapConfig);
-                    var targetType = (INamedTypeSymbol)value.Value!.Value.Value!;
-                    var methodName = method?.Value?.Value?.ToString() ?? $"MapTo{targetType.Name}";
-                    var mapConfigType = mapConfig?.Value?.Value as INamedTypeSymbol;
+                    parameters.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
+                    parameters.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
+                    parameters.TryGetValue(nameof(MapToAttribute.MapperConfig), out var mapConfig);
+                    var targetType = (INamedTypeSymbol)value.Value!;
+                    var methodName = method?.Value?.ToString() ?? $"MapTo{targetType.Name}";
+                    var mapConfigType = mapConfig?.Value as INamedTypeSymbol;
                     if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
                         targets = mapMethodsByType[classSymbol] = ([], []);
                     mapConfigType = CheckMapConfig(
@@ -407,24 +408,25 @@ internal partial class GeneratorExecution
                         mapConfigType
                     );
                     targets.ToMethods.Add(
-                        new(targetType, methodName, scrutiny?.Value?.Value is true, mapConfigType)
+                        new(targetType, methodName, scrutiny?.Value is true, mapConfigType)
                     );
                 }
                 else if (attributeName == typeof(MapFromAttribute).FullName)
                 {
-                    if (attribute.TryGetAttributeAndValues(out var datas) is false)
+                    var parameters = attribute.GetAttributeParameters();
+                    if (parameters.Count == 0)
                         continue;
                     if (
-                        datas.TryGetValue(nameof(MapToAttribute.TargetType), out var value) is false
+                        parameters.TryGetValue(nameof(MapToAttribute.TargetType), out var value)
+                        is false
                     )
                         continue;
-                    datas.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
-                    datas.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
-                    datas.TryGetValue(nameof(MapToAttribute.MapperConfig), out var mapConfig);
-                    var targetType = (INamedTypeSymbol)value.Value!.Value.Value!;
-                    var mapConfigType = mapConfig?.Value?.Value as INamedTypeSymbol;
-                    var methodName =
-                        method?.Value?.Value?.ToString() ?? $"MapFrom{targetType.Name}";
+                    parameters.TryGetValue(nameof(MapToAttribute.MethodName), out var method);
+                    parameters.TryGetValue(nameof(MapToAttribute.ScrutinyMode), out var scrutiny);
+                    parameters.TryGetValue(nameof(MapToAttribute.MapperConfig), out var mapConfig);
+                    var targetType = (INamedTypeSymbol)value.Value!;
+                    var mapConfigType = mapConfig?.Value as INamedTypeSymbol;
+                    var methodName = method?.Value?.ToString() ?? $"MapFrom{targetType.Name}";
                     if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
                         targets = mapMethodsByType[targetType] = ([], []);
                     mapConfigType = CheckMapConfig(
@@ -434,7 +436,7 @@ internal partial class GeneratorExecution
                         mapConfigType
                     );
                     targets.FromMethods.Add(
-                        new(targetType, methodName, scrutiny?.Value?.Value is true, mapConfigType)
+                        new(targetType, methodName, scrutiny?.Value is true, mapConfigType)
                     );
                 }
             }

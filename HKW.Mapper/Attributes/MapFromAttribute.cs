@@ -11,8 +11,15 @@ public sealed class MapFromAttribute : Attribute
 {
     /// <inheritdoc/>
     /// <param name="TargetType">目标类型</param>
+    public MapFromAttribute(Type TargetType)
+    {
+        this.TargetType = TargetType;
+    }
+
+    /// <inheritdoc/>
+    /// <param name="TargetType">目标类型</param>
     /// <param name="MapperConfig">映射设置</param>
-    public MapFromAttribute(Type TargetType, Type? MapperConfig = null)
+    public MapFromAttribute(Type TargetType, Type MapperConfig)
     {
         this.TargetType = TargetType;
         this.MapperConfig = MapperConfig;

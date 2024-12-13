@@ -1,4 +1,5 @@
 ﻿using System.CodeDom.Compiler;
+using HKW.SourceGeneratorUtils;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -102,7 +103,7 @@ internal partial class GeneratorExecution
 /// <para>This attribute is only used in <c>{mapMethod}</c></para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-[global::System.CodeDom.Compiler.GeneratedCode(""{System .Reflection.Assembly.GetCallingAssembly() .GetName() .Name}"",""{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}"")]
+{CommonData.GeneratedCodeAttribute}
 public sealed class {mapMethod}PropertyAttribute : Attribute
 {{
     /// <inheritdoc/>
@@ -127,6 +128,16 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     /// ConverterType
     /// </summary>
     public Type? ConverterType {{ get; set; }}
+
+    /// <summary>
+    /// {nameof(MapPropertyAttribute.MapWhenRValueNotNullOrDefault)}
+    /// </summary>
+    public bool {nameof(MapPropertyAttribute.MapWhenRValueNotNullOrDefault)} {{ get; set; }}
+
+    /// <summary>
+    /// {nameof(MapPropertyAttribute.MapWhenLValueNullOrDefault)}
+    /// </summary>
+    public bool {nameof(MapPropertyAttribute.MapWhenLValueNullOrDefault)} {{ get; set; }}
 }}"
             );
         }
@@ -202,9 +213,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     )
     {
         var accessibility = sourceType.GetLowestAccessibility(mapInfo.TargetType);
-        writer.WriteLine(
-            $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-        );
+        writer.WriteLine(CommonData.GeneratedCodeAttribute);
         writer.WriteLine(
             $"{accessibility} static {mapInfo.TargetType.GetFullNameAndGeneric()} {mapInfo.MethodName}(this {sourceType.GetFullNameAndGeneric()} source, {mapInfo.TargetType.GetFullNameAndGeneric()} target)"
         );
@@ -320,7 +329,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
                 attributeData,
                 ref targetPropertyName,
                 ref converterType,
-                out var attributeValues
+                out var attributeParameters
             );
             // 检查属性
             if (
@@ -328,6 +337,33 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
                 is not IPropertySymbol targetProperty
             )
                 return;
+
+            if (
+                attributeParameters.TryGetValue(
+                    nameof(MapPropertyAttribute.MapWhenRValueNotNullOrDefault),
+                    out var mapWhenR
+                ) && mapWhenR.Value is true
+            )
+            {
+                if (property.Type.IsValueType)
+                    writer.WriteLine($"if(source.{property.Name} == default)");
+                else
+                    writer.WriteLine($"if(source.{property.Name} is not null)");
+            }
+
+            if (
+                attributeParameters.TryGetValue(
+                    nameof(MapPropertyAttribute.MapWhenLValueNullOrDefault),
+                    out var mapWhenL
+                ) && mapWhenL.Value is true
+            )
+            {
+                if (targetProperty.Type.IsValueType)
+                    writer.WriteLine($"if(target.{targetPropertyName} == default)");
+                else
+                    writer.WriteLine($"if(target.{targetPropertyName} is null)");
+            }
+
             if (converterType is not null)
             {
                 if (CheckConverter(property, targetProperty, attributeData, converterType))
@@ -366,9 +402,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     )
     {
         var accessibility = sourceType.GetLowestAccessibility(mapInfo.TargetType);
-        writer.WriteLine(
-            $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-        );
+        writer.WriteLine(CommonData.GeneratedCodeAttribute);
         writer.WriteLine(
             $"{accessibility} static {sourceType.GetFullNameAndGeneric()} {mapInfo.MethodName}(this {sourceType.GetFullNameAndGeneric()} source, {mapInfo.TargetType.GetFullNameAndGeneric()} target)"
         );
@@ -484,7 +518,7 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
                 attributeData,
                 ref targetPropertyName,
                 ref converterType,
-                out var attributeValues
+                out var attributeParameters
             );
             // 检查属性
             if (
@@ -492,6 +526,31 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
                 is not IPropertySymbol targetProperty
             )
                 return;
+            if (
+                attributeParameters.TryGetValue(
+                    nameof(MapPropertyAttribute.MapWhenRValueNotNullOrDefault),
+                    out var mapWhenR
+                ) && mapWhenR.Value is true
+            )
+            {
+                if (targetProperty.Type.IsValueType)
+                    writer.WriteLine($"if(target.{targetPropertyName} == default)");
+                else
+                    writer.WriteLine($"if(target.{targetPropertyName} is not null)");
+            }
+
+            if (
+                attributeParameters.TryGetValue(
+                    nameof(MapPropertyAttribute.MapWhenLValueNullOrDefault),
+                    out var mapWhenL
+                ) && mapWhenL.Value is true
+            )
+            {
+                if (property.Type.IsValueType)
+                    writer.WriteLine($"if(source.{property.Name} == default)");
+                else
+                    writer.WriteLine($"if(source.{property.Name} is null)");
+            }
 
             if (converterType is not null)
             {
@@ -542,13 +601,9 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         {
             var typeFullName = converter.GetFullName();
             var fieldName = $"_{converter.Name.FirstLetterToLower()}";
-            writer.WriteLine(
-                $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-            );
+            writer.WriteLine(CommonData.GeneratedCodeAttribute);
             writer.WriteLine($"private static {typeFullName}? {fieldName};");
-            writer.WriteLine(
-                $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-            );
+            writer.WriteLine(CommonData.GeneratedCodeAttribute);
             writer.WriteLine(
                 $"{converter.GetAccessibilityString()} static {typeFullName} {converter.Name} => {fieldName} ?? ({fieldName} = new {typeFullName}()); "
             );
@@ -578,13 +633,9 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         {
             var typeFullName = config.GetFullName();
             var fieldName = $"_{config.Name.FirstLetterToLower()}";
-            writer.WriteLine(
-                $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-            );
+            writer.WriteLine(CommonData.GeneratedCodeAttribute);
             writer.WriteLine($"private static {typeFullName}? {fieldName};");
-            writer.WriteLine(
-                $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]"
-            );
+            writer.WriteLine(CommonData.GeneratedCodeAttribute);
             writer.WriteLine(
                 $"{config.GetAccessibilityString()} static {typeFullName} {config.Name} => {fieldName} ?? ({fieldName} = ({typeFullName})new {typeFullName}().Frozen()); "
             );

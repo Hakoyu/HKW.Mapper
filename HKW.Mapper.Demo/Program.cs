@@ -16,8 +16,11 @@ internal class Program
 
     static void Main(string[] args)
     {
+        string str = default;
+        TestSource t = default;
         var test1 = new TestSource();
         var test2 = test1.MapToTestTarget(new());
+        if (t.Value1 == default) { }
         //var test = new Test2();
         //var c = new TestMapConfig();
         //test.Value ??= 1;
@@ -81,13 +84,29 @@ internal class TestSource
     [MapIgnoreProperty]
     public int Value { get; set; }
 
-    [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
-    [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
+    [TestSourceMapToTestTargetProperty(
+        "Value1",
+        MapWhenLValueNullOrDefault = true,
+        MapWhenRValueNotNullOrDefault = true
+    )]
+    [TestSourceMapFromTestTargetProperty(
+        "Value1",
+        MapWhenLValueNullOrDefault = true,
+        MapWhenRValueNotNullOrDefault = true
+    )]
     public int Value1 { get; set; }
 
-    [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
-    [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
-    public int Value2 { get; set; }
+    [TestSourceMapToTestTargetProperty(
+        "Value2",
+        MapWhenLValueNullOrDefault = true,
+        MapWhenRValueNotNullOrDefault = true
+    )]
+    [TestSourceMapFromTestTargetProperty(
+        "Value2",
+        MapWhenLValueNullOrDefault = true,
+        MapWhenRValueNotNullOrDefault = true
+    )]
+    public string Value2 { get; set; }
 
     [TestSourceMapToTestTargetProperty(typeof(TestConverter))]
     [TestSourceMapFromTestTargetProperty(typeof(TestConverter))]
@@ -101,8 +120,8 @@ internal class TestSource
 internal class TestTarget
 {
     internal int Value { get; set; }
-    public string? Value1 { get; set; }
-    public string? Value2 { get; set; }
+    public int Value1 { get; set; }
+    public string Value2 { get; set; } = null!;
     public string? Value3 { get; set; }
     public string? Value4 { get; set; }
 }

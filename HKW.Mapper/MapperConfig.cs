@@ -54,7 +54,11 @@ public abstract class MapperConfig<TSource, TTarget>
     /// <returns></returns>
     public MapperConfig<TSource, TTarget> Frozen()
     {
-        _frozenPropertyActions = FrozenDictionary.ToFrozenDictionary(_propertyActions);
+        _frozenPropertyActions = FrozenDictionary.ToFrozenDictionary(
+            _propertyActions,
+            x => string.Intern(x.Key),
+            x => x.Value
+        );
         _propertyActions.Clear();
         _propertyActions = null!;
         return this;

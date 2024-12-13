@@ -11,8 +11,15 @@ public sealed class MapToAttribute : Attribute
 {
     /// <inheritdoc/>
     /// <param name="TargetType">目标类型</param>
+    public MapToAttribute(Type TargetType)
+    {
+        this.TargetType = TargetType;
+    }
+
+    /// <inheritdoc/>
+    /// <param name="TargetType">目标类型</param>
     /// <param name="MapperConfig">映射设置</param>
-    public MapToAttribute(Type TargetType, Type? MapperConfig = null)
+    public MapToAttribute(Type TargetType, Type MapperConfig)
     {
         this.TargetType = TargetType;
         this.MapperConfig = MapperConfig;
