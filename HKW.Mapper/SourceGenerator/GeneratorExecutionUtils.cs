@@ -428,7 +428,7 @@ internal partial class GeneratorExecution
                     var mapConfigType = mapConfig?.Value as INamedTypeSymbol;
                     var methodName = method?.Value?.ToString() ?? $"MapFrom{targetType.Name}";
                     if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
-                        targets = mapMethodsByType[targetType] = ([], []);
+                        targets = mapMethodsByType[classSymbol] = ([], []);
                     mapConfigType = CheckMapConfig(
                         classSymbol,
                         attribute,

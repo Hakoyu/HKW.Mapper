@@ -16,11 +16,6 @@ internal class Program
 
     static void Main(string[] args)
     {
-        string str = default;
-        TestSource t = default;
-        var test1 = new TestSource();
-        var test2 = test1.MapToTestTarget(new());
-        if (t.Value1 == default) { }
         //var test = new Test2();
         //var c = new TestMapConfig();
         //test.Value ??= 1;
@@ -28,59 +23,17 @@ internal class Program
     }
 }
 
-internal class TestMapConfig : MapperConfig<TestSource, TestTarget>
-{
-    public TestMapConfig()
-    {
-        AddMap(
-            x => x.Value!,
-            (s, t) =>
-            {
-                s.Value = t.Value;
-            }
-        );
-    }
-
-    public override void BeginMapAction(TestSource source, TestTarget target)
-    {
-        return;
-    }
-
-    public override void EndMapAction(TestSource source, TestTarget target)
-    {
-        return;
-    }
-}
-
-internal class TestMap1Config : MapperConfig<TestSource, TestTarget>
-{
-    public TestMap1Config()
-    {
-        AddMap(
-            x => x.Value,
-            (s, t) =>
-            {
-                s.Value = t.Value;
-            }
-        );
-    }
-
-    public override void BeginMapAction(TestSource source, TestTarget target)
-    {
-        return;
-    }
-
-    public override void EndMapAction(TestSource source, TestTarget target)
-    {
-        return;
-    }
-}
-
 [MapFrom(typeof(TestSource))]
 [MapTo(typeof(TestTarget), MapperConfig = typeof(TestMapConfig))]
-[MapFrom(typeof(TestTarget), MapperConfig = typeof(TestMap1Config))]
+[MapFrom(typeof(TestTarget))]
 internal class TestSource
 {
+    public int this[int v]
+    {
+        get => Value;
+        set => Value = value;
+    }
+
     [MapIgnoreProperty]
     public int Value { get; set; }
 
@@ -147,7 +100,53 @@ internal class TestConverter : IMapConverter<int, string>
     }
 }
 
+internal class TestMapConfig : MapperConfig<TestSource, TestTarget>
+{
+    public TestMapConfig()
+    {
+        AddMap(
+            x => x.Value!,
+            (s, t) =>
+            {
+                s.Value = t.Value;
+            }
+        );
+    }
 
+    public override void BeginMapAction(TestSource source, TestTarget target)
+    {
+        return;
+    }
+
+    public override void EndMapAction(TestSource source, TestTarget target)
+    {
+        return;
+    }
+}
+
+internal class TestMap1Config : MapperConfig<TestSource, TestTarget>
+{
+    public TestMap1Config()
+    {
+        AddMap(
+            x => x.Value,
+            (s, t) =>
+            {
+                s.Value = t.Value;
+            }
+        );
+    }
+
+    public override void BeginMapAction(TestSource source, TestTarget target)
+    {
+        return;
+    }
+
+    public override void EndMapAction(TestSource source, TestTarget target)
+    {
+        return;
+    }
+}
 
 //partial class TestModel : ReactiveObject
 //{

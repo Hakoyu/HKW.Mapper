@@ -258,6 +258,9 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
         // 如果是静态属性,则跳过
         if (property.IsStatic)
             return;
+        // 如果是索引器,则跳过
+        if (property.IsIndexer)
+            return;
         var attributes = property.GetAttributes();
         // 获取特性
         var attributeData = attributes.FirstOrDefault(x =>
@@ -446,6 +449,9 @@ public sealed class {mapMethod}PropertyAttribute : Attribute
     {
         // 如果是静态属性,则跳过
         if (property.IsStatic)
+            return;
+        // 如果是索引器,则跳过
+        if (property.IsIndexer)
             return;
         var attributes = property.GetAttributes();
 
