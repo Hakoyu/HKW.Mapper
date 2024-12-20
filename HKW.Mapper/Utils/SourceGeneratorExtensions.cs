@@ -41,6 +41,16 @@ internal static class SourceGeneratorExtensions
     }
 
     /// <summary>
+    /// 获取点替换为下划线的全名
+    /// </summary>
+    /// <param name="typeSymbol"></param>
+    /// <returns></returns>
+    public static string GetUnderlineFullName(this ITypeSymbol typeSymbol)
+    {
+        return $"{typeSymbol.ContainingNamespace.ToString().Replace('.', '_')}_{typeSymbol.Name}";
+    }
+
+    /// <summary>
     /// 获取名称和泛型
     /// </summary>
     /// <param name="typeSymbol"></param>

@@ -17,7 +17,14 @@ internal partial class Generator : ISourceGenerator
 
     public void Execute(GeneratorExecutionContext context)
     {
-        GeneratorExecution.Load(context).Execute();
+        var compilation = GenerateMapPropertyAttributes.Execute(context);
+        if (compilation is null)
+            return;
+
+        var info = GenerateMappers.Execute(context, compilation);
+
+        GenerateConfigs.Execute(context, info.Configs);
+        GenerateConverters.Execute(context, info.Converters);
     }
 }
 

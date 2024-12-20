@@ -3,8 +3,8 @@
 /// <summary>
 /// 从目标类型制图
 /// <para>会在当前类型生成一个扩展方法用于将目标类型映射当前类型</para>
-/// <para>自动生成方法 <c>MapFrom{TargetClassName}</c> </para>
-/// <para>自动生成特性 <c>{SourceClassName}{MethodName}PropertyAttribute</c>, 可用其对属性进行更详细的设置</para>
+/// <para>自动生成方法 <c>MapFrom{<see cref="TargetName"/>}</c> </para>
+/// <para>自动生成特性 <c>{SourceClassName}MapFrom{<see cref="TargetName"/>}PropertyAttribute</c>, 可用其对属性进行更详细的设置</para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class MapFromAttribute : Attribute
@@ -31,9 +31,9 @@ public sealed class MapFromAttribute : Attribute
     public Type TargetType { get; set; }
 
     /// <summary>
-    /// 方法名称, 默认名称为 <c>MapFrom{TargetClassName}</c>
+    /// 方法名称, 默认为 <c>{TargetType.Name}</c>
     /// </summary>
-    public string? MethodName { get; set; }
+    public string? TargetName { get; set; }
 
     /// <summary>
     /// 严格模式

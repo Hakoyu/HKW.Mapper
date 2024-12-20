@@ -20,7 +20,7 @@ public abstract class MapperConfig<TSource, TTarget>
     /// <param name="expression">映射属性表达式</param>
     /// <param name="action">映射行动</param>
     /// <exception cref="ArgumentException">映射格式错误</exception>
-    protected void AddMap(
+    protected internal void AddMap(
         Expression<Func<TSource, object>> expression,
         Action<TSource, TTarget> action
     )

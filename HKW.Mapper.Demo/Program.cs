@@ -23,7 +23,7 @@ internal class Program
     }
 }
 
-[MapFrom(typeof(TestSource))]
+[MapFrom(typeof(TestSource), TargetName = "TestSource1")]
 [MapTo(typeof(TestTarget), MapperConfig = typeof(TestMapConfig))]
 [MapFrom(typeof(TestTarget))]
 internal class TestSource
@@ -72,6 +72,7 @@ internal class TestSource
 
 internal class TestTarget
 {
+    internal int Abc;
     internal int Value { get; set; }
     public int Value1 { get; set; }
     public string Value2 { get; set; } = null!;

@@ -9,6 +9,6 @@ internal static class NativeUtils
 {
     public static string GetMapPropertyAttributeName(INamedTypeSymbol sourceType, string methodName)
     {
-        return $"HKW.HKWMapper.{sourceType.Name}{methodName}PropertyAttribute";
+        return $"{sourceType.ContainingNamespace}.{sourceType.Name}{methodName}PropertyAttribute";
     }
 }
