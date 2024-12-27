@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using System.Collections;
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -8,13 +9,48 @@ namespace HKW.SourceGeneratorUtils;
 internal static class SourceGeneratorExtensions
 {
     /// <summary>
-    /// 从当前类以及父类中获取成员
+    /// 获取任务返回值
+    /// </summary>
+    /// <param name="symbol"></param>
+    /// <returns>如果类型是 <see cref="Task{T}"/> 则返回结果, 否则返回 <see langword="null"/></returns>
+    public static INamedTypeSymbol? GetTaskResult(this ITypeSymbol symbol)
+    {
+        const string TeskResultFullName = "System.Threading.Tasks.Task<TResult>";
+        var currentType = symbol;
+        while (currentType != null)
+        {
+            if (currentType.OriginalDefinition?.ToString() == TeskResultFullName)
+                return ((INamedTypeSymbol)currentType).TypeArguments[0] as INamedTypeSymbol;
+            currentType = currentType.BaseType;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 从当前类中查找成员
     /// </summary>
     /// <typeparam name="TMemberType">成员类型</typeparam>
     /// <param name="symbol">当前类</param>
     /// <param name="memberName">成员名称</param>
     /// <returns>成员</returns>
-    public static TMemberType? GetMember<TMemberType>(
+    public static TMemberType? FindMember<TMemberType>(
+        this INamedTypeSymbol symbol,
+        string memberName
+    )
+        where TMemberType : ISymbol
+    {
+        var temp = symbol;
+        return temp.GetMembers(memberName).OfType<TMemberType>().FirstOrDefault();
+    }
+
+    /// <summary>
+    /// 从当前类以及父类中查找成员
+    /// </summary>
+    /// <typeparam name="TMemberType">成员类型</typeparam>
+    /// <param name="symbol">当前类</param>
+    /// <param name="memberName">成员名称</param>
+    /// <returns>成员</returns>
+    public static TMemberType? FindMemberIncludingBaseTypes<TMemberType>(
         this INamedTypeSymbol symbol,
         string memberName
     )
@@ -78,8 +114,8 @@ internal static class SourceGeneratorExtensions
         if (typeSymbol is INamedTypeSymbol namedTypeSymbol)
         {
             if (xmlFormat)
-                return $"{namedTypeSymbol}{(namedTypeSymbol.TypeParameters.Length > 0 ? $"{{{string.Join(", ", namedTypeSymbol.TypeParameters)}}}" : string.Empty)}";
-            return $"{namedTypeSymbol}{(namedTypeSymbol.TypeParameters.Length > 0 ? $"<{string.Join(", ", namedTypeSymbol.TypeParameters)}>" : string.Empty)}";
+                return namedTypeSymbol.ToString().ToXMLFormat();
+            return namedTypeSymbol.ToString();
         }
         return typeSymbol.GetFullName();
     }
@@ -149,7 +185,7 @@ internal static class SourceGeneratorExtensions
     /// </summary>
     /// <param name="attributeData"></param>
     /// <returns>特性参数和值 (ParameterName, ParameterValue)</returns>
-    public static Dictionary<string, AttributeParameterValue> GetAttributeParameters(
+    public static Dictionary<string, AttributeParameterValue> GetAttributeParameterInfos(
         this AttributeData attributeData
     )
     {
@@ -173,6 +209,40 @@ internal static class SourceGeneratorExtensions
             if (parameters.ContainsKey(name))
                 continue;
             parameters.Add(name, new(info));
+        }
+        return parameters;
+    }
+
+    /// <summary>
+    /// 获取特性参数值
+    /// </summary>
+    /// <param name="attributeData"></param>
+    /// <returns>特性参数和值 (ParameterName, ParameterValue)</returns>
+    public static AttributeParameterByName GetAttributeParameters(this AttributeData attributeData)
+    {
+        var parameters = new AttributeParameterByName();
+        if (
+            attributeData?.AttributeConstructor?.Parameters
+            is not ImmutableArray<IParameterSymbol> constructorParams
+        )
+            return parameters;
+
+        var allArguments = attributeData
+            .ConstructorArguments
+            // 如果参数未命名,则从参数顺序获取名称
+            .Select((info, index) => (constructorParams[index].Name, info))
+            // 然后合并参数和值
+            .Union(attributeData.NamedArguments.Select(x => (x.Key, x.Value)))
+            .Distinct();
+
+        foreach (var (name, info) in allArguments)
+        {
+            if (parameters.ContainsKey(name))
+                continue;
+            if (info.Kind is TypedConstantKind.Array)
+                parameters.Add(name, info.Values);
+            else
+                parameters.Add(name, info.Value);
         }
         return parameters;
     }
@@ -302,5 +372,68 @@ internal static class SourceGeneratorExtensions
             }
         }
         return sb;
+    }
+
+    /// <summary>
+    /// 尝试添加
+    /// </summary>
+    /// <typeparam name="TKey"></typeparam>
+    /// <typeparam name="TValue"></typeparam>
+    /// <param name="dictionary"></param>
+    /// <param name="key"></param>
+    /// <param name="value"></param>
+    /// <returns></returns>
+    public static bool TryAdd<TKey, TValue>(
+        this IDictionary<TKey, TValue> dictionary,
+        TKey key,
+        TValue value
+    )
+        where TKey : notnull
+    {
+        if (dictionary.TryGetValue(key, out _))
+            return false;
+
+        dictionary.Add(key, value);
+        return true;
+    }
+}
+
+/// <summary>
+/// 特性参数
+/// </summary>
+public class AttributeParameterByName : Dictionary<string, object?>
+{
+    /// <summary>
+    /// 尝试获取值
+    /// </summary>
+    /// <typeparam name="TOutValue">类型</typeparam>
+    /// <param name="parameterName">参数名称</param>
+    /// <param name="outValue"></param>
+    /// <returns>参数存在为 <see langword="true"/> 不存在为 <see langword="false"/></returns>
+    public bool TryGetValue<TOutValue>(string parameterName, out TOutValue outValue)
+    {
+        var r = base.TryGetValue(parameterName, out var value);
+        if (value is null)
+            outValue = default!;
+        else
+            outValue = (TOutValue)value!;
+        return r;
+    }
+
+    /// <summary>
+    /// 尝试获取数组
+    /// </summary>
+    /// <typeparam name="TOutValue">类型</typeparam>
+    /// <param name="parameterName">参数名称</param>
+    /// <param name="outValue"></param>
+    /// <returns>参数存在为 <see langword="true"/> 不存在为 <see langword="false"/></returns>
+    public bool TryGetArray<TOutValue>(string parameterName, out TOutValue[] outValue)
+    {
+        var r = base.TryGetValue(parameterName, out var value);
+        if (value is ICollection collection)
+            outValue = collection.Cast<TOutValue>().ToArray();
+        else
+            outValue = default!;
+        return r;
     }
 }

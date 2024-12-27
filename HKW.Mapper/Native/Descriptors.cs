@@ -26,11 +26,11 @@ internal static class Descriptors
             isEnabledByDefault: true
         );
 
-    public static readonly DiagnosticDescriptor ConverterError =
+    public static readonly DiagnosticDescriptor NotImplementIMapConverter =
         new(
             id: "M0003",
             title: "Converter not implemented IConverter interface",
-            messageFormat: "Converter \"{0}\", not implemented IMapConverter interface",
+            messageFormat: "Converter \"{0}\" Not implemented IMapConverter interface",
             category: "HKWMapper",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true
@@ -139,6 +139,26 @@ internal static class Descriptors
             id: "M0014",
             title: "Same map property config",
             messageFormat: "Map property config \"{0}\" is exists, please check your map property config",
+            category: "HKWMapper",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true
+        );
+
+    public static readonly DiagnosticDescriptor ImplementMultipleIMapConverter =
+        new(
+            id: "M0015",
+            title: "Multiple IMapConvert interfaces",
+            messageFormat: "Converter \"{0}\" Implements multiple IMapConvert interfaces, but will only use the first one",
+            category: "HKWMapper",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true
+        );
+
+    public static DiagnosticDescriptor MapAsyncTaskDoesNotExist =
+        new(
+            id: "M0016",
+            title: "Map async task does not exist",
+            messageFormat: "Async task does not exist, please check the property type or set InvokeState to Sync in attribute",
             category: "HKWMapper",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true

@@ -14,6 +14,8 @@ internal class GenerateConverters
         HashSet<INamedTypeSymbol> converters
     )
     {
+        if (converters.Count == 0)
+            return;
         var x = new GenerateConverters() { ExecutionContext = executionContext };
         x.Generate(converters);
     }

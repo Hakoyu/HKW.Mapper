@@ -49,5 +49,5 @@ public sealed class MapToAttribute : Attribute
     /// 方法调用状态
     /// <para>会根据设置来生成对应的方法</para>
     /// </summary>
-    public MapMethodInvokeState MethodInvokeState { get; set; }
+    public MapMethodInvokeState InvokeState { get; set; }
 }

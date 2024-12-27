@@ -2,20 +2,69 @@
 
 namespace HKW.HKWMapper.SourceGenerator;
 
-internal class MapInfo(
-    INamedTypeSymbol targetType,
-    string methodName,
-    bool scrutinyMode,
-    INamedTypeSymbol? mapConfigType
-) : IEquatable<MapInfo>
+internal class MapInfo : IEquatable<MapInfo>
 {
-    public INamedTypeSymbol TargetType { get; set; } = targetType;
+    public MapInfo(
+        AttributeData attribute,
+        INamedTypeSymbol sourceType,
+        INamedTypeSymbol targetType,
+        string methodName
+    )
+    {
+        Attribute = attribute;
+        SourceType = sourceType;
+        TargetType = targetType;
+        MethodName = methodName;
+        PropertyAttributeFullName =
+            $"{sourceType.ContainingNamespace}.{sourceType.Name}{methodName}PropertyAttribute";
+    }
 
-    public string MethodName { get; set; } = methodName;
+    public AttributeData Attribute { get; }
 
-    public bool ScrutinyMode { get; set; } = scrutinyMode;
+    /// <summary>
+    /// 源类型
+    /// </summary>
+    public INamedTypeSymbol SourceType { get; }
 
-    public INamedTypeSymbol? MapConfigType { get; set; } = mapConfigType;
+    /// <summary>
+    /// 目标类型
+    /// </summary>
+    public INamedTypeSymbol TargetType { get; }
+
+    /// <summary>
+    /// 方法名称
+    /// </summary>
+    public string MethodName { get; }
+
+    /// <summary>
+    /// 属性特性名称
+    /// </summary>
+    public string PropertyAttributeFullName { get; }
+
+    /// <summary>
+    /// 严格模式
+    /// </summary>
+    public bool ScrutinyMode { get; set; }
+
+    /// <summary>
+    /// 映射设置类型
+    /// </summary>
+    public INamedTypeSymbol? ConfigType { get; set; }
+
+    /// <summary>
+    /// 方法执行类型
+    /// </summary>
+    public MapMethodInvokeState InvokeState { get; set; }
+
+    /// <summary>
+    /// 是映射至
+    /// </summary>
+    public bool IsMapTo { get; set; }
+
+    /// <summary>
+    /// 是异步
+    /// </summary>
+    public bool IsAsync { get; set; }
 
     public bool Equals(MapInfo? other)
     {

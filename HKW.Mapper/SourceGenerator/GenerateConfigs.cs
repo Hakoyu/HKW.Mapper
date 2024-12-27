@@ -14,6 +14,8 @@ internal class GenerateConfigs
         HashSet<INamedTypeSymbol> configs
     )
     {
+        if (configs.Count == 0)
+            return;
         var x = new GenerateConfigs() { ExecutionContext = executionContext };
         x.Generate(configs);
     }

@@ -11,6 +11,8 @@ internal static class CommonData
 {
     public const string TaskTypeFullName = "global::System.Threading.Tasks.Task";
 
+    public const string TeskResultFullName = "System.Threading.Tasks.Task<TResult>";
+
     public static string GeneratedCodeAttribute { get; } =
         $"[global::System.CodeDom.Compiler.GeneratedCode(\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Name}\",\"{System.Reflection.Assembly.GetCallingAssembly().GetName().Version}\")]";
 

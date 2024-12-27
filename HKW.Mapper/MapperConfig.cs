@@ -11,11 +11,16 @@ namespace HKW.HKWMapper;
 public abstract class MapperConfig<TSource, TTarget>
 {
     private Dictionary<string, Action<TSource, TTarget>> _propertyActions = [];
+    private Dictionary<string, Func<TSource, TTarget, Task>> _propertyActionAsyncs = [];
     private FrozenDictionary<string, Action<TSource, TTarget>> _frozenPropertyActions = null!;
+    private FrozenDictionary<string, Func<TSource, TTarget, Task>> _frozenPropertyActionAsyncs =
+        null!;
 
     /// <summary>
     /// 添加映射
     /// <para><c>x=>x.Property,(s,t)=>{}</c></para>
+    /// <para><c>MapTo: t.Value = s.Value</c></para>
+    /// <para><c>MapFrom: s.Value = t.Value</c></para>
     /// </summary>
     /// <param name="expression">映射属性表达式</param>
     /// <param name="action">映射行动</param>
@@ -25,14 +30,38 @@ public abstract class MapperConfig<TSource, TTarget>
         Action<TSource, TTarget> action
     )
     {
+        _propertyActions.Add(GetName(expression), action);
+    }
+
+    /// <summary>
+    /// 添加映射
+    /// <para><c>x=>x.Property,(s,t)=>{}</c></para>
+    /// <para><c>MapTo: t.Value = s.Value</c></para>
+    /// <para><c>MapFrom: s.Value = t.Value</c></para>
+    /// </summary>
+    /// <param name="expression">映射属性表达式</param>
+    /// <param name="action">映射行动</param>
+    /// <exception cref="ArgumentException">映射格式错误</exception>
+    protected internal void AddMapAsync(
+        Expression<Func<TSource, object>> expression,
+        Func<TSource, TTarget, Task> action
+    )
+    {
+        _propertyActionAsyncs.Add(GetName(expression), action);
+    }
+
+    private static string GetName(Expression<Func<TSource, object>> expression)
+    {
         if (expression.Body is MemberExpression member)
         {
-            _propertyActions.Add(member.Member.Name, action);
+            return member.Member.Name;
         }
-        else if (expression.Body is UnaryExpression unary)
+        else if (
+            expression.Body is UnaryExpression unary
+            && unary.Operand is MemberExpression unaryMember
+        )
         {
-            if (unary.Operand is MemberExpression unaryMember)
-                _propertyActions.Add(unaryMember.Member.Name, action);
+            return unaryMember.Member.Name;
         }
         else
             throw new ArgumentException("Expression error", nameof(expression));
@@ -49,6 +78,16 @@ public abstract class MapperConfig<TSource, TTarget>
     }
 
     /// <summary>
+    /// 获取映射行动
+    /// </summary>
+    /// <param name="propertyName">名称</param>
+    /// <returns>映射行动</returns>
+    public Func<TSource, TTarget, Task> GetMapActionAsync(string propertyName)
+    {
+        return _frozenPropertyActionAsyncs[propertyName];
+    }
+
+    /// <summary>
     /// 将已添加的映射冻结,以提高性能
     /// </summary>
     /// <returns></returns>
@@ -59,8 +98,15 @@ public abstract class MapperConfig<TSource, TTarget>
             x => string.Intern(x.Key),
             x => x.Value
         );
+        _frozenPropertyActionAsyncs = FrozenDictionary.ToFrozenDictionary(
+            _propertyActionAsyncs,
+            x => string.Intern(x.Key),
+            x => x.Value
+        );
         _propertyActions.Clear();
         _propertyActions = null!;
+        _propertyActionAsyncs.Clear();
+        _propertyActionAsyncs = null!;
         return this;
     }
 
@@ -73,4 +119,20 @@ public abstract class MapperConfig<TSource, TTarget>
     /// 结束映射行动
     /// </summary>
     public virtual void EndMapAction(TSource source, TTarget target) { }
+
+    /// <summary>
+    /// 开始映射行动
+    /// </summary>
+    public virtual Task BeginMapActionAsync(TSource source, TTarget target)
+    {
+        return null!;
+    }
+
+    /// <summary>
+    /// 结束映射行动
+    /// </summary>
+    public virtual Task EndMapActionAsync(TSource source, TTarget target)
+    {
+        return null!;
+    }
 }

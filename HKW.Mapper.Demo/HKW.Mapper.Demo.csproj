@@ -7,7 +7,6 @@
 		<ImplicitUsings>Enable</ImplicitUsings>
 		<Nullable>Enable</Nullable>
 		<IncludeSymbols>false</IncludeSymbols>
-		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<RootNamespace>HKW.HKWMapper.Demo</RootNamespace>
 		<PathMap>$(SolutionDir)=$(MSBuildProjectName.Replace(" ", "_"))/</PathMap>
 		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>

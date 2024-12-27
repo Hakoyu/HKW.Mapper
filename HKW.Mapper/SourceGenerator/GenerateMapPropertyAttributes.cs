@@ -90,7 +90,7 @@ internal class GenerateMapPropertyAttributes
                 var attributeName = attribute.AttributeClass!.GetFullName();
                 if (attributeName == typeof(MapToAttribute).FullName)
                 {
-                    var parameters = attribute.GetAttributeParameters();
+                    var parameters = attribute.GetAttributeParameterInfos();
                     if (parameters.Count == 0)
                         continue;
                     if (
@@ -123,7 +123,7 @@ internal class GenerateMapPropertyAttributes
                 }
                 else if (attributeName == typeof(MapFromAttribute).FullName)
                 {
-                    var parameters = attribute.GetAttributeParameters();
+                    var parameters = attribute.GetAttributeParameterInfos();
                     if (
                         parameters.TryGetValue(nameof(MapToAttribute.TargetType), out var value)
                         is false
