@@ -23,6 +23,10 @@ internal class GenerateMappers
     public GeneratorExecutionContext ExecutionContext { get; private set; }
 
     public Compilation Compilation { get; private set; } = null!;
+
+    /// <summary>
+    /// (ObjectType, (memberName, isAsync))
+    /// </summary>
     public Dictionary<INamedTypeSymbol, Dictionary<string, bool>> MapperConfigInfoByType
     {
         get;
@@ -122,38 +126,88 @@ internal class GenerateMappers
         writer.WriteLine("{");
         writer.Indent++;
         GenerateBeginMapAction(writer, mapInfo);
+        var sourceByTarget = new Dictionary<IPropertySymbol, IPropertySymbol>(
+            SymbolEqualityComparer.Default
+        );
         if (mapInfo.IsMapTo)
         {
             foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
-                GenerateToMethodProperty(writer, mapInfo, property);
+            {
+                var targetProperty = GenerateToMethodProperty(
+                    writer,
+                    mapInfo,
+                    property,
+                    out var attributeData
+                );
+
+                CheckSameTargetProperty(sourceByTarget, property, targetProperty, attributeData);
+            }
         }
         else
         {
             foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
-                GenerateFromMethodProperty(writer, mapInfo, property);
+            {
+                var targetProperty = GenerateFromMethodProperty(
+                    writer,
+                    mapInfo,
+                    property,
+                    out var attributeData
+                );
+                CheckSameTargetProperty(sourceByTarget, property, targetProperty, attributeData);
+            }
         }
         GenerateEndMapAction(writer, mapInfo);
         writer.WriteLine(mapInfo.IsMapTo ? "return target;" : "return source;");
         writer.Indent--;
         writer.WriteLine("}");
         writer.WriteLine();
+
+        void CheckSameTargetProperty(
+            Dictionary<IPropertySymbol, IPropertySymbol> sourceByTarget,
+            IPropertySymbol property,
+            IPropertySymbol? targetProperty,
+            AttributeData? attributeData
+        )
+        {
+            if (targetProperty is null)
+                return;
+            if (sourceByTarget.TryGetValue(targetProperty, out var sourceProperty) is false)
+            {
+                sourceByTarget.Add(targetProperty, property);
+            }
+            else
+            {
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.SameMapTargetProperty,
+                    attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                        attributeData.ApplicationSyntaxReference.Span
+                    ),
+                    sourceProperty.ToString(),
+                    property.ToString(),
+                    targetProperty.ToString()
+                );
+                ExecutionContext.ReportDiagnostic(diagnostic);
+            }
+        }
     }
 
-    private void GenerateToMethodProperty(
+    private IPropertySymbol? GenerateToMethodProperty(
         IndentedTextWriter writer,
         MapInfo mapInfo,
-        IPropertySymbol property
+        IPropertySymbol property,
+        out AttributeData? attributeData
     )
     {
+        attributeData = null;
         // 如果是静态属性,则跳过
         if (property.IsStatic)
-            return;
+            return null;
         // 如果是索引器,则跳过
         if (property.IsIndexer)
-            return;
+            return null;
         var attributes = property.GetAttributes();
         // 获取特性
-        var attributeData = attributes.FirstOrDefault(x =>
+        attributeData = attributes.FirstOrDefault(x =>
             x.AttributeClass!.GetFullName() == mapInfo.PropertyAttributeFullName
         );
 
@@ -161,7 +215,7 @@ internal class GenerateMappers
         if (CheckMapConfigInfo(mapInfo, property, attributeData) is string addMap)
         {
             writer.WriteLine(addMap);
-            return;
+            return null;
         }
 
         // 如果是被忽略的属性,则跳过
@@ -170,19 +224,20 @@ internal class GenerateMappers
                 x.AttributeClass?.GetFullName() == typeof(MapIgnorePropertyAttribute).FullName
             )
         )
-            return;
+            return null;
 
         // 如果没有特性,则直接使用同名属性
         if (attributeData is null)
         {
-            // 检查目标属性
+            // 获取目标属性
             if (
-                CheckProperty(mapInfo, property, property.Name)
+                GetTargetProperty(mapInfo, property, property.Name)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
 
             GenerateStandardProperty(writer, mapInfo, property, targetProperty);
+            return targetProperty;
         }
         else
         {
@@ -193,12 +248,12 @@ internal class GenerateMappers
                 ref targetPropertyName,
                 out var converterType
             );
-            // 检查属性
+            // 获取目标属性
             if (
-                CheckProperty(mapInfo, property, targetPropertyName)
+                GetTargetProperty(mapInfo, property, targetPropertyName)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
 
             if (
                 attributeParameters.TryGetValue(
@@ -256,6 +311,7 @@ internal class GenerateMappers
             {
                 GenerateStandardProperty(writer, mapInfo, property, targetProperty);
             }
+            return targetProperty;
         }
 
         void GenerateStandardProperty(
@@ -295,29 +351,31 @@ internal class GenerateMappers
         }
     }
 
-    private void GenerateFromMethodProperty(
+    private IPropertySymbol? GenerateFromMethodProperty(
         IndentedTextWriter writer,
         MapInfo mapInfo,
-        IPropertySymbol property
+        IPropertySymbol property,
+        out AttributeData? attributeData
     )
     {
+        attributeData = null;
         // 如果是静态属性,则跳过
         if (property.IsStatic)
-            return;
+            return null;
         // 如果是索引器,则跳过
         if (property.IsIndexer)
-            return;
+            return null;
         var attributes = property.GetAttributes();
 
         // 获取特性
-        var attributeData = attributes.FirstOrDefault(x =>
+        attributeData = attributes.FirstOrDefault(x =>
             x.AttributeClass!.GetFullName() == mapInfo.PropertyAttributeFullName
         );
         // 如果这个属性在映射设置中有添加
         if (CheckMapConfigInfo(mapInfo, property, attributeData) is string addMap)
         {
             writer.WriteLine(addMap);
-            return;
+            return null;
         }
 
         // 如果是被忽略的属性,则跳过
@@ -326,19 +384,20 @@ internal class GenerateMappers
                 x.AttributeClass?.GetFullName() == typeof(MapIgnorePropertyAttribute).FullName
             )
         )
-            return;
+            return null;
 
         // 如果没有特性,则直接使用同名属性
         if (attributeData is null)
         {
             // 检查目标属性
             if (
-                CheckProperty(mapInfo, property, property.Name)
+                GetTargetProperty(mapInfo, property, property.Name)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
 
             GenerateStandardProperty(writer, mapInfo, property, targetProperty);
+            return targetProperty;
         }
         else
         {
@@ -349,12 +408,12 @@ internal class GenerateMappers
                 ref targetPropertyName,
                 out var converterType
             );
-            // 检查属性
+            // 获取目标属性
             if (
-                CheckProperty(mapInfo, property, targetPropertyName)
+                GetTargetProperty(mapInfo, property, targetPropertyName)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
             if (
                 attributeParameters.TryGetValue(
                     nameof(MapPropertyAttribute.MapWhenRValueNotNullOrDefault),
@@ -409,6 +468,7 @@ internal class GenerateMappers
             {
                 GenerateStandardProperty(writer, mapInfo, property, targetProperty);
             }
+            return targetProperty;
         }
 
         void GenerateStandardProperty(
@@ -463,15 +523,34 @@ internal class GenerateMappers
         writer.WriteLine("{");
         writer.Indent++;
         GenerateBeginMapAction(writer, mapInfo);
+        var sourceByTarget = new Dictionary<IPropertySymbol, IPropertySymbol>(
+            SymbolEqualityComparer.Default
+        );
         if (mapInfo.IsMapTo)
         {
             foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
-                GenerateAsyncToMethodProperty(writer, mapInfo, property);
+            {
+                var targetProperty = GenerateAsyncToMethodProperty(
+                    writer,
+                    mapInfo,
+                    property,
+                    out var attributeData
+                );
+                CheckSameTargetProperty(sourceByTarget, property, targetProperty, attributeData);
+            }
         }
         else
         {
             foreach (var property in sourceType.GetMembers().OfType<IPropertySymbol>())
-                GenerateAsyncFromMethodProperty(writer, mapInfo, property);
+            {
+                var targetProperty = GenerateAsyncFromMethodProperty(
+                    writer,
+                    mapInfo,
+                    property,
+                    out var attributeData
+                );
+                CheckSameTargetProperty(sourceByTarget, property, targetProperty, attributeData);
+            }
         }
         GenerateEndMapAction(writer, mapInfo);
 
@@ -489,23 +568,53 @@ internal class GenerateMappers
         writer.Indent--;
         writer.WriteLine("}");
         writer.WriteLine();
+
+        void CheckSameTargetProperty(
+            Dictionary<IPropertySymbol, IPropertySymbol> sourceByTarget,
+            IPropertySymbol property,
+            IPropertySymbol? targetProperty,
+            AttributeData? attributeData
+        )
+        {
+            if (targetProperty is null)
+                return;
+            if (sourceByTarget.TryGetValue(targetProperty, out var sourceProperty) is false)
+            {
+                sourceByTarget.Add(targetProperty, property);
+            }
+            else
+            {
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.SameMapTargetProperty,
+                    attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                        attributeData.ApplicationSyntaxReference.Span
+                    ),
+                    sourceProperty.ToString(),
+                    property.ToString(),
+                    targetProperty.ToString()
+                );
+                ExecutionContext.ReportDiagnostic(diagnostic);
+            }
+        }
     }
 
-    private void GenerateAsyncToMethodProperty(
+    private IPropertySymbol? GenerateAsyncToMethodProperty(
         IndentedTextWriter writer,
         MapInfo mapInfo,
-        IPropertySymbol property
+        IPropertySymbol property,
+        out AttributeData? attributeData
     )
     {
+        attributeData = null;
         // 如果是静态属性,则跳过
         if (property.IsStatic)
-            return;
+            return null;
         // 如果是索引器,则跳过
         if (property.IsIndexer)
-            return;
+            return null;
         var attributes = property.GetAttributes();
         // 获取特性
-        var attributeData = attributes.FirstOrDefault(x =>
+        attributeData = attributes.FirstOrDefault(x =>
             x.AttributeClass!.GetFullName() == mapInfo.PropertyAttributeFullName
         );
 
@@ -513,7 +622,7 @@ internal class GenerateMappers
         if (CheckAsyncMapConfigInfo(mapInfo, property, attributeData) is string addMap)
         {
             writer.WriteLine(addMap);
-            return;
+            return null;
         }
 
         // 如果是被忽略的属性,则跳过
@@ -522,18 +631,19 @@ internal class GenerateMappers
                 x.AttributeClass?.GetFullName() == typeof(MapIgnorePropertyAttribute).FullName
             )
         )
-            return;
+            return null;
 
         // 如果没有特性,则直接使用同名属性
         if (attributeData is null)
         {
-            // 检查目标属性
+            // 获取目标属性
             if (
-                CheckProperty(mapInfo, property, property.Name)
+                GetTargetProperty(mapInfo, property, property.Name)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
             GenerateStandardProperty(writer, mapInfo, property, targetProperty);
+            return targetProperty;
         }
         else
         {
@@ -546,10 +656,10 @@ internal class GenerateMappers
             );
             // 检查属性
             if (
-                CheckProperty(mapInfo, property, targetPropertyName)
+                GetTargetProperty(mapInfo, property, targetPropertyName)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
 
             if (
                 attributeParameters.TryGetValue(
@@ -606,6 +716,7 @@ internal class GenerateMappers
             {
                 GenerateStandardProperty(writer, mapInfo, property, targetProperty);
             }
+            return targetProperty;
         }
 
         void GenerateStandardProperty(
@@ -646,29 +757,31 @@ internal class GenerateMappers
         }
     }
 
-    private void GenerateAsyncFromMethodProperty(
+    private IPropertySymbol? GenerateAsyncFromMethodProperty(
         IndentedTextWriter writer,
         MapInfo mapInfo,
-        IPropertySymbol property
+        IPropertySymbol property,
+        out AttributeData? attributeData
     )
     {
+        attributeData = null;
         // 如果是静态属性,则跳过
         if (property.IsStatic)
-            return;
+            return null;
         // 如果是索引器,则跳过
         if (property.IsIndexer)
-            return;
+            return null;
         var attributes = property.GetAttributes();
 
         // 获取特性
-        var attributeData = attributes.FirstOrDefault(x =>
+        attributeData = attributes.FirstOrDefault(x =>
             x.AttributeClass!.GetFullName() == mapInfo.PropertyAttributeFullName
         );
         // 如果这个属性在映射设置中有添加
         if (CheckAsyncMapConfigInfo(mapInfo, property, attributeData) is string addMap)
         {
             writer.WriteLine(addMap);
-            return;
+            return null;
         }
 
         // 如果是被忽略的属性,则跳过
@@ -677,19 +790,20 @@ internal class GenerateMappers
                 x.AttributeClass?.GetFullName() == typeof(MapIgnorePropertyAttribute).FullName
             )
         )
-            return;
+            return null;
 
         // 如果没有特性,则直接使用同名属性
         if (attributeData is null)
         {
             // 检查目标属性
             if (
-                CheckProperty(mapInfo, property, property.Name)
+                GetTargetProperty(mapInfo, property, property.Name)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
 
             GenerateStandardProperty(writer, mapInfo, property, targetProperty);
+            return targetProperty;
         }
         else
         {
@@ -702,10 +816,10 @@ internal class GenerateMappers
             );
             // 检查属性
             if (
-                CheckProperty(mapInfo, property, targetPropertyName)
+                GetTargetProperty(mapInfo, property, targetPropertyName)
                 is not IPropertySymbol targetProperty
             )
-                return;
+                return null;
             if (
                 attributeParameters.TryGetValue(
                     nameof(MapPropertyAttribute.MapWhenRValueNotNullOrDefault),
@@ -760,6 +874,7 @@ internal class GenerateMappers
             {
                 GenerateStandardProperty(writer, mapInfo, property, targetProperty);
             }
+            return targetProperty;
         }
 
         void GenerateStandardProperty(
@@ -1034,7 +1149,7 @@ internal class GenerateMappers
         return memberName;
     }
 
-    private IPropertySymbol? CheckProperty(
+    private IPropertySymbol? GetTargetProperty(
         MapInfo target,
         IPropertySymbol property,
         string? targetPropertyName
@@ -1278,6 +1393,7 @@ internal class GenerateMappers
                         || name == typeof(MapFromAttribute).FullName
                     )
                 );
+            var methodNames = new HashSet<string>();
             foreach (var attribute in attributeDatas)
             {
                 var attributeName = attribute.AttributeClass!.GetFullName();
@@ -1289,6 +1405,17 @@ internal class GenerateMappers
                     if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
                         targets = mapMethodsByType[classSymbol] = new([], []);
                     targets.ToMethodInfos.Add(mapInfo);
+                    if (methodNames.Add(mapInfo.MethodName) is false)
+                    {
+                        var diagnostic = Diagnostic.Create(
+                            Descriptors.SameMethodName,
+                            attribute.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                                attribute.ApplicationSyntaxReference.Span
+                            ),
+                            mapInfo.MethodName
+                        );
+                        ExecutionContext.ReportDiagnostic(diagnostic);
+                    }
                 }
                 else if (attributeName == typeof(MapFromAttribute).FullName)
                 {
@@ -1298,6 +1425,17 @@ internal class GenerateMappers
                     if (mapMethodsByType.TryGetValue(classSymbol, out var targets) is false)
                         targets = mapMethodsByType[classSymbol] = new([], []);
                     targets.FromMethodInfos.Add(mapInfo);
+                    if (methodNames.Add(mapInfo.MethodName) is false)
+                    {
+                        var diagnostic = Diagnostic.Create(
+                            Descriptors.SameMethodName,
+                            attribute.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                                attribute.ApplicationSyntaxReference.Span
+                            ),
+                            mapInfo.MethodName
+                        );
+                        ExecutionContext.ReportDiagnostic(diagnostic);
+                    }
                 }
             }
         }
@@ -1339,7 +1477,7 @@ internal class GenerateMappers
             ConfigType = mapConfigType,
             ScrutinyMode = scrutiny,
             IsMapTo = isMapTo,
-            InvokeState = invokeState
+            InvokeState = invokeState == default ? MapMethodInvokeState.Sync : invokeState
         };
     }
 

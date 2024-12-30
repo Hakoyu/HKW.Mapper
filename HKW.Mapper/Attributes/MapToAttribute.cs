@@ -31,7 +31,7 @@ public sealed class MapToAttribute : Attribute
     public Type TargetType { get; set; }
 
     /// <summary>
-    /// 方法名称, 默认为 <c>{TargetType.Name}</c>
+    /// 目标名称, 默认为 <c>{TargetType.Name}</c>
     /// </summary>
     public string? TargetName { get; set; }
 

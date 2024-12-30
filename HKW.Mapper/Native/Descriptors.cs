@@ -11,16 +11,16 @@ internal static class Descriptors
         new(
             id: "M0001",
             title: "Same method name exists",
-            messageFormat: "Same method name exists \"{0}\", please check attribute and set different method name",
+            messageFormat: "Same method name exists \"{0}\", please check attribute and set different target name",
             category: "HKWMapper",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true
         );
-    public static readonly DiagnosticDescriptor SameTargetName =
+    public static readonly DiagnosticDescriptor SameMapTargetProperty =
         new(
             id: "M0002",
-            title: "Same target property name exists",
-            messageFormat: "Same target property name exists \"{0}\", please check attribute and set different property name",
+            title: "Same map target property",
+            messageFormat: "The first source property \"{0}\" and this source property \"{1}\" has same target property \"{1}\", please check attribute and set different property name",
             category: "HKWMapper",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true
