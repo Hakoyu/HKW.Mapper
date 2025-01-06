@@ -32,14 +32,12 @@ internal class GenerateMappers
         get;
         private set;
     } = null!;
-    public HashSet<INamedTypeSymbol> Converters { get; private set; } = [];
-    public HashSet<INamedTypeSymbol> Configs { get; private set; } = [];
-    public INamedTypeSymbol IMapConverterType { get; private set; } = null!;
+    public INamedTypeSymbol MapConverterType { get; private set; } = null!;
     public INamedTypeSymbol MapConfigType { get; private set; } = null!;
 
     public void Execute()
     {
-        IMapConverterType = Compilation.GetTypeByMetadataName(typeof(IMapConverter<,>).FullName)!;
+        MapConverterType = Compilation.GetTypeByMetadataName(typeof(MapConverter<,>).FullName)!;
         MapConfigType = Compilation.GetTypeByMetadataName(typeof(MapperConfig<,>).FullName)!;
         MapperConfigInfoByType = GetMapperConfigInfos(ExecutionContext);
 
@@ -89,6 +87,7 @@ internal class GenerateMappers
             {
                 if (mapInfo.InvokeState.HasFlag(MapMethodInvokeState.Sync))
                     GenerateMethod(pair.Key, writer, mapInfo);
+                mapInfo.IndexByConverter.Clear();
                 if (mapInfo.InvokeState.HasFlag(MapMethodInvokeState.Async))
                     GenerateAsyncMethod(pair.Key, writer, mapInfo);
             }
@@ -97,6 +96,7 @@ internal class GenerateMappers
             {
                 if (mapInfo.InvokeState.HasFlag(MapMethodInvokeState.Sync))
                     GenerateMethod(pair.Key, writer, mapInfo);
+                mapInfo.IndexByConverter.Clear();
                 if (mapInfo.InvokeState.HasFlag(MapMethodInvokeState.Async))
                     GenerateAsyncMethod(pair.Key, writer, mapInfo);
             }
@@ -125,6 +125,12 @@ internal class GenerateMappers
         );
         writer.WriteLine("{");
         writer.Indent++;
+        if (mapInfo.ConfigType is not null)
+        {
+            writer.WriteLine(
+                $"var config = HKW.HKWMapper.MapperCache.GetConfig<{mapInfo.ConfigType.GetFullName()}>();"
+            );
+        }
         GenerateBeginMapAction(writer, mapInfo);
         var sourceByTarget = new Dictionary<IPropertySymbol, IPropertySymbol>(
             SymbolEqualityComparer.Default
@@ -293,16 +299,17 @@ internal class GenerateMappers
                     )
                 )
                 {
+                    var converterName = GetConverterName(writer, mapInfo, converterType);
                     if (isAsync)
                     {
                         writer.WriteLine(
-                            $"target.{targetPropertyName} = {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.Convert)}(source, source.{property.Name}).Result;"
+                            $"target.{targetPropertyName} = {converterName}.{nameof(MapConverter<int, int>.Convert)}(source, source.{property.Name}).Result;"
                         );
                     }
                     else
                     {
                         writer.WriteLine(
-                            $"target.{targetPropertyName} = {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.Convert)}(source, source.{property.Name});"
+                            $"target.{targetPropertyName} = {converterName}.{nameof(MapConverter<int, int>.Convert)}(source, source.{property.Name});"
                         );
                     }
                 }
@@ -349,6 +356,22 @@ internal class GenerateMappers
                 }
             }
         }
+    }
+
+    private static string GetConverterName(
+        IndentedTextWriter writer,
+        MapInfo mapInfo,
+        INamedTypeSymbol converterType
+    )
+    {
+        if (mapInfo.IndexByConverter.TryGetValue(converterType, out var index) is false)
+        {
+            index = mapInfo.IndexByConverter[converterType] = mapInfo.IndexByConverter.Count;
+            writer.WriteLine(
+                $"var converter{index} = HKW.HKWMapper.MapperCache.GetConverter<{converterType.GetFullName()}>();"
+            );
+        }
+        return $"converter{index}";
     }
 
     private IPropertySymbol? GenerateFromMethodProperty(
@@ -451,18 +474,21 @@ internal class GenerateMappers
                         out var isAsync
                     )
                 )
+                {
+                    var converterName = GetConverterName(writer, mapInfo, converterType);
                     if (isAsync)
                     {
                         writer.WriteLine(
-                            $"source.{property.Name} = {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.ConvertBack)}(target, target.{targetPropertyName}).Result;"
+                            $"source.{property.Name} = {converterName}.{nameof(MapConverter<int, int>.ConvertBack)}(target, target.{targetPropertyName}).Result;"
                         );
                     }
                     else
                     {
                         writer.WriteLine(
-                            $"source.{property.Name} = {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.ConvertBack)}(target, target.{targetPropertyName});"
+                            $"source.{property.Name} = {converterName}.{nameof(MapConverter<int, int>.ConvertBack)}(target, target.{targetPropertyName});"
                         );
                     }
+                }
             }
             else
             {
@@ -518,10 +544,16 @@ internal class GenerateMappers
         var accessibility = sourceType.GetLowestAccessibility(mapInfo.TargetType);
         writer.WriteLine(CommonData.GeneratedCodeAttribute);
         writer.WriteLine(
-            $"{accessibility} static async {(mapInfo.IsMapTo ? mapInfo.TargetType.GetFullNameAndGeneric() : sourceType.GetFullNameAndGeneric())} {mapInfo.MethodName}Async(this {sourceType.GetFullNameAndGeneric()} source, {mapInfo.TargetType.GetFullNameAndGeneric()} target)"
+            $"{accessibility} static async Task<{(mapInfo.IsMapTo ? mapInfo.TargetType.GetFullNameAndGeneric() : sourceType.GetFullNameAndGeneric())}> {mapInfo.MethodName}Async(this {sourceType.GetFullNameAndGeneric()} source, {mapInfo.TargetType.GetFullNameAndGeneric()} target)"
         );
         writer.WriteLine("{");
         writer.Indent++;
+        if (mapInfo.ConfigType is not null)
+        {
+            writer.WriteLine(
+                $"var config = HKW.HKWMapper.MapperCache.GetConfig<{mapInfo.ConfigType.GetFullName()}>();"
+            );
+        }
         GenerateBeginMapAction(writer, mapInfo);
         var sourceByTarget = new Dictionary<IPropertySymbol, IPropertySymbol>(
             SymbolEqualityComparer.Default
@@ -564,7 +596,7 @@ internal class GenerateMappers
             );
             ExecutionContext.ReportDiagnostic(diagnostic);
         }
-        writer.WriteLine("return target;");
+        writer.WriteLine(mapInfo.IsMapTo ? "return target;" : "return source;");
         writer.Indent--;
         writer.WriteLine("}");
         writer.WriteLine();
@@ -698,19 +730,22 @@ internal class GenerateMappers
                         out var isAsync
                     )
                 )
+                {
+                    var converterName = GetConverterName(writer, mapInfo, converterType);
                     if (isAsync)
                     {
                         mapInfo.IsAsync = true;
                         writer.WriteLine(
-                            $"target.{targetPropertyName} = await {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.Convert)}(source, source.{property.Name});"
+                            $"target.{targetPropertyName} = await {converterName}.{nameof(MapConverter<int, int>.Convert)}(source, source.{property.Name});"
                         );
                     }
                     else
                     {
                         writer.WriteLine(
-                            $"target.{targetPropertyName} = {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.Convert)}(source, source.{property.Name});"
+                            $"target.{targetPropertyName} = {converterName}.{nameof(MapConverter<int, int>.Convert)}(source, source.{property.Name});"
                         );
                     }
+                }
             }
             else
             {
@@ -857,18 +892,21 @@ internal class GenerateMappers
                         out var isAsync
                     )
                 )
+                {
+                    var converterName = GetConverterName(writer, mapInfo, converterType);
                     if (isAsync)
                     {
                         writer.WriteLine(
-                            $"source.{property.Name} = await {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.ConvertBack)}(target, target.{targetPropertyName});"
+                            $"source.{property.Name} = await {converterName}.{nameof(MapConverter<int, int>.ConvertBack)}(target, target.{targetPropertyName});"
                         );
                     }
                     else
                     {
                         writer.WriteLine(
-                            $"source.{property.Name} = {converterType.GetUnderlineFullName()}.{nameof(IMapConverter.ConvertBack)}(target, target.{targetPropertyName});"
+                            $"source.{property.Name} = {converterName}.{nameof(MapConverter<int, int>.ConvertBack)}(target, target.{targetPropertyName});"
                         );
                     }
+                }
             }
             else
             {
@@ -942,11 +980,11 @@ internal class GenerateMappers
         if (isAsync)
         {
             mapInfo.IsAsync = true;
-            return $"await {mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.GetMapActionAsync)}(\"{property.Name}\")(source, target);";
+            return $"await config.{nameof(MapperConfig<int, int>.GetMapActionAsync)}(\"{property.Name}\",source, target);";
         }
         else
         {
-            return $"{mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);";
+            return $"config.{nameof(MapperConfig<int, int>.GetMapAction)}(\"{property.Name}\",source, target);";
         }
     }
     #endregion
@@ -964,7 +1002,6 @@ internal class GenerateMappers
                 writer.WriteLine(
                     $"{mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.EndMapAction)}(source,target);"
                 );
-                Configs.Add(mapInfo.ConfigType);
             }
 
             var asyncMethod = mapInfo.ConfigType.FindMember<IMethodSymbol>(
@@ -985,7 +1022,6 @@ internal class GenerateMappers
                     );
                 }
                 mapInfo.IsAsync = true;
-                Configs.Add(mapInfo.ConfigType);
             }
         }
     }
@@ -1001,9 +1037,8 @@ internal class GenerateMappers
             if (method is not null)
             {
                 writer.WriteLine(
-                    $"{mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.BeginMapAction)}(source,target);"
+                    $"config.{nameof(MapperConfig<int, int>.BeginMapAction)}(source,target);"
                 );
-                Configs.Add(mapInfo.ConfigType);
             }
 
             var asyncMethod = mapInfo.ConfigType.FindMember<IMethodSymbol>(
@@ -1014,7 +1049,7 @@ internal class GenerateMappers
                 if (mapInfo.InvokeState.HasFlag(MapMethodInvokeState.Async))
                 {
                     writer.WriteLine(
-                        $"await {mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.BeginMapActionAsync)}(source,target);"
+                        $"await config.{nameof(MapperConfig<int, int>.BeginMapActionAsync)}(source,target);"
                     );
                 }
                 else
@@ -1024,7 +1059,6 @@ internal class GenerateMappers
                     );
                 }
                 mapInfo.IsAsync = true;
-                Configs.Add(mapInfo.ConfigType);
             }
         }
     }
@@ -1056,11 +1090,11 @@ internal class GenerateMappers
         }
         if (isAsync)
         {
-            return $"{mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.GetMapActionAsync)}(\"{property.Name}\")(source, target).Wait();";
+            return $"config.{nameof(MapperConfig<int, int>.GetMapActionAsync)}(\"{property.Name}\",source, target).Wait();";
         }
         else
         {
-            return $"{mapInfo.ConfigType.GetUnderlineFullName()}.{nameof(MapperConfig<int, int>.GetMapAction)}(\"{property.Name}\")(source, target);";
+            return $"config.{nameof(MapperConfig<int, int>.GetMapAction)}(\"{property.Name}\",source, target);";
         }
     }
 
@@ -1256,10 +1290,7 @@ internal class GenerateMappers
     )
     {
         isAsync = false;
-        var iconverter = converterType.Interfaces.First(x =>
-            SymbolEqualityComparer.Default.Equals(x.OriginalDefinition, IMapConverterType)
-        );
-        var converterSourceType = iconverter.TypeArguments[0];
+        var converterSourceType = converterType.BaseType!.TypeArguments[0];
         // 比较转换器当前属性与当前属性的类型
         if (SymbolEqualityComparer.Default.Equals(property.Type, converterSourceType) is false)
         {
@@ -1280,7 +1311,7 @@ internal class GenerateMappers
             else
                 isAsync = true;
         }
-        var converterTargetType = iconverter.TypeArguments[1];
+        var converterTargetType = converterType.BaseType!.TypeArguments[1];
         // 比较转换器目标属性与目标属性的类型
         if (
             SymbolEqualityComparer.Default.Equals(targetProperty.Type, converterTargetType) is false
@@ -1331,43 +1362,10 @@ internal class GenerateMappers
         )
         {
             converterType = converterData.Value as INamedTypeSymbol;
-            if (converterType is not null)
-            {
-                var converters = converterType
-                    .Interfaces.Where(x =>
-                        SymbolEqualityComparer.Default.Equals(
-                            x.OriginalDefinition,
-                            IMapConverterType
-                        )
-                    )
-                    .ToArray();
-                if (converters.Length == 0)
-                {
-                    var diagnostic = Diagnostic.Create(
-                        Descriptors.NotImplementIMapConverter,
-                        attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                            attributeData.ApplicationSyntaxReference.Span
-                        ),
-                        converterType.Name
-                    );
-                    ExecutionContext.ReportDiagnostic(diagnostic);
-                }
-                else
-                {
-                    if (converters.Length > 1)
-                    {
-                        var diagnostic = Diagnostic.Create(
-                            Descriptors.ImplementMultipleIMapConverter,
-                            attributeData.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                                attributeData.ApplicationSyntaxReference.Span
-                            ),
-                            converterType.Name
-                        );
-                        ExecutionContext.ReportDiagnostic(diagnostic);
-                    }
-                    Converters.Add(converterType);
-                }
-            }
+            if (
+                converterType?.InheritedFrom("HKW.HKWMapper.MapConverter<TValue, TTarget>") is false
+            )
+                converterType = null;
         }
         return parameters;
     }

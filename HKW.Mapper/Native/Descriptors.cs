@@ -144,19 +144,9 @@ internal static class Descriptors
             isEnabledByDefault: true
         );
 
-    public static readonly DiagnosticDescriptor ImplementMultipleIMapConverter =
-        new(
-            id: "M0015",
-            title: "Multiple IMapConvert interfaces",
-            messageFormat: "Converter \"{0}\" Implements multiple IMapConvert interfaces, but will only use the first one",
-            category: "HKWMapper",
-            DiagnosticSeverity.Warning,
-            isEnabledByDefault: true
-        );
-
     public static DiagnosticDescriptor MapAsyncTaskDoesNotExist =
         new(
-            id: "M0016",
+            id: "M0015",
             title: "Map async task does not exist",
             messageFormat: "Async task does not exist, please check the property type or set InvokeState to Sync in attribute",
             category: "HKWMapper",

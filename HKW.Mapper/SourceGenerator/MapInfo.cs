@@ -56,6 +56,9 @@ internal class MapInfo : IEquatable<MapInfo>
     /// </summary>
     public MapMethodInvokeState InvokeState { get; set; }
 
+    public Dictionary<INamedTypeSymbol, int> IndexByConverter { get; } =
+        new(SymbolEqualityComparer.Default);
+
     /// <summary>
     /// 是映射至
     /// </summary>

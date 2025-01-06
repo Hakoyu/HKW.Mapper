@@ -30,23 +30,38 @@ internal class GenerateConfigs
         writer.WriteLine("#nullable enable");
         writer.WriteLine("#pragma warning disable CS1591");
         writer.WriteLine();
+        var configsByNameSpace = new Dictionary<INamespaceSymbol, List<INamedTypeSymbol>>(
+            SymbolEqualityComparer.Default
+        );
+
         foreach (var config in configs)
         {
-            writer.WriteLine($"namespace {config.ContainingNamespace}");
+            if (
+                configsByNameSpace.TryGetValue(config.ContainingNamespace, out var iconfigs)
+                is false
+            )
+                iconfigs = configsByNameSpace[config.ContainingNamespace] = [];
+            iconfigs.Add(config);
+        }
+
+        foreach (var pair in configsByNameSpace)
+        {
+            writer.WriteLine($"namespace {pair.Key}");
             writer.WriteLine("{");
             writer.Indent++;
-            writer.WriteLine($"public static partial class MapperExtensions");
+            writer.WriteLine($"public static partial class MapperConfigs");
             writer.WriteLine("{");
             writer.Indent++;
-            var typeFullName = config.GetFullName();
-            var fullName = typeFullName.Replace('.', '_');
-            var fieldName = $"_{fullName}";
-            writer.WriteLine(CommonData.GeneratedCodeAttribute);
-            writer.WriteLine($"private static {typeFullName}? {fieldName};");
-            writer.WriteLine(CommonData.GeneratedCodeAttribute);
-            writer.WriteLine(
-                $"{config.GetAccessibilityString()} static {typeFullName} {fullName} => {fieldName} ?? ({fieldName} = ({typeFullName})new {typeFullName}().Frozen()); "
-            );
+            foreach (var config in pair.Value)
+            {
+                var fieldName = $"_{config.Name.FirstLetterToLower()}";
+                writer.WriteLine(CommonData.GeneratedCodeAttribute);
+                writer.WriteLine($"private static {config.Name}? {fieldName};");
+                writer.WriteLine(CommonData.GeneratedCodeAttribute);
+                writer.WriteLine(
+                    $"{config.GetAccessibilityString()} static {config.Name} {config.Name} => {fieldName} ?? ({fieldName} = new {config.GetFullName()}().Frozen()); "
+                );
+            }
             writer.Indent--;
             writer.WriteLine("}");
             writer.Indent--;

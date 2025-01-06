@@ -23,8 +23,8 @@ internal partial class Generator : ISourceGenerator
 
         var info = GenerateMappers.Execute(context, compilation);
 
-        GenerateConfigs.Execute(context, info.Configs);
-        GenerateConverters.Execute(context, info.Converters);
+        //GenerateConfigs.Execute(context, info.Configs);
+        //GenerateConverters.Execute(context, info.Converters);
     }
 }
 

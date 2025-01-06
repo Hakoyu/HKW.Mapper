@@ -271,7 +271,13 @@ internal static class SourceGeneratorExtensions
                 ) == baseTypeFullName
             )
                 return true;
-            currentType = currentType.BaseType;
+            if (
+                currentType is INamedTypeSymbol namedTypeSymbol
+                && namedTypeSymbol.TypeParameters.Length > 0
+            )
+                currentType = currentType.OriginalDefinition;
+            else
+                currentType = currentType.BaseType;
         }
         return false;
     }

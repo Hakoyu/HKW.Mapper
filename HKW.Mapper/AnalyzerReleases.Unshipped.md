@@ -19,5 +19,4 @@ M0011 | HKWMapper | Error | Descriptors
 M0012 | HKWMapper | Error | Descriptors
 M0013 | HKWMapper | Warning | Descriptors
 M0014 | HKWMapper | Error | Descriptors
-M0015 | HKWMapper | Warning | Descriptors
-M0016 | HKWMapper | Error | Descriptors
+M0015 | HKWMapper | Error | Descriptors

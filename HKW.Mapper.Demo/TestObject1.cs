@@ -14,7 +14,7 @@ internal class TestObject1
 
     public int Property1 { get; set; }
 
-    [TestObject1MapToTestObject1Property(nameof(Property1))]
+    //[TestObject1MapToTestObject1Property(nameof(Property1))]
     public Task<int> Property2 { get; set; } = null!;
     public string Property3 { get; set; } = string.Empty;
 

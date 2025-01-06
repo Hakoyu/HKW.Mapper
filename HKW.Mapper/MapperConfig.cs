@@ -1,14 +1,27 @@
 ﻿using System.Collections.Frozen;
+using System.Diagnostics;
 using System.Linq.Expressions;
 
 namespace HKW.HKWMapper;
+
+/// <summary>
+/// 映射器设置接口
+/// </summary>
+public interface IMapperConfig
+{
+    /// <summary>
+    /// 冻结
+    /// </summary>
+    void Frozen();
+}
 
 /// <summary>
 /// 映射设置
 /// </summary>
 /// <typeparam name="TSource">源类型</typeparam>
 /// <typeparam name="TTarget">目标类型</typeparam>
-public abstract class MapperConfig<TSource, TTarget>
+[DebuggerDisplay("Source = {TSource}, Target = {TTarget}")]
+public abstract class MapperConfig<TSource, TTarget> : IMapperConfig
 {
     private Dictionary<string, Action<TSource, TTarget>> _propertyActions = [];
     private Dictionary<string, Func<TSource, TTarget, Task>> _propertyActionAsyncs = [];
@@ -71,27 +84,31 @@ public abstract class MapperConfig<TSource, TTarget>
     /// 获取映射行动
     /// </summary>
     /// <param name="propertyName">名称</param>
+    /// <param name="source">源</param>
+    /// <param name="target">目标</param>
     /// <returns>映射行动</returns>
-    public Action<TSource, TTarget> GetMapAction(string propertyName)
+    public void GetMapAction(string propertyName, TSource source, TTarget target)
     {
-        return _frozenPropertyActions[propertyName];
+        _frozenPropertyActions[propertyName](source, target);
     }
 
     /// <summary>
     /// 获取映射行动
     /// </summary>
     /// <param name="propertyName">名称</param>
+    /// <param name="source">源</param>
+    /// <param name="target">目标</param>
     /// <returns>映射行动</returns>
-    public Func<TSource, TTarget, Task> GetMapActionAsync(string propertyName)
+    public Task GetMapActionAsync(string propertyName, TSource source, TTarget target)
     {
-        return _frozenPropertyActionAsyncs[propertyName];
+        return _frozenPropertyActionAsyncs[propertyName](source, target);
     }
 
     /// <summary>
     /// 将已添加的映射冻结,以提高性能
     /// </summary>
     /// <returns></returns>
-    public MapperConfig<TSource, TTarget> Frozen()
+    public void Frozen()
     {
         _frozenPropertyActions = FrozenDictionary.ToFrozenDictionary(
             _propertyActions,
@@ -107,7 +124,6 @@ public abstract class MapperConfig<TSource, TTarget>
         _propertyActions = null!;
         _propertyActionAsyncs.Clear();
         _propertyActionAsyncs = null!;
-        return this;
     }
 
     /// <summary>
