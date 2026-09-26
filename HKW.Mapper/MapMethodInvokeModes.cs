@@ -3,7 +3,8 @@
 /// <summary>
 /// 方法调用状态
 /// </summary>
-public enum MapMethodInvokeState
+[Flags]
+public enum MapMethodInvokeModes
 {
     /// <summary>
     /// 同步
@@ -18,5 +19,5 @@ public enum MapMethodInvokeState
     /// <summary>
     /// 同步和异步
     /// </summary>
-    Both = Sync | Async
+    Both = Sync | Async,
 }

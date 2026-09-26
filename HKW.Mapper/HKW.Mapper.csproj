@@ -1,44 +1,66 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
-	<PropertyGroup>
-		<Version>0.1.4</Version>
-		<Company>HKW</Company>
-		<Authors>HKW</Authors>
-		<PackageDescription>High-performance Mapper with SourceGenerator</PackageDescription>
-		<PackageTags>Mapper;SourceGenerator</PackageTags>
-		<TargetFramework>netstandard2.0</TargetFramework>
-		<Nullable>enable</Nullable>
-		<RootNamespace>HKW.HKWMapper</RootNamespace>
-		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-		<CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
-		<EnforceExtendedAnalyzerRules>false</EnforceExtendedAnalyzerRules>
-		<IsRoslynComponent>true</IsRoslynComponent>
-		<LangVersion>latest</LangVersion>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<PathMap>$(SolutionDir)=$(MSBuildProjectName.Replace(" ", "_"))/</PathMap>
-		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<ProduceReferenceAssembly>true</ProduceReferenceAssembly>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<PackageId>HKW.Mapper</PackageId>
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+    <Company>HKW</Company>
+    <Authors>HKW</Authors>
+    <PackageDescription>High-performance Mapper with SourceGenerator</PackageDescription>
+    <PackageTags>Mapper;SourceGenerator</PackageTags>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>HKW.HKWMapper</RootNamespace>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <EnforceExtendedAnalyzerRules>false</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageId>HKW.Mapper</PackageId>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-	</PropertyGroup>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" PrivateAssets="all" />
-		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
-		<None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-	</ItemGroup>
+  <PropertyGroup>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
+    <PathMap Condition="'$(SolutionDir)' != ''">$(SolutionDir)=/_/</PathMap>
+    <PathMap Condition="'$(SolutionDir)' == ''">$(MSBuildProjectDirectory)=/_/$(AssemblyName)/</PathMap>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<None Include="..\README.md">
-			<Pack>True</Pack>
-			<PackagePath>\</PackagePath>
-		</None>
-	</ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
 
-	<ItemGroup>
-	  <Folder Include="Extensions\" />
-	</ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 必须将dll导入NuGet分析器目录, 否则NuGet无法使用源生成 -->
+    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 引用的包 -->
+    <PackageReference Include="HKW.SourceGeneratorUtils" Version="0.1.8" PrivateAssets="all" GeneratePathProperty="true" />
+    <!-- 将引用的包dll复制进分析器目录, 否则NuGet无法使用 -->
+    <None Include="$(PkgHKW_SourceGeneratorUtils)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <!-- 项目分析器必须引用包, 否则 FileNotFoundException -->
+    <Analyzer Include="$(PkgHKW_SourceGeneratorUtils)\lib\netstandard2.0\*.dll" />
+  </ItemGroup>
 </Project>

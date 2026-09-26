@@ -1,11 +1,18 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.10.35013.160
+# Visual Studio Version 18
+VisualStudioVersion = 18.10.12210.168
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HKW.Mapper.Demo", "HKW.Mapper.Demo\HKW.Mapper.Demo.csproj", "{2C642080-F748-495E-BA1A-390459D80AD9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HKW.Mapper", "HKW.Mapper\HKW.Mapper.csproj", "{881402AC-1354-42A3-A38A-CD238DDA5256}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0E9290DE-4BF2-462F-956B-9456FF298F94}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HKW.MapperTest", "HKW.MapperTest\HKW.MapperTest.csproj", "{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +28,10 @@ Global
 		{881402AC-1354-42A3-A38A-CD238DDA5256}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{881402AC-1354-42A3-A38A-CD238DDA5256}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{881402AC-1354-42A3-A38A-CD238DDA5256}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
