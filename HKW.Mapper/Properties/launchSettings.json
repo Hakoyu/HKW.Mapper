@@ -3,9 +3,13 @@
     "HKW.Mapper": {
       "commandName": "Project"
     },
-    "SourceGenerator": {
+    "GeneratorDemo": {
       "commandName": "DebugRoslynComponent",
       "targetProject": "..\\HKW.Mapper.Demo\\HKW.Mapper.Demo.csproj"
+    },
+    "GeneratorTest": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "..\\HKW.MapperTest\\HKW.MapperTest.csproj"
     }
   }
 }

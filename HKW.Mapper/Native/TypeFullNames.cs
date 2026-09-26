@@ -29,7 +29,7 @@ internal static class TypeFullNames
         typeof(MapFromConfigActionAttribute).GetGlobalFullName();
 
     public static string ICloneable { get; } = typeof(ICloneable).GetGlobalFullName();
-    public static string MapPropertyTypes { get; } = typeof(MapPropertyTypes).GetGlobalFullName();
+    public static string MapPropertyType { get; } = typeof(MapPropertyType).GetGlobalFullName();
 
     public static string Type { get; } = typeof(Type).GetGlobalFullName();
 }

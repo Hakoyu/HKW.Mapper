@@ -41,7 +41,7 @@ internal class ClassSourceWriter
         // 获取可访问性
         var accessibility = _classInfo.ClassSyntax.Modifiers.GetAccessibility();
         _writer.WriteLine(
-            $"{accessibility} static class {_classInfo.ClassSymbol.Name}MapExtensions"
+            $"{accessibility} static class {_classInfo.ClassSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat).Replace('.', '_')}MapExtensions"
         );
         _writer.WriteLine("{");
         _writer.Indent++;

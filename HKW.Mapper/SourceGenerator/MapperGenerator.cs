@@ -49,22 +49,12 @@ internal class MapperGenerator
         }
     }
 
-    private static void TryAddConfig(MapTargetInfo mapTarget)
-    {
-        if (mapTarget.ConfigInfo is null)
-            return;
-        mapTarget.MapToMethod.Contents.Add(
-            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
-        );
-        mapTarget.MapFromMethod.Contents.Add(
-            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
-        );
-    }
-
     private void ParseProperty(MapTargetInfo mapTarget, IPropertySymbol propertySymbol)
     {
         var atts = propertySymbol.GetAttributes();
         if (atts.Any(a => a.AttributeClass?.GetFullName() == TypeFullNames.MapTargetAttribute))
+            return;
+        if (atts.Any(a => a.AttributeClass?.GetFullName() == TypeFullNames.MapIgnoreAttribute))
             return;
         var attributeData = atts.FirstOrDefault(a =>
             a.AttributeClass?.GetFullName() == mapTarget.PropertyAttributeFullName
@@ -131,8 +121,8 @@ internal class MapperGenerator
             )
         )
         {
-            mapTarget.MapFromMethod.Contents.RemoveAt(mapTarget.MapToMethod.Contents.Count - 1);
-            mapTarget.MapToMethod.Contents.Add($"// Replace {propertySymbol.Name}");
+            mapTarget.MapFromMethod.Contents.RemoveAt(mapTarget.MapFromMethod.Contents.Count - 1);
+            mapTarget.MapFromMethod.Contents.Add($"// Replace {propertySymbol.Name}");
             mapTarget.MapFromMethod.Contents.Add(
                 mapFromMethod.BuildInvocationStatement(MapConfigInfo.ConfigName)
             );
@@ -210,6 +200,26 @@ internal class MapperGenerator
         IPropertySymbol targetProperty
     )
     {
+        if (
+            attributeInfo?.TryGetParam<MapPropertyType>(
+                nameof(MapPropertyAttribute.MapType),
+                out var mapType
+            )
+            is not true
+        )
+            mapType = default;
+
+        if (mapType is MapPropertyType.ConstructFromSelf)
+        {
+            mapTarget.MapToMethod.Contents.Add(
+                $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = new({MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+            );
+            mapTarget.MapFromMethod.Contents.Add(
+                $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = new({MapTargetInfo.TargetParamName}.{targetProperty.Name});"
+            );
+            return;
+        }
+
         // 比较当前属性与目标属性的类型
         if (propertySymbol.Type.SymbolEquals(targetProperty.Type) is false)
         {
@@ -234,18 +244,7 @@ internal class MapperGenerator
             );
             return;
         }
-
-        if (
-            propertySymbol.Type.IsReferenceType
-            && (
-                attributeInfo?.TryGetParam<bool>(
-                    nameof(MapPropertyAttribute.MapPropertyType),
-                    out var mapRef
-                )
-                    is not true
-                || mapRef is not true
-            )
-        )
+        if (propertySymbol.Type.IsReferenceType && mapType is not MapPropertyType.Reference)
         {
             // 如果是引用类型, 则错误
             var diagnostic = Diagnostic.Create(
@@ -263,6 +262,18 @@ internal class MapperGenerator
         );
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {MapTargetInfo.TargetParamName}.{targetProperty.Name};"
+        );
+    }
+
+    private static void TryAddConfig(MapTargetInfo mapTarget)
+    {
+        if (mapTarget.ConfigInfo is null)
+            return;
+        mapTarget.MapToMethod.Contents.Add(
+            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
+        );
+        mapTarget.MapFromMethod.Contents.Add(
+            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
         );
     }
 
@@ -324,8 +335,11 @@ internal class MapperGenerator
         )
             return false;
 
+        var converterInterface = converterType.Interfaces.FirstOrDefault(i =>
+            i.OriginalDefinition.GetFullName() == TypeFullNames.MapConverterInterface
+        );
         // 判断转换器是否实现转换器接口
-        if (converterType.ImplementInterface(TypeFullNames.MapConverterInterface) is false)
+        if (converterInterface is null)
         {
             var diagnostic = Diagnostic.Create(
                 Descriptors.ConverterNotImplementIMapConverter,
@@ -339,8 +353,8 @@ internal class MapperGenerator
         }
         // 判断转换器泛型类型是否与映射类型相同
         if (
-            converterType.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false
-            || converterType.TypeArguments[1].SymbolEquals(targetProperty.Type) is false
+            converterInterface.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false
+            || converterInterface.TypeArguments[1].SymbolEquals(targetProperty.Type) is false
         )
         {
             var diagnostic = Diagnostic.Create(
@@ -348,8 +362,8 @@ internal class MapperGenerator
                 attributeInfo.Data.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                     attributeInfo.Data.ApplicationSyntaxReference.Span
                 ),
-                converterType.TypeArguments[0].GetName(),
-                converterType.TypeArguments[1].GetName(),
+                converterInterface.TypeArguments[0].GetName(),
+                converterInterface.TypeArguments[1].GetName(),
                 propertySymbol.Type.GetName(),
                 targetProperty.Type.GetName()
             );
@@ -459,7 +473,7 @@ internal class MapperGenerator
 
         foreach (var action in mapTarget.ConfigInfo.MapFrom.StartActions)
         {
-            mapTarget.MapToMethod.Contents.Add(
+            mapTarget.MapFromMethod.Contents.Add(
                 action.BuildInvocationStatement(MapConfigInfo.ConfigName)
             );
         }
@@ -478,7 +492,7 @@ internal class MapperGenerator
 
         foreach (var action in mapTarget.ConfigInfo.MapFrom.EndActions)
         {
-            mapTarget.MapToMethod.Contents.Add(
+            mapTarget.MapFromMethod.Contents.Add(
                 action.BuildInvocationStatement(MapConfigInfo.ConfigName)
             );
         }

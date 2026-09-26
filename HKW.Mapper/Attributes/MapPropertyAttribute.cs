@@ -45,7 +45,7 @@ internal sealed class MapPropertyAttribute : Attribute
     /// <summary>
     /// 映射引用类型
     /// </summary>
-    public MapPropertyTypes MapPropertyType { get; set; }
+    public MapPropertyType MapType { get; set; }
 
     ///// <summary>
     ///// 当右值不为 <see langword="NullOrDefault"/> 时才进行映射
@@ -81,7 +81,7 @@ internal sealed class MapPropertyAttribute : Attribute
 /// <summary>
 /// 属性映射类型
 /// </summary>
-public enum MapPropertyTypes
+public enum MapPropertyType
 {
     /// <summary>
     /// 默认操作, 会自动使用 ICloneable ,会警告映射引用类型

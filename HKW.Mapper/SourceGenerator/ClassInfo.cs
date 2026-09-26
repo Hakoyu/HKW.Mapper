@@ -67,7 +67,11 @@ internal class ClassInfo
 
             fieldName = $"{baseFieldName}_{count++}";
         }
-        var field = new FieldGenerateInfo(typeSymbol, fieldName) { Default = "new()" };
+        var field = new FieldGenerateInfo(typeSymbol, fieldName)
+        {
+            Default = "new()",
+            IsStatic = true,
+        };
         MapConverters.Add(field);
     }
 
@@ -243,8 +247,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         );
         Attribute.Members.Add(
             new PropertyGenerateInfo(
-                GeneratorHelper.BoolName,
-                nameof(MapPropertyAttribute.MapPropertyType),
+                TypeFullNames.MapPropertyType,
+                nameof(MapPropertyAttribute.MapType),
                 new()
             )
             {
@@ -262,7 +266,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             string.Empty
         )
         {
-            GenerateType = MethodGenerateType.Static,
+            IsStatic = true,
             Accessibility = lowestAccessibility,
             Params =
             [
@@ -280,7 +284,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             string.Empty
         )
         {
-            GenerateType = MethodGenerateType.Static,
+            IsStatic = true,
             Accessibility = lowestAccessibility,
             Params =
             [
@@ -502,9 +506,12 @@ internal sealed class MapConfigInfo
             }
         }
 
-        var isTask = methodSymbol.ReturnType.InheritedFrom(GeneratorHelper.TaskTypeFullName);
-        if (isTask)
-            actionInfo.IsAsync = isTask;
+        if (actionInfo.IsAsync is false)
+        {
+            actionInfo.IsAsync = methodSymbol.ReturnType.InheritedFrom(
+                GeneratorHelper.TaskTypeFullName
+            );
+        }
     }
 }
 
