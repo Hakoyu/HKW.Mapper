@@ -254,7 +254,13 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         );
 
         // MapTo扩展方法
-        MapToMethod = new(GeneratorHelper.VoidName, MapToName, string.Empty)
+        MapToMethod = new(
+            ConfigInfo?.MapTo.IsAsync is true
+                ? $"async {GeneratorHelper.TaskTypeFullName}"
+                : GeneratorHelper.VoidName,
+            MapToName,
+            string.Empty
+        )
         {
             GenerateType = MethodGenerateType.Static,
             Accessibility = lowestAccessibility,
@@ -266,7 +272,13 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         };
 
         // MapFrom扩展方法
-        MapFromMethod = new(GeneratorHelper.VoidName, MapFromName, string.Empty)
+        MapFromMethod = new(
+            ConfigInfo?.MapFrom.IsAsync is true
+                ? $"async {GeneratorHelper.TaskTypeFullName}"
+                : GeneratorHelper.VoidName,
+            MapFromName,
+            string.Empty
+        )
         {
             GenerateType = MethodGenerateType.Static,
             Accessibility = lowestAccessibility,
@@ -293,8 +305,6 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     public bool IsInvalid { get; }
 
     public INamedTypeSymbol TargetType { get; }
-
-    public MapMethodInvokeModes InvokeMode { get; set; }
 
     public MethodGenerateInfo MapToMethod { get; }
     public MethodGenerateInfo MapFromMethod { get; }
@@ -450,10 +460,6 @@ internal sealed class MapConfigInfo
         )
             return;
 
-        var isTask = methodSymbol.ReturnType.InheritedFrom(GeneratorHelper.TaskTypeFullName);
-        if (isTask)
-            actionInfo.IsAsync = isTask;
-
         if (mode is MapConfigActionMode.Start)
             actionInfo.StartActions.Add(methodSymbol);
         else if (mode is MapConfigActionMode.End)
@@ -495,6 +501,10 @@ internal sealed class MapConfigInfo
                 GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
             }
         }
+
+        var isTask = methodSymbol.ReturnType.InheritedFrom(GeneratorHelper.TaskTypeFullName);
+        if (isTask)
+            actionInfo.IsAsync = isTask;
     }
 }
 

@@ -26,7 +26,7 @@ internal static class TypeFullNames
     public static string MapToConfigActionAttribute { get; } =
         typeof(MapToConfigActionAttribute).GetGlobalFullName();
     public static string MapFromConfigActionAttribute { get; } =
-        typeof(MapToConfigActionAttribute).GetGlobalFullName();
+        typeof(MapFromConfigActionAttribute).GetGlobalFullName();
 
     public static string ICloneable { get; } = typeof(ICloneable).GetGlobalFullName();
     public static string MapPropertyTypes { get; } = typeof(MapPropertyTypes).GetGlobalFullName();

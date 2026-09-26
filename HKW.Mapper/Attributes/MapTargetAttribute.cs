@@ -48,10 +48,4 @@ public sealed class MapTargetAttribute : Attribute
     /// 映射设置, 基于 <see cref="MapperConfig{TSource, TTarget}"/>
     /// </summary>
     public Type? Config { get; }
-
-    /// <summary>
-    /// 方法调用状态
-    /// <para>会根据设置来生成对应的方法</para>
-    /// </summary>
-    public MapMethodInvokeModes InvokeMode { get; set; }
 }

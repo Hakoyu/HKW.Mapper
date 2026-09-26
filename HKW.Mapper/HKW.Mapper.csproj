@@ -55,7 +55,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- 引用的包 -->
-    <PackageReference Include="HKW.SourceGeneratorUtils" Version="0.1.8" PrivateAssets="all" GeneratePathProperty="true" />
+    <PackageReference Include="HKW.SourceGeneratorUtils" Version="0.1.10" PrivateAssets="all" GeneratePathProperty="true" />
     <!-- 将引用的包dll复制进分析器目录, 否则NuGet无法使用 -->
     <None Include="$(PkgHKW_SourceGeneratorUtils)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

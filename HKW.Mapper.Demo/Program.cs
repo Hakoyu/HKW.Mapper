@@ -60,8 +60,8 @@ public class MyMapConfig : MapperConfig<Test1, Test2>
         );
 
     [MapToConfigAction(MapConfigActionMode.Start)]
-    public void Start()
+    public async Task Start()
     {
-        Console.WriteLine(nameof(Start));
+        await Task.Delay(100);
     }
 }

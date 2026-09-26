@@ -118,6 +118,7 @@ internal class MapperGenerator
         )
         {
             mapTarget.MapToMethod.Contents.RemoveAt(mapTarget.MapToMethod.Contents.Count - 1);
+            mapTarget.MapToMethod.Contents.Add($"// Replace {propertySymbol.Name}");
             mapTarget.MapToMethod.Contents.Add(
                 mapToMethod.BuildInvocationStatement(MapConfigInfo.ConfigName)
             );
@@ -131,6 +132,7 @@ internal class MapperGenerator
         )
         {
             mapTarget.MapFromMethod.Contents.RemoveAt(mapTarget.MapToMethod.Contents.Count - 1);
+            mapTarget.MapToMethod.Contents.Add($"// Replace {propertySymbol.Name}");
             mapTarget.MapFromMethod.Contents.Add(
                 mapFromMethod.BuildInvocationStatement(MapConfigInfo.ConfigName)
             );
