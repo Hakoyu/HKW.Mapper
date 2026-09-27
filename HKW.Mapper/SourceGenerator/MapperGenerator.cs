@@ -122,20 +122,23 @@ internal class MapperGenerator
 
     private static bool IsForTarget(AttributeData attribute, MapTargetInfo mapTarget)
     {
-        if (attribute.ConstructorArguments.Length == 0)
-            return false;
+        var ps = attribute.GetParams();
+        var targetName = string.Empty;
+        if (
+            ps.TryGetParam<INamedTypeSymbol>(
+                nameof(MapPropertyAttribute.TargetType),
+                out var targetType
+            )
+        )
+        {
+            targetName = targetType.Name;
+        }
+        else if (ps.TryGetParam<string>(nameof(MapPropertyAttribute.TargetName), out var name))
+        {
+            targetName = name;
+        }
 
-        var argument = attribute.ConstructorArguments[0];
-        if (argument.Kind is TypedConstantKind.Type)
-            return argument.Value is INamedTypeSymbol type
-                && type.SymbolEquals(mapTarget.TargetType);
-        if (argument.Kind is TypedConstantKind.Primitive)
-            return string.Equals(
-                argument.Value?.ToString(),
-                mapTarget.TargetName,
-                StringComparison.Ordinal
-            );
-        return false;
+        return mapTarget.TargetName == targetName;
     }
 
     private static string GetMapPropertyTargetText(AttributeData attribute)
@@ -143,11 +146,18 @@ internal class MapperGenerator
         if (attribute.ConstructorArguments.Length == 0)
             return "<missing>";
         var argument = attribute.ConstructorArguments[0];
-        return argument.Kind is TypedConstantKind.Type
-            ? argument.Value is INamedTypeSymbol type
+        if (argument.Value is INamedTypeSymbol type)
+        {
+            return argument.Kind is TypedConstantKind.Type
                 ? type.GetFullName()
-                : "<invalid>"
-            : argument.Value?.ToString() ?? "<invalid>";
+                : argument.Value?.ToString() ?? "<invalid>";
+        }
+        else
+        {
+            return argument.Kind is TypedConstantKind.Type
+                ? "<invalid>"
+                : argument.Value?.ToString() ?? "<invalid>";
+        }
     }
 
     private static void TryReplacePropertyAction(
@@ -280,12 +290,11 @@ internal class MapperGenerator
         if (TryMapComplexProperty(mapTarget, propertySymbol, targetProperty))
             return;
 
-        if (TryMapNullableProperty(mapTarget, propertySymbol, targetProperty))
-            return;
-
         // 比较当前属性与目标属性的类型
         if (propertySymbol.Type.SymbolEquals(targetProperty.Type) is false)
         {
+            if (TryMapNullableProperty(mapTarget, propertySymbol, targetProperty))
+                return;
             // 如果当前属性类型与目标属性类型不一样, 则异常
             var diagnostic = Diagnostic.Create(
                 Descriptors.TargetPropertyTypeError,
@@ -307,7 +316,11 @@ internal class MapperGenerator
             );
             return;
         }
-        if (propertySymbol.Type.IsReferenceType && mapType is not MapPropertyType.Reference)
+        if (
+            propertySymbol.Type.IsReferenceType
+            && propertySymbol.Type.SpecialType != SpecialType.System_String
+            && mapType is not MapPropertyType.Reference
+        )
         {
             // 如果是引用类型, 则错误
             var diagnostic = Diagnostic.Create(

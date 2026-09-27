@@ -9,7 +9,10 @@ public sealed class MapPropertyAttribute : Attribute
     /// <inheritdoc/>
     /// <param name="TargetType">目标类型</param>
     public MapPropertyAttribute(Type TargetType)
-        : this(TargetType.Name) { }
+        : this(TargetType.Name)
+    {
+        this.TargetType = TargetType;
+    }
 
     /// <inheritdoc/>
     /// <param name="TargetName">目标名称</param>
@@ -22,7 +25,10 @@ public sealed class MapPropertyAttribute : Attribute
     /// <param name="TargetType">目标类型</param>
     /// <param name="PropertyName">属性名称</param>
     public MapPropertyAttribute(Type TargetType, string PropertyName)
-        : this(TargetType.Name, PropertyName) { }
+        : this(TargetType.Name, PropertyName)
+    {
+        this.TargetType = TargetType;
+    }
 
     /// <inheritdoc/>
     /// <param name="TargetName">目标名称</param>
@@ -37,6 +43,11 @@ public sealed class MapPropertyAttribute : Attribute
     /// 目标名称
     /// </summary>
     public string? TargetName { get; }
+
+    /// <summary>
+    /// 目标类型
+    /// </summary>
+    public Type? TargetType { get; }
 
     /// <summary>
     /// 属性名称

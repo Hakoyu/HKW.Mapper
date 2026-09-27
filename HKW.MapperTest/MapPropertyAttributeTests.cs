@@ -103,6 +103,18 @@ public sealed class PropertyNameTarget
     public int Mapped { get; set; }
 }
 
+[MapTarget(typeof(PropertyTargetNameTarget))]
+public sealed class PropertyTargetNameSource
+{
+    [MapProperty(nameof(PropertyTargetNameTarget), "Mapped")]
+    public int Original { get; set; }
+}
+
+public sealed class PropertyTargetNameTarget
+{
+    public int Mapped { get; set; }
+}
+
 [MapTarget(typeof(ConverterTypeTarget))]
 public sealed class ConverterTypeSource
 {
