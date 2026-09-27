@@ -24,10 +24,24 @@ public sealed class MapPropertyAttributeTests
     }
 
     [TestMethod]
-    public void PropertyNameMapsToDifferentTargetProperty()
+    public void PropertyNameMapsToDifferentTargetProperty1()
     {
         var source = new PropertyNameSource { Original = 3 };
         var target = new PropertyNameTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual(3, target.Mapped);
+        target.Mapped = 8;
+        source.MapFrom(target);
+        Assert.AreEqual(8, source.Original);
+    }
+
+    [TestMethod]
+    public void PropertyNameMapsToDifferentTargetProperty2()
+    {
+        var source = new PropertyTargetNameSource { Original = 3 };
+        var target = new PropertyTargetNameTarget();
 
         source.MapTo(target);
 

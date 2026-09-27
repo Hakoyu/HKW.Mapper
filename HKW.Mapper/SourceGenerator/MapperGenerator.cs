@@ -74,6 +74,7 @@ internal class MapperGenerator
                 mapTarget.SourceType.GetName()
             );
             GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            return;
         }
         if (matchingAttributes.Length > 1)
         {
@@ -83,6 +84,7 @@ internal class MapperGenerator
                 propertySymbol.Name
             );
             GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            return;
         }
         var attributeData = matchingAttributes.FirstOrDefault();
 

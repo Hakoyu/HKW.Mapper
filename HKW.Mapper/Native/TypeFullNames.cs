@@ -10,8 +10,6 @@ namespace HKW.HKWMapper;
 
 internal static class TypeFullNames
 {
-    public const string _global = "global::";
-
     public static string MapTargetAttribute { get; } =
         typeof(MapTargetAttribute).GetGlobalFullName();
     public static string MapIgnorePropertyAttribute { get; } =
