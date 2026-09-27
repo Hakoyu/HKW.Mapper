@@ -15,8 +15,6 @@ internal class ClassSourceWriter
         w.Write();
     }
 
-    public static string FirstClassFullName { get; set; } = string.Empty;
-
     private readonly ClassInfo _classInfo;
     private readonly IndentedTextWriter _writer;
 
@@ -52,8 +50,10 @@ internal class ClassSourceWriter
             _writer.WriteInfo(config);
         foreach (var mapTarget in _classInfo.MapTargets)
         {
-            _writer.WriteInfo(mapTarget.MapToMethod);
-            _writer.WriteInfo(mapTarget.MapFromMethod);
+            if (mapTarget.Direction.HasFlag(MapDirections.To))
+                _writer.WriteInfo(mapTarget.MapToMethod);
+            if (mapTarget.Direction.HasFlag(MapDirections.From))
+                _writer.WriteInfo(mapTarget.MapFromMethod);
         }
 
         _writer.Indent--;

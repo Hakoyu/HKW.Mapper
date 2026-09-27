@@ -141,6 +141,22 @@ internal static class Descriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor MapPropertyTargetNotFound = new(
+        id: "M0017",
+        title: "Map property target not found",
+        messageFormat: "MapProperty target '{0}' does not match any MapTarget on '{1}'.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapPropertyTargetAmbiguous = new(
+        id: "M0018",
+        title: "Map property target is ambiguous",
+        messageFormat: "MapProperty on '{0}' matches more than one mapping target.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
     //public static readonly DiagnosticDescriptor ConverterTargetTypeDifferentNoMethod = new(
     //    id: "M0010",
     //    title: "Converter target property type is different",

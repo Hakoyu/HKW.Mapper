@@ -1,4 +1,6 @@
-﻿namespace HKW.HKWMapper;
+﻿using System.ComponentModel;
+
+namespace HKW.HKWMapper;
 
 /// <summary>
 /// 从目标类型做双向映射
@@ -7,11 +9,6 @@
 /// <code><![CDATA[
 /// MapTo{TargetName}(Target)
 /// MapFrom{TargetName}(Target)
-/// ]]></code>
-/// </para>
-/// <para>自动为生成映射特性, 可对映射属性进行设置
-/// <code><![CDATA[
-/// {SourceName}MapFrom{TargetName}PropertyAttribute
 /// ]]></code>
 /// </para>
 /// </summary>
@@ -23,6 +20,7 @@ public sealed class MapTargetAttribute : Attribute
     public MapTargetAttribute(Type TargetType)
     {
         this.TargetType = TargetType;
+        this.Direction = Direction;
     }
 
     /// <inheritdoc/>
@@ -32,6 +30,7 @@ public sealed class MapTargetAttribute : Attribute
     {
         this.TargetType = TargetType;
         this.Config = Config;
+        this.Direction = Direction;
     }
 
     /// <summary>
@@ -45,7 +44,37 @@ public sealed class MapTargetAttribute : Attribute
     public string? TargetName { get; set; }
 
     /// <summary>
-    /// 映射设置, 基于 <see cref="MapperConfig{TSource, TTarget}"/>
+    /// 映射设置, 目标必须继承至 <see cref="MapperConfig{TSource, TTarget}"/>
     /// </summary>
     public Type? Config { get; }
+
+    /// <summary>
+    /// 要生成的映射方向
+    /// </summary>
+    [DefaultValue(MapDirections.Both)]
+    public MapDirections Direction { get; set; } = MapDirections.Both;
 }
+
+#pragma warning disable S2346
+/// <summary>
+/// 映射方法生成方向
+/// </summary>
+[Flags]
+public enum MapDirections
+{
+    /// <summary>
+    /// 映射至
+    /// </summary>
+    To = 0 << 1,
+
+    /// <summary>
+    /// 映射回源
+    /// </summary>
+    From = 0 << 2,
+
+    /// <summary>
+    /// 双向映射
+    /// </summary>
+    Both = To | From,
+}
+#pragma warning restore S2346

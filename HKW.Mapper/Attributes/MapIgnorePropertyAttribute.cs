@@ -4,4 +4,4 @@
 /// 制图跳过属性
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-public sealed class MapIgnoreAttribute : Attribute { }
+public sealed class MapIgnorePropertyAttribute : Attribute { }

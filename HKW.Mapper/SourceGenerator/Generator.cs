@@ -17,18 +17,14 @@ internal partial class Generator : IIncrementalGenerator
             static (spc, compilation) =>
             {
                 GeneratorHelper.Initialize(spc, compilation);
-                var classInfos = new Dictionary<ClassDeclarationSyntax, ClassInfo>();
+                var classInfos = new List<ClassInfo>();
                 foreach (var syntaxTree in compilation.SyntaxTrees)
-                {
                     ParseSyntaxTree(compilation, syntaxTree, classInfos);
-                }
-                var compilation1 = MapAttributeGenerator.Generate(classInfos.Values);
-                if (compilation1 == null)
-                    return;
-
-                foreach (var syntaxTree in compilation.SyntaxTrees)
+                var allMapTargets = classInfos.SelectMany(i => i.MapTargets).ToArray();
+                foreach (var classInfo in classInfos)
                 {
-                    ParseSyntaxTree(compilation1, syntaxTree, classInfos);
+                    MapperGenerator.Generate(classInfo, allMapTargets);
+                    ClassSourceWriter.Execute(classInfo);
                 }
             }
         );
@@ -37,7 +33,7 @@ internal partial class Generator : IIncrementalGenerator
     private static void ParseSyntaxTree(
         Compilation compilation,
         SyntaxTree syntaxTree,
-        Dictionary<ClassDeclarationSyntax, ClassInfo> classInfos
+        List<ClassInfo> classInfos
     )
     {
         var semanticModel = compilation.GetSemanticModel(syntaxTree);
@@ -50,20 +46,10 @@ internal partial class Generator : IIncrementalGenerator
         {
             var classSymbol = (INamedTypeSymbol)
                 ModelExtensions.GetDeclaredSymbol(syntaxTreeInfo.SemanticModel, classSyntax)!;
-            if (classInfos.TryGetValue(classSyntax, out var classInfo))
-            {
-                classInfo.Update(classSymbol);
-
-                MapperGenerator.Generate(classInfo);
-
-                ClassSourceWriter.Execute(classInfo);
-            }
-            else
-            {
-                var info = ClassValidator(classSyntax, classSymbol);
-                if (info is not null)
-                    classInfos.Add(classSyntax, info);
-            }
+            var classInfo = ClassValidator(classSyntax, classSymbol);
+            if (classInfo is null)
+                continue;
+            classInfos.Add(classInfo);
         }
 
         static ClassInfo? ClassValidator(

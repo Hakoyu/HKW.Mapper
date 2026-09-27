@@ -5,7 +5,7 @@
 ## 特性
 
 - 编译期生成映射代码，减少运行时开销
-- 根据 `[MapTargetAttribute]` 声明生成 `MapTo` 和 `MapFrom` 双向扩展方法
+- 根据 `[MapTarget]` 声明生成 `MapTo`、`MapFrom` 或双向扩展方法，默认生成双向方法
 - 支持同步映射，以及在配置动作包含异步方法时生成异步映射方法
 - 支持属性重命名、忽略属性和自定义类型转换器
 - 支持映射配置的开始、结束、属性前、属性后和替换属性操作
@@ -34,7 +34,7 @@ public sealed class UserDto
 }
 ```
 
-编译后会生成以下扩展方法：
+编译后会生成以下扩展方法。写入式重载返回写入后的目标对象；当目标类型有可访问的无参构造函数时，还会生成无参创建式重载：
 
 ```csharp
 var user = new User { Id = 1, Name = "Ada" };
@@ -80,10 +80,10 @@ public sealed class User
 
 ### 重命名属性
 
-`[MapTargetAttribute]` 会为当前源类型和目标类型生成一个内部属性配置特性。特性名称格式为：
+使用固定的公共 `[MapProperty]` 配置目标类型或目标名称，不再生成专用属性特性：
 
 ```text
-{SourceName}MapTarget{TargetName}PropertyAttribute
+[MapProperty(typeof(UserDto), "Name")]
 ```
 
 例如，`User` 映射到 `UserDto` 时，可以这样把 `DisplayName` 映射到 `Name`：
@@ -92,18 +92,18 @@ public sealed class User
 [MapTarget(typeof(UserDto))]
 public sealed class User
 {
-    [UserMapTargetUserDtoProperty("Name")]
+    [MapProperty(typeof(UserDto), "Name")]
     public string DisplayName { get; set; } = string.Empty;
 }
 ```
 
-这些属性特性由源生成器生成，因此只能在与 `[MapTargetAttribute]` 相同的编译单元中使用。若不需要属性级设置，则同名属性会自动映射。
+`MapProperty` 的目标类型或目标名称必须匹配当前源类型上的一个 `[MapTarget]`；未匹配或重复匹配会产生编译诊断。若不需要属性级设置，则同名属性会自动映射。
 
 ## 自定义转换器
 
 ### 属性级转换器
 
-实现 `IMapConverter<TSourceValue, TTargetValue>`，然后在生成的属性特性上指定转换器类型：
+实现 `IMapConverter<TSourceValue, TTargetValue>`，然后在 `[MapProperty]` 上指定转换器类型：
 
 ```csharp
 public sealed class NumberTextConverter : IMapConverter<int, string>
@@ -117,7 +117,7 @@ public sealed class NumberTextConverter : IMapConverter<int, string>
 [MapTarget(typeof(NumberDto))]
 public sealed class NumberModel
 {
-    [NumberModelMapTargetNumberDtoProperty("Text", typeof(NumberTextConverter))]
+    [MapProperty(typeof(NumberDto), "Text", ConverterType = typeof(NumberTextConverter))]
     public int Number { get; set; }
 }
 
@@ -163,7 +163,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 
 ## 引用类型属性
 
-为避免意外共享对象引用，默认情况下引用类型属性不会自动映射，并会产生编译诊断。可以在生成的属性配置特性上选择映射方式：
+为避免意外共享对象引用，普通引用类型默认不会自动复制，并会产生编译诊断。集合和已注册的嵌套映射会递归生成；数组、`List<T>` 和 `Dictionary<TKey,TValue>` 使用编译期生成的循环映射。nullable 使用统一策略：目标可空类型保留 null，目标不可空类型对 null 使用 `default`。
 
 ```csharp
 public sealed class Address
@@ -178,7 +178,7 @@ public sealed class Address
 [MapTarget(typeof(UserDto))]
 public sealed class User
 {
-    [UserMapTargetUserDtoProperty(nameof(Address), MapType = MapPropertyType.ConstructFromSelf)]
+    [MapProperty(typeof(UserDto), nameof(Address), MapType = MapPropertyType.ConstructFromSelf)]
     public Address Address { get; set; } = new(new Address { City = "" });
 }
 ```
@@ -244,7 +244,11 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 | 设置 `TargetName = "Custom"` | `MapToCustom`、`MapFromCustom` |
 | 异步配置动作 | 额外生成对应的 `MapTo...Async`、`MapFrom...Async` |
 
-映射方法接收一个已创建的目标对象并写入其属性，不负责创建目标对象。
+映射方法接收一个已创建的目标对象并写入其属性，同时返回该目标对象。目标类型支持无参初始化时，`MapToXxx()` 会创建并返回目标对象。
+
+## 映射方向和边界
+
+可以通过 `[MapTarget(typeof(UserDto), MapDirection.To)]` 只生成源到目标方法，也可以使用 `MapDirection.From` 或默认的 `MapDirection.Both`。嵌套对象要求子类型存在对应的 `[MapTarget]` 映射，并且目标可无参初始化；多态映射仅对编译期已声明的具体源/目标映射生成分派代码，不会通过反射发现未知派生类型。
 
 ## 从源码构建
 

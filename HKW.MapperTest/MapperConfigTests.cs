@@ -60,7 +60,7 @@ public sealed class ConfigSource
 {
     public int Number { get; set; }
 
-    [MapIgnore]
+    [MapIgnoreProperty]
     public string ActionLog { get; set; } = string.Empty;
 }
 
@@ -150,7 +150,7 @@ public sealed class TestMapperAsyncConfig : MapperConfig<ConfigSource, ConfigTar
 [MapTarget(typeof(PriorityTarget), typeof(PriorityConfig))]
 public sealed class PrioritySource
 {
-    [PrioritySourceMapTargetPriorityTargetProperty(typeof(AttributePriorityConverter))]
+    [MapProperty(typeof(PriorityTarget), ConverterType = typeof(AttributePriorityConverter))]
     public int Value { get; set; }
 }
 

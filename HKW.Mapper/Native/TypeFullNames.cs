@@ -14,8 +14,10 @@ internal static class TypeFullNames
 
     public static string MapTargetAttribute { get; } =
         typeof(MapTargetAttribute).GetGlobalFullName();
-    public static string MapIgnoreAttribute { get; } =
-        typeof(MapIgnoreAttribute).GetGlobalFullName();
+    public static string MapIgnorePropertyAttribute { get; } =
+        typeof(MapIgnorePropertyAttribute).GetGlobalFullName();
+    public static string MapPropertyAttribute { get; } =
+        typeof(MapPropertyAttribute).GetGlobalFullName();
 
     public static string MapConfigClass { get; } = typeof(MapperConfig<,>).GetGlobalFullName();
     public static string MapConverterInterface { get; } =
@@ -32,4 +34,8 @@ internal static class TypeFullNames
     public static string MapPropertyType { get; } = typeof(MapPropertyType).GetGlobalFullName();
 
     public static string Type { get; } = typeof(Type).GetGlobalFullName();
+
+    public static string ICollectionT { get; } = typeof(ICollection<>).GetGlobalFullName();
+    public static string ICollectionNeedGeneric { get; } =
+        "global::System.Collections.Generic.ICollection";
 }

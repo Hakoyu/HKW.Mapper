@@ -1,85 +1,66 @@
-﻿namespace HKW.HKWMapper;
+namespace HKW.HKWMapper;
 
 /// <summary>
-/// Map property attribute
-/// <para>Source: <see cref="Object"/></para>
-/// <para>Target: <see cref="Object"/></para>
+/// 配置当前属性在某个目标映射中的名称、转换器或引用类型策略。
 /// </summary>
-[AttributeUsage(AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class MapPropertyAttribute : Attribute
 {
     /// <inheritdoc/>
-    public MapPropertyAttribute(string PropertyName)
+    /// <param name="TargetType">目标类型</param>
+    public MapPropertyAttribute(Type TargetType)
+        : this(TargetType.Name) { }
+
+    /// <inheritdoc/>
+    /// <param name="TargetName">目标名称</param>
+    public MapPropertyAttribute(string TargetName)
     {
-        this.PropertyName = PropertyName;
+        this.TargetName = TargetName;
     }
 
     /// <inheritdoc/>
-    public MapPropertyAttribute(Type ConverterType)
-    {
-        this.ConverterType = ConverterType;
-    }
+    /// <param name="TargetType">目标类型</param>
+    /// <param name="PropertyName">属性名称</param>
+    public MapPropertyAttribute(Type TargetType, string PropertyName)
+        : this(TargetType.Name, PropertyName) { }
 
     /// <inheritdoc/>
-    public MapPropertyAttribute(string PropertyName, Type ConverterType)
+    /// <param name="TargetName">目标名称</param>
+    /// <param name="PropertyName">属性名称</param>
+    public MapPropertyAttribute(string TargetName, string PropertyName)
+        : this(TargetName)
     {
         this.PropertyName = PropertyName;
-        this.ConverterType = ConverterType;
     }
 
     /// <summary>
-    /// 目标属性名称
+    /// 目标名称
+    /// </summary>
+    public string? TargetName { get; }
+
+    /// <summary>
+    /// 属性名称
     /// </summary>
     public string? PropertyName { get; }
 
     /// <summary>
-    /// 转换器类型
+    /// 转换器类型, 目标必须实现 <see cref="IMapConverter{TSourceValue, TTargetValue}"/>
     /// </summary>
-    public Type? ConverterType { get; }
+    public Type? ConverterType { get; set; }
 
     /// <summary>
-    /// 忽略属性
+    /// 忽视属性
     /// </summary>
     public bool Ignore { get; set; }
 
     /// <summary>
-    /// 映射引用类型
+    /// 映射类型
     /// </summary>
     public MapPropertyType MapType { get; set; }
-
-    ///// <summary>
-    ///// 当右值不为 <see langword="NullOrDefault"/> 时才进行映射
-    ///// <para>
-    ///// 右值为值类型时进行非 <see langword="default"/> 检查, 右值为引用类型时进行非 <see langword="null"/> 检查
-    ///// </para>
-    ///// <para><code><![CDATA[
-    ///// if(target.Value is not default)
-    /////     source.Value = target.Value;
-    ///// // OR
-    ///// if(target.Value is not null)
-    /////     source.Value = target.Value;
-    ///// ]]></code></para>
-    ///// </summary>
-    //public bool CheckRightValue { get; set; }
-
-    ///// <summary>
-    ///// 当左值不为 <see langword="NullOrDefault"/> 时才进行映射
-    ///// <para>
-    ///// 左值为值类型时进行 <see langword="default"/> 检查, 左值为引用类型时进行 <see langword="null"/> 检查
-    ///// </para>
-    ///// <para><code><![CDATA[
-    ///// if(source.Value is not default)
-    /////     source.Value = target.Value;
-    ///// // OR
-    ///// if(source.Value is not null)
-    /////     source.Value = target.Value;
-    ///// ]]></code></para>
-    ///// </summary>
-    //public bool CheckLeftValue { get; set; }
 }
 
 /// <summary>
-/// 属性映射类型
+/// 属性映射类型。
 /// </summary>
 public enum MapPropertyType
 {

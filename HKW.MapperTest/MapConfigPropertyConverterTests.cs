@@ -48,7 +48,7 @@ public sealed class MapConfigPropertyConverterTests
 [MapTarget(typeof(RedirectTarget), typeof(RedirectConfig))]
 public sealed class RedirectSource
 {
-    [RedirectSourceMapTargetRedirectTargetProperty("Mapped")]
+    [MapProperty(typeof(RedirectTarget), "Mapped")]
     public int Original { get; set; }
 }
 

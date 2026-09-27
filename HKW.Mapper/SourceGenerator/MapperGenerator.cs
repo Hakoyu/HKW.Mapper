@@ -10,28 +10,25 @@ namespace HKW.HKWMapper.SourceGenerator;
 
 internal class MapperGenerator
 {
-    public static MapperGenerator Generate(ClassInfo classInfo)
+    public static MapperGenerator Generate(
+        ClassInfo classInfo,
+        IReadOnlyList<MapTargetInfo> mapTargets
+    )
     {
-        var x = new MapperGenerator(classInfo);
+        var x = new MapperGenerator(classInfo, mapTargets);
         x.Execute();
         return x;
     }
 
-    public MapperGenerator(ClassInfo classInfo)
+    public MapperGenerator(ClassInfo classInfo, IReadOnlyList<MapTargetInfo> mapTargets)
     {
         ClassInfo = classInfo;
+        AllMapTargets = mapTargets;
     }
 
     public ClassInfo ClassInfo { get; }
+    public IReadOnlyList<MapTargetInfo> AllMapTargets { get; }
 
-    /// <summary>
-    /// (ObjectType, (memberName, isAsync))
-    /// </summary>
-    public Dictionary<INamedTypeSymbol, Dictionary<string, bool>> MapperConfigInfoByType
-    {
-        get;
-        private set;
-    } = null!;
     public INamedTypeSymbol MapConverterType { get; private set; } = null!;
     public INamedTypeSymbol MapConfigType { get; private set; } = null!;
 
@@ -46,21 +43,52 @@ internal class MapperGenerator
                 ParseProperty(target, property);
             }
             AddEndAction(target);
+            if (target.Direction.HasFlag(MapDirections.To))
+                target.MapToMethod.Contents.Add($"return {MapTargetInfo.TargetParamName};");
+            if (target.Direction.HasFlag(MapDirections.From))
+                target.MapFromMethod.Contents.Add($"return {MapTargetInfo.SourceParamName};");
         }
     }
 
     private void ParseProperty(MapTargetInfo mapTarget, IPropertySymbol propertySymbol)
     {
         var atts = propertySymbol.GetAttributes();
-        if (atts.Any(a => a.AttributeClass?.GetFullName() == TypeFullNames.MapTargetAttribute))
+        // 检查全局忽略属性
+        if (
+            atts.Any(a =>
+                a.AttributeClass?.GetFullName() == TypeFullNames.MapIgnorePropertyAttribute
+            )
+        )
             return;
-        if (atts.Any(a => a.AttributeClass?.GetFullName() == TypeFullNames.MapIgnoreAttribute))
-            return;
-        var attributeData = atts.FirstOrDefault(a =>
-            a.AttributeClass?.GetFullName() == mapTarget.PropertyAttributeFullName
-        );
+        var propertyAttributes = atts.Where(a =>
+                a.AttributeClass?.GetFullName() == TypeFullNames.MapPropertyAttribute
+            )
+            .ToArray();
+        // 获取当前映射目标有效的特性
+        var matchingAttributes = propertyAttributes.Where(a => IsForTarget(a, mapTarget)).ToArray();
+        if (propertyAttributes.Length > 0 && matchingAttributes.Length == 0)
+        {
+            var diagnostic = Diagnostic.Create(
+                Descriptors.MapPropertyTargetNotFound,
+                propertySymbol.Locations[0],
+                GetMapPropertyTargetText(propertyAttributes[0]),
+                mapTarget.SourceType.GetName()
+            );
+            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+        }
+        if (matchingAttributes.Length > 1)
+        {
+            var diagnostic = Diagnostic.Create(
+                Descriptors.MapPropertyTargetAmbiguous,
+                propertySymbol.Locations[0],
+                propertySymbol.Name
+            );
+            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+        }
+        var attributeData = matchingAttributes.FirstOrDefault();
 
         var attributeInfo = attributeData is null ? null : new AttributeInfo(attributeData);
+        // 指定特性忽略
         if (
             attributeInfo?.TryGetParam<bool>(nameof(MapPropertyAttribute.Ignore), out var ignore)
                 is true
@@ -91,6 +119,36 @@ internal class MapperGenerator
         }
         TryReplacePropertyAction(mapTarget, propertySymbol);
         AddAfterPropertyAction(mapTarget, propertySymbol);
+    }
+
+    private static bool IsForTarget(AttributeData attribute, MapTargetInfo mapTarget)
+    {
+        if (attribute.ConstructorArguments.Length == 0)
+            return false;
+
+        var argument = attribute.ConstructorArguments[0];
+        if (argument.Kind is TypedConstantKind.Type)
+            return argument.Value is INamedTypeSymbol type
+                && type.SymbolEquals(mapTarget.TargetType);
+        if (argument.Kind is TypedConstantKind.Primitive)
+            return string.Equals(
+                argument.Value?.ToString(),
+                mapTarget.TargetName,
+                StringComparison.Ordinal
+            );
+        return false;
+    }
+
+    private static string GetMapPropertyTargetText(AttributeData attribute)
+    {
+        if (attribute.ConstructorArguments.Length == 0)
+            return "<missing>";
+        var argument = attribute.ConstructorArguments[0];
+        return argument.Kind is TypedConstantKind.Type
+            ? argument.Value is INamedTypeSymbol type
+                ? type.GetFullName()
+                : "<invalid>"
+            : argument.Value?.ToString() ?? "<invalid>";
     }
 
     private static void TryReplacePropertyAction(
@@ -193,7 +251,7 @@ internal class MapperGenerator
         }
     }
 
-    private static void MapProperty(
+    private void MapProperty(
         MapTargetInfo mapTarget,
         IPropertySymbol propertySymbol,
         AttributeInfo? attributeInfo,
@@ -219,6 +277,12 @@ internal class MapperGenerator
             );
             return;
         }
+
+        if (TryMapComplexProperty(mapTarget, propertySymbol, targetProperty))
+            return;
+
+        if (TryMapNullableProperty(mapTarget, propertySymbol, targetProperty))
+            return;
 
         // 比较当前属性与目标属性的类型
         if (propertySymbol.Type.SymbolEquals(targetProperty.Type) is false)
@@ -250,7 +314,7 @@ internal class MapperGenerator
             var diagnostic = Diagnostic.Create(
                 Descriptors.PropertyIsReferenceType,
                 propertySymbol.Locations[0],
-                mapTarget.PropertyAttributeName
+                $"{mapTarget.SourceType.Name}.{propertySymbol.Name}"
             );
             GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
             return;
@@ -263,6 +327,186 @@ internal class MapperGenerator
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {MapTargetInfo.TargetParamName}.{targetProperty.Name};"
         );
+    }
+
+    private static bool TryMapNullableProperty(
+        MapTargetInfo mapTarget,
+        IPropertySymbol sourceProperty,
+        IPropertySymbol targetProperty
+    )
+    {
+        var sourceType = UnwrapNullable(sourceProperty.Type);
+        var targetType = UnwrapNullable(targetProperty.Type);
+        if (sourceType.SymbolEquals(targetType) is false)
+            return false;
+
+        var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
+        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+        var sourceNullable = IsNullable(sourceProperty.Type);
+        var targetNullable = IsNullable(targetProperty.Type);
+        var toExpression = sourceNullable && !targetNullable ? $"{source} ?? default!" : source;
+        var fromExpression = targetNullable && !sourceNullable ? $"{target} ?? default!" : target;
+        mapTarget.MapToMethod.Contents.Add($"{target} = {toExpression};");
+        mapTarget.MapFromMethod.Contents.Add($"{source} = {fromExpression};");
+        return sourceNullable || targetNullable;
+    }
+
+    private static bool IsNullable(ITypeSymbol type)
+    {
+        return type.NullableAnnotation == NullableAnnotation.Annotated
+            || type is INamedTypeSymbol named
+                && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+    }
+
+    private bool TryMapComplexProperty(
+        MapTargetInfo mapTarget,
+        IPropertySymbol sourceProperty,
+        IPropertySymbol targetProperty
+    )
+    {
+        var sourceType = UnwrapNullable(sourceProperty.Type);
+        var targetType = UnwrapNullable(targetProperty.Type);
+
+        if (
+            sourceType is IArrayTypeSymbol sourceArray
+            && targetType is IArrayTypeSymbol targetArray
+        )
+        {
+            if (
+                !TryGetElementMapping(sourceArray.ElementType, targetArray.ElementType, out var map)
+            )
+                return false;
+            var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
+            var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+            mapTarget.MapToMethod.Contents.Add("{");
+            mapTarget.MapToMethod.Contents.Add(
+                $"{target} = new {targetArray.GetFullName()}[{source}.Length];"
+            );
+            mapTarget.MapToMethod.Contents.Add($"for (var i = 0; i < {source}.Length; i++)");
+            mapTarget.MapToMethod.Contents.Add(
+                $"    {target}[i] = {map.ToTarget($"{source}[i]")};"
+            );
+            mapTarget.MapToMethod.Contents.Add("}");
+
+            mapTarget.MapFromMethod.Contents.Add("{");
+            mapTarget.MapFromMethod.Contents.Add(
+                $"{source} = new {sourceArray.GetFullName()}[{target}.Length];"
+            );
+            mapTarget.MapFromMethod.Contents.Add($"for (var i = 0; i < {target}.Length; i++)");
+            mapTarget.MapFromMethod.Contents.Add(
+                $"    {source}[i] = {map.ToSource($"{target}[i]")};"
+            );
+            mapTarget.MapFromMethod.Contents.Add("}");
+            return true;
+        }
+
+        if (
+            TryGetGeneric(sourceType, TypeFullNames.ICollectionT, out var sourceCollection)
+            && TryGetGeneric(targetType, TypeFullNames.ICollectionT, out var targetCollection)
+        )
+        {
+            if (!TryGetElementMapping(sourceCollection[0], targetCollection[0], out var map))
+                return false;
+            var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
+            var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+            var genericName = sourceCollection[0].GetFullName();
+
+            mapTarget.MapToMethod.Contents.Add("{");
+            mapTarget.MapToMethod.Contents.Add($"if({target} is null) {target} = new();");
+            mapTarget.MapToMethod.Contents.Add($"else if({target}.Count > 0) {target}.Clear();");
+            mapTarget.MapToMethod.Contents.Add(
+                $"foreach (var item in {source}) (({TypeFullNames.ICollectionNeedGeneric}<{genericName}>){target}).Add({map.ToTarget("item")});"
+            );
+            mapTarget.MapToMethod.Contents.Add("}");
+
+            mapTarget.MapFromMethod.Contents.Add("{");
+            mapTarget.MapFromMethod.Contents.Add($"if({source} is null) {source} = new();");
+            mapTarget.MapFromMethod.Contents.Add($"else if({source}.Count > 0) {source}.Clear();");
+            mapTarget.MapFromMethod.Contents.Add(
+                $"foreach (var item in {target}) (({TypeFullNames.ICollectionNeedGeneric}<{genericName}>){source}).Add({map.ToSource("item")});"
+            );
+            mapTarget.MapFromMethod.Contents.Add("}");
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryGetElementMapping(
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType,
+        out ElementMapping mapping
+    )
+    {
+        if (sourceType.SymbolEquals(targetType))
+        {
+            mapping = new(value => value, value => value);
+            return true;
+        }
+
+        var nested = AllMapTargets.FirstOrDefault(x =>
+            x.SourceType.SymbolEquals(sourceType) && x.TargetType.SymbolEquals(targetType)
+        );
+        if (
+            nested is not null
+            && nested.Direction.HasFlag(MapDirections.To)
+            && targetType is INamedTypeSymbol namedTarget
+            && namedTarget.InstanceConstructors.Any(c =>
+                c.Parameters.Length == 0 && c.DeclaredAccessibility >= Accessibility.Internal
+            )
+        )
+        {
+            var extensionType = nested.SourceType.GetFullName().Replace('.', '_');
+            mapping = new(
+                value =>
+                    $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nested.MapToName}({value}, new {targetType.GetFullName()}())",
+                value =>
+                    $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nested.MapFromName}(new {sourceType.GetFullName()}(), {value})"
+            );
+            return true;
+        }
+
+        mapping = default;
+        return false;
+    }
+
+    private static ITypeSymbol UnwrapNullable(ITypeSymbol type)
+    {
+        if (
+            type is INamedTypeSymbol named
+            && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+        )
+            return named.TypeArguments[0];
+        return type;
+    }
+
+    private static bool TryGetGeneric(
+        ITypeSymbol type,
+        string metadataShape,
+        out ITypeSymbol[] arguments
+    )
+    {
+        arguments = [];
+        if (type is not INamedTypeSymbol named || named.TypeArguments.Length == 0)
+            return false;
+        var expected = metadataShape.Substring(0, metadataShape.IndexOf('<'));
+        var name = named.ContainingNamespace.ToDisplayString() + "." + named.Name;
+        if (!string.Equals(name, expected, StringComparison.Ordinal))
+            return false;
+        arguments = named.TypeArguments.ToArray();
+        return true;
+    }
+
+    private readonly struct ElementMapping
+    {
+        public ElementMapping(Func<string, string> toTarget, Func<string, string> toSource)
+        {
+            ToTarget = toTarget;
+            ToSource = toSource;
+        }
+
+        public Func<string, string> ToTarget { get; }
+        public Func<string, string> ToSource { get; }
     }
 
     private static void TryAddConfig(MapTargetInfo mapTarget)
@@ -456,6 +700,7 @@ internal class MapperGenerator
                 targetProperty.ToString()
             );
             GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            return null;
         }
         return targetProperty;
     }

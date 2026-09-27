@@ -3,7 +3,7 @@ using HKW.HKWMapper;
 namespace HKW.MapperTest;
 
 [TestClass]
-public sealed class MapIgnoreAttributeTests
+public sealed class MapIgnorePropertyAttributeTests
 {
     [TestMethod]
     public void DoesNotMapPropertyInEitherDirection()
@@ -30,7 +30,7 @@ public sealed class IgnoreSource
 {
     public int Mapped { get; set; }
 
-    [MapIgnore]
+    [MapIgnoreProperty]
     public int Ignored { get; set; }
 }
 

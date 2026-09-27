@@ -78,7 +78,8 @@ public sealed class ConstructValue
 [MapTarget(typeof(ConstructTarget))]
 public sealed class ConstructSource
 {
-    [ConstructSourceMapTargetConstructTargetProperty(
+    [MapProperty(
+        typeof(ConstructTarget),
         nameof(Value),
         MapType = MapPropertyType.ConstructFromSelf
     )]
@@ -93,7 +94,7 @@ public sealed class ConstructTarget
 [MapTarget(typeof(PropertyNameTarget))]
 public sealed class PropertyNameSource
 {
-    [PropertyNameSourceMapTargetPropertyNameTargetProperty("Mapped")]
+    [MapProperty(typeof(PropertyNameTarget), "Mapped")]
     public int Original { get; set; }
 }
 
@@ -105,7 +106,7 @@ public sealed class PropertyNameTarget
 [MapTarget(typeof(ConverterTypeTarget))]
 public sealed class ConverterTypeSource
 {
-    [ConverterTypeSourceMapTargetConverterTypeTargetProperty("Text", typeof(NumberTextConverter))]
+    [MapProperty(typeof(ConverterTypeTarget), "Text", ConverterType = typeof(NumberTextConverter))]
     public int Number { get; set; }
 }
 
@@ -124,7 +125,7 @@ public sealed class NumberTextConverter : IMapConverter<int, string>
 [MapTarget(typeof(PropertyIgnoreTarget))]
 public sealed class PropertyIgnoreSource
 {
-    [PropertyIgnoreSourceMapTargetPropertyIgnoreTargetProperty(nameof(Value), Ignore = true)]
+    [MapProperty(typeof(PropertyIgnoreTarget), nameof(Value), Ignore = true)]
     public int Value { get; set; }
 }
 

@@ -35,6 +35,11 @@ internal class ClassInfo
                 GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
             }
         }
+        // 分析所有成员
+        foreach (var propertySymbol in classSymbol.GetMembers().OfType<IPropertySymbol>())
+        {
+            Properties.Add(propertySymbol);
+        }
     }
 
     public string Namespace { get; }
@@ -73,20 +78,6 @@ internal class ClassInfo
             IsStatic = true,
         };
         MapConverters.Add(field);
-    }
-
-    /// <summary>
-    /// 在生成了映射器专用特性后才能更新, 否则无法解析属性使用的映射器专用特性
-    /// </summary>
-    /// <param name="classSymbol"></param>
-    public void Update(INamedTypeSymbol classSymbol)
-    {
-        ClassSymbol = classSymbol;
-        // 分析所有成员
-        foreach (var propertySymbol in classSymbol.GetMembers().OfType<IPropertySymbol>())
-        {
-            Properties.Add(propertySymbol);
-        }
     }
 }
 
@@ -136,6 +127,10 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         {
             TargetName = targetName;
         }
+        if (ps.TryGetParam<MapDirections>(nameof(MapTargetAttribute.Direction), out var direction))
+            Direction = direction;
+        else
+            Direction = MapDirections.Both;
         if (string.IsNullOrWhiteSpace(TargetName))
             TargetName = TargetType!.Name;
 
@@ -147,121 +142,11 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             PropertyByName.Add(property.Name, property);
         }
         var lowestAccessibility = sourceType.GetLowestAccessibility(targetType);
-        // 映射器专用特性
-        Attribute = new(PropertyAttributeName, ObjectGenerateType.SealedClass)
-        {
-            Attributes =
-            [
-                new("[global::System.AttributeUsage(global::System.AttributeTargets.Property)]"),
-            ],
-            Accessibility = Accessibility.Internal,
-            Comment = $"""
-                /// <summary>
-                /// Map property attribute
-                /// <para>Source: <see cref="{sourceType.GetFullName()}"/></para>
-                /// <para>Target: <see cref="{TargetType.GetFullName()}"/></para>
-                /// </summary>
-                """,
-            Inherits = [nameof(System.Attribute)],
-            Constructors =
-            [
-                new(
-                    PropertyAttributeName,
-                    new ParameterGenerateInfo(
-                        GeneratorHelper.StringName,
-                        nameof(MapPropertyAttribute.PropertyName)
-                    )
-                )
-                {
-                    Accessibility = Accessibility.Public,
-                    Comment = "/// <inheritdoc/>",
-                    Contents =
-                    [
-                        $"this.{nameof(MapPropertyAttribute.PropertyName)} = {nameof(MapPropertyAttribute.PropertyName)};",
-                    ],
-                },
-                new(
-                    PropertyAttributeName,
-                    new ParameterGenerateInfo(
-                        TypeFullNames.Type,
-                        nameof(MapPropertyAttribute.ConverterType)
-                    )
-                )
-                {
-                    Accessibility = Accessibility.Public,
-                    Comment = "/// <inheritdoc/>",
-                    Contents =
-                    [
-                        $"this.{nameof(MapPropertyAttribute.ConverterType)} = {nameof(MapPropertyAttribute.ConverterType)};",
-                    ],
-                },
-                new(
-                    PropertyAttributeName,
-                    new ParameterGenerateInfo(GeneratorHelper.StringName, "PropertyName"),
-                    new ParameterGenerateInfo(
-                        TypeFullNames.Type,
-                        nameof(MapPropertyAttribute.ConverterType)
-                    )
-                )
-                {
-                    Accessibility = Accessibility.Public,
-                    Comment = "/// <inheritdoc/>",
-                    Contents =
-                    [
-                        $"this.{nameof(MapPropertyAttribute.PropertyName)} = {nameof(MapPropertyAttribute.PropertyName)};",
-                        $"this.{nameof(MapPropertyAttribute.ConverterType)} = {nameof(MapPropertyAttribute.ConverterType)};",
-                    ],
-                },
-            ],
-        };
-        Attribute.Members.Add(
-            new PropertyGenerateInfo(
-                GeneratorHelper.StringName + "?",
-                nameof(MapPropertyAttribute.PropertyName),
-                new()
-            )
-            {
-                Accessibility = Accessibility.Public,
-            }
-        );
-        Attribute.Members.Add(
-            new PropertyGenerateInfo(
-                TypeFullNames.Type + "?",
-                nameof(MapPropertyAttribute.ConverterType),
-                new()
-            )
-            {
-                Accessibility = Accessibility.Public,
-            }
-        );
-        Attribute.Members.Add(
-            new PropertyGenerateInfo(
-                GeneratorHelper.BoolName,
-                nameof(MapPropertyAttribute.Ignore),
-                new()
-            )
-            {
-                Accessibility = Accessibility.Public,
-                SetMethod = new(),
-            }
-        );
-        Attribute.Members.Add(
-            new PropertyGenerateInfo(
-                TypeFullNames.MapPropertyType,
-                nameof(MapPropertyAttribute.MapType),
-                new()
-            )
-            {
-                Accessibility = Accessibility.Public,
-                SetMethod = new(),
-            }
-        );
-
         // MapTo扩展方法
         MapToMethod = new(
             ConfigInfo?.MapTo.IsAsync is true
-                ? $"async {GeneratorHelper.TaskTypeFullName}"
-                : GeneratorHelper.VoidName,
+                ? $"async {GeneratorHelper.TaskTypeFullName}<{TargetType.GetFullName()}>"
+                : TargetType.GetFullName(),
             MapToName,
             string.Empty
         )
@@ -278,8 +163,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         // MapFrom扩展方法
         MapFromMethod = new(
             ConfigInfo?.MapFrom.IsAsync is true
-                ? $"async {GeneratorHelper.TaskTypeFullName}"
-                : GeneratorHelper.VoidName,
+                ? $"async {GeneratorHelper.TaskTypeFullName}<{SourceType.GetFullName()}>"
+                : SourceType.GetFullName(),
             MapFromName,
             string.Empty
         )
@@ -299,21 +184,15 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     public string MapToName => "MapTo" + TargetName;
     public string MapFromName => "MapFrom" + TargetName;
 
-    public string PropertyAttributeFullName =>
-        $"{SourceType.GetFullName()}MapTarget{TargetName}PropertyAttribute";
-    public string PropertyAttributeName =>
-        $"{SourceType.GetName()}MapTarget{TargetName}PropertyAttribute";
-
     public Dictionary<string, IPropertySymbol> PropertyByName { get; } = [];
 
     public bool IsInvalid { get; }
 
     public INamedTypeSymbol TargetType { get; }
+    public MapDirections Direction { get; } = MapDirections.Both;
 
     public MethodGenerateInfo MapToMethod { get; }
     public MethodGenerateInfo MapFromMethod { get; }
-
-    public ObjectGenerateInfo Attribute { get; }
 
     public MapConfigInfo? ConfigInfo { get; }
 
