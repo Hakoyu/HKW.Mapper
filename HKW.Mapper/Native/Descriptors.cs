@@ -79,7 +79,7 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor PropertyIsReferenceType = new(
         id: "M0009",
         title: "Property is reference type",
-        messageFormat: "Property is reference type, please igone or set the MapReference of '{0}' to true.",
+        messageFormat: "Property is reference type, please igone or set the MapType.Reference of '{0}' to true.",
         category: _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true

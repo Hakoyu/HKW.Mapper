@@ -6,7 +6,7 @@
 /// <para>Target: <see cref="Object"/></para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-internal sealed class MapPropertyAttribute : Attribute
+public sealed class MapPropertyAttribute : Attribute
 {
     /// <inheritdoc/>
     public MapPropertyAttribute(string PropertyName)
