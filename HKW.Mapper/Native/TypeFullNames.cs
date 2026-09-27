@@ -36,6 +36,9 @@ internal static class TypeFullNames
     public static string Type { get; } = typeof(Type).GetGlobalFullName();
 
     public static string ICollectionT { get; } = typeof(ICollection<>).GetGlobalFullName();
+    public static string IListT { get; } = typeof(IList<>).GetGlobalFullName();
+    public static string IDictionaryT { get; } = typeof(IDictionary<,>).GetGlobalFullName();
+    public static string ISetT { get; } = typeof(ISet<>).GetGlobalFullName();
     public static string ICollectionNeedGeneric { get; } =
         "global::System.Collections.Generic.ICollection";
 }

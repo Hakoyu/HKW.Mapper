@@ -248,7 +248,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 
 ## 映射方向和边界
 
-可以通过 `[MapTarget(typeof(UserDto), MapDirection.To)]` 只生成源到目标方法，也可以使用 `MapDirection.From` 或默认的 `MapDirection.Both`。嵌套对象要求子类型存在对应的 `[MapTarget]` 映射，并且目标可无参初始化；多态映射仅对编译期已声明的具体源/目标映射生成分派代码，不会通过反射发现未知派生类型。
+可以通过 `[MapTarget(typeof(UserDto), Direction = MapDirections.To)]` 只生成源到目标方法，也可以使用 `MapDirections.From` 或默认的 `MapDirections.Both`。数组、`IList<T>`、`IDictionary<TKey, TValue>` 和 `ISet<T>` 会分别生成专用映射代码；集合目标需要可写、可清空并支持添加元素。嵌套对象要求子类型存在对应的 `[MapTarget]` 映射，并且目标可无参初始化；嵌套映射的 To/From 方向分别检查。多态映射仅对编译期已声明的具体源/目标映射生成分派代码，不会通过反射发现未知派生类型。
 
 ## 从源码构建
 

@@ -12,7 +12,7 @@ internal class MapperGenerator
 {
     public static MapperGenerator Generate(
         ClassInfo classInfo,
-        IReadOnlyList<MapTargetInfo> mapTargets
+        IReadOnlyDictionary<string, MapTargetInfo> mapTargets
     )
     {
         var x = new MapperGenerator(classInfo, mapTargets);
@@ -20,14 +20,17 @@ internal class MapperGenerator
         return x;
     }
 
-    public MapperGenerator(ClassInfo classInfo, IReadOnlyList<MapTargetInfo> mapTargets)
+    public MapperGenerator(
+        ClassInfo classInfo,
+        IReadOnlyDictionary<string, MapTargetInfo> mapTargets
+    )
     {
         ClassInfo = classInfo;
         AllMapTargets = mapTargets;
     }
 
     public ClassInfo ClassInfo { get; }
-    public IReadOnlyList<MapTargetInfo> AllMapTargets { get; }
+    public IReadOnlyDictionary<string, MapTargetInfo> AllMapTargets { get; }
 
     public INamedTypeSymbol MapConverterType { get; private set; } = null!;
     public INamedTypeSymbol MapConfigType { get; private set; } = null!;
@@ -378,58 +381,146 @@ internal class MapperGenerator
                 return false;
             var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
             var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
-            mapTarget.MapToMethod.Contents.Add("{");
-            mapTarget.MapToMethod.Contents.Add(
-                $"{target} = new {targetArray.ElementType.GetFullName()}[{source}.Length];"
-            );
-            mapTarget.MapToMethod.Contents.Add($"for (var i = 0; i < {source}.Length; i++)");
-            mapTarget.MapToMethod.Contents.Add(
-                $"    {target}[i] = {map.ToTarget($"{source}[i]")};"
-            );
-            mapTarget.MapToMethod.Contents.Add("}");
+            if (map.CanMapTo)
+            {
+                mapTarget.MapToMethod.Contents.Add("{");
+                mapTarget.MapToMethod.Contents.Add(
+                    $"{target} = new {targetArray.ElementType.GetFullName()}[{source}.Length];"
+                );
+                mapTarget.MapToMethod.Contents.Add($"for (var i = 0; i < {source}.Length; i++)");
+                mapTarget.MapToMethod.Contents.Add(
+                    $"    {target}[i] = {map.ToTarget!($"{source}[i]")};"
+                );
+                mapTarget.MapToMethod.Contents.Add("}");
+            }
 
-            mapTarget.MapFromMethod.Contents.Add("{");
-            mapTarget.MapFromMethod.Contents.Add(
-                $"{source} = new {sourceArray.ElementType.GetFullName()}[{target}.Length];"
-            );
-            mapTarget.MapFromMethod.Contents.Add($"for (var i = 0; i < {target}.Length; i++)");
-            mapTarget.MapFromMethod.Contents.Add(
-                $"    {source}[i] = {map.ToSource($"{target}[i]")};"
-            );
-            mapTarget.MapFromMethod.Contents.Add("}");
+            if (map.CanMapFrom)
+            {
+                mapTarget.MapFromMethod.Contents.Add("{");
+                mapTarget.MapFromMethod.Contents.Add(
+                    $"{source} = new {sourceArray.ElementType.GetFullName()}[{target}.Length];"
+                );
+                mapTarget.MapFromMethod.Contents.Add($"for (var i = 0; i < {target}.Length; i++)");
+                mapTarget.MapFromMethod.Contents.Add(
+                    $"    {source}[i] = {map.ToSource!($"{target}[i]")};"
+                );
+                mapTarget.MapFromMethod.Contents.Add("}");
+            }
             return true;
         }
 
         if (
-            TryGetGeneric(sourceType, TypeFullNames.ICollectionT, out var sourceCollection)
-            && TryGetGeneric(targetType, TypeFullNames.ICollectionT, out var targetCollection)
+            TryMapDictionaryProperty(
+                mapTarget,
+                sourceProperty,
+                targetProperty,
+                sourceType,
+                targetType
+            )
         )
-        {
-            if (!TryGetElementMapping(sourceCollection[0], targetCollection[0], out var map))
-                return false;
-            var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
-            var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
-            var targetGenericName = targetCollection[0].GetFullName();
-
-            mapTarget.MapToMethod.Contents.Add("{");
-            mapTarget.MapToMethod.Contents.Add($"if({target} is null) {target} = new();");
-            mapTarget.MapToMethod.Contents.Add($"else if({target}.Count > 0) {target}.Clear();");
-            mapTarget.MapToMethod.Contents.Add(
-                $"foreach (var item in {source}) (({TypeFullNames.ICollectionNeedGeneric}<{targetGenericName}>){target}).Add({map.ToTarget("item")});"
-            );
-            mapTarget.MapToMethod.Contents.Add("}");
-
-            mapTarget.MapFromMethod.Contents.Add("{");
-            mapTarget.MapFromMethod.Contents.Add($"if({source} is null) {source} = new();");
-            mapTarget.MapFromMethod.Contents.Add($"else if({source}.Count > 0) {source}.Clear();");
-            mapTarget.MapFromMethod.Contents.Add(
-                $"foreach (var item in {target}) (({TypeFullNames.ICollectionNeedGeneric}<{sourceCollection[0].GetFullName()}>){source}).Add({map.ToSource("item")});"
-            );
-            mapTarget.MapFromMethod.Contents.Add("}");
             return true;
-        }
+
+        if (
+            TryMapCollectionProperty(
+                mapTarget,
+                sourceProperty,
+                targetProperty,
+                sourceType,
+                targetType
+            )
+        )
+            return true;
 
         return false;
+    }
+
+    private bool TryMapCollectionProperty(
+        MapTargetInfo mapTarget,
+        IPropertySymbol sourceProperty,
+        IPropertySymbol targetProperty,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    )
+    {
+        if (
+            !TryGetGeneric(sourceType, TypeFullNames.ICollectionT, out var sourceArgs)
+            || !TryGetGeneric(targetType, TypeFullNames.ICollectionT, out var targetArgs)
+            || !TryGetElementMapping(sourceArgs[0], targetArgs[0], out var map)
+        )
+            return false;
+        var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
+        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+        if (map.CanMapTo)
+        {
+            mapTarget.MapToMethod.Contents.Add("{");
+            var targetItem = map.ToTarget!("item");
+            mapTarget.MapToMethod.Contents.Add(
+                $"if ({target} is null) {target} = new(); else {target}.Clear();"
+            );
+            mapTarget.MapToMethod.Contents.Add(
+                $"foreach (var item in {source}) {target}.Add({targetItem});"
+            );
+            mapTarget.MapToMethod.Contents.Add("}");
+        }
+        if (map.CanMapFrom)
+        {
+            mapTarget.MapFromMethod.Contents.Add("{");
+            var sourceItem = map.ToSource!("item");
+            mapTarget.MapFromMethod.Contents.Add(
+                $"if ({source} is null) {source} = new(); else {source}.Clear();"
+            );
+            mapTarget.MapFromMethod.Contents.Add(
+                $"foreach (var item in {target}) {source}.Add({sourceItem});"
+            );
+            mapTarget.MapFromMethod.Contents.Add("}");
+        }
+        return true;
+    }
+
+    private bool TryMapDictionaryProperty(
+        MapTargetInfo mapTarget,
+        IPropertySymbol sourceProperty,
+        IPropertySymbol targetProperty,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    )
+    {
+        if (
+            !TryGetGeneric(sourceType, TypeFullNames.IDictionaryT, out var sourceArgs)
+            || !TryGetGeneric(targetType, TypeFullNames.IDictionaryT, out var targetArgs)
+            || !TryGetElementMapping(sourceArgs[0], targetArgs[0], out var keyMap)
+            || !TryGetElementMapping(sourceArgs[1], targetArgs[1], out var valueMap)
+        )
+            return false;
+        var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
+        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+        mapTarget.MapToMethod.Contents.Add("{");
+        if (keyMap.CanMapTo && valueMap.CanMapTo)
+        {
+            var targetKey = keyMap.ToTarget!("item.Key");
+            var targetValue = valueMap.ToTarget!("item.Value");
+            mapTarget.MapToMethod.Contents.Add(
+                $"if ({target} is null) {target} = new(); else {target}.Clear();"
+            );
+            mapTarget.MapToMethod.Contents.Add(
+                $"foreach (var item in {source}) {target}.Add({targetKey}, {targetValue});"
+            );
+        }
+        mapTarget.MapToMethod.Contents.Add("}");
+        mapTarget.MapFromMethod.Contents.Add("{");
+        if (keyMap.CanMapFrom && valueMap.CanMapFrom)
+        {
+            var sourceKey = keyMap.ToSource!("item.Key");
+            var sourceValue = valueMap.ToSource!("item.Value");
+            mapTarget.MapFromMethod.Contents.Add(
+                $"if ({source} is null) {source} = new(); else {source}.Clear();"
+            );
+            mapTarget.MapFromMethod.Contents.Add(
+                $"foreach (var item in {target}) {source}.Add({sourceKey}, {sourceValue});"
+            );
+        }
+        mapTarget.MapFromMethod.Contents.Add("}");
+        return true;
     }
 
     private bool TryGetElementMapping(
@@ -440,30 +531,39 @@ internal class MapperGenerator
     {
         if (sourceType.SymbolEquals(targetType))
         {
-            mapping = new(value => value, value => value);
+            mapping = new(value => value, value => value, true, true);
             return true;
         }
 
-        var nested = AllMapTargets.FirstOrDefault(x =>
-            x.SourceType.SymbolEquals(sourceType) && x.TargetType.SymbolEquals(targetType)
+        AllMapTargets.TryGetValue(
+            $"{sourceType.GetFullName()}->{targetType.GetFullName()}",
+            out var nested
         );
+        var canMapTo = nested?.Direction.HasFlag(MapDirections.To) is true;
+        var canMapFrom = nested?.Direction.HasFlag(MapDirections.From) is true;
         if (
-            nested is not null
-            && nested.Direction.HasFlag(MapDirections.To)
+            (canMapTo || canMapFrom)
             && targetType is INamedTypeSymbol namedTarget
             && namedTarget.InstanceConstructors.Any(c =>
                 c.Parameters.Length == 0 && c.DeclaredAccessibility >= Accessibility.Internal
             )
         )
         {
-            var extensionType = nested
+            var nestedTarget = nested!;
+            var extensionType = nestedTarget
                 .SourceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)
                 .Replace('.', '_');
             mapping = new(
-                value =>
-                    $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nested.MapToName}({value}, new {targetType.GetFullName()}())",
-                value =>
-                    $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nested.MapFromName}(new {sourceType.GetFullName()}(), {value})"
+                canMapTo
+                    ? value =>
+                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapToName}({value}, new {targetType.GetFullName()}())"
+                    : null,
+                canMapFrom
+                    ? value =>
+                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapFromName}(new {sourceType.GetFullName()}(), {value})"
+                    : null,
+                canMapTo,
+                canMapFrom
             );
             return true;
         }
@@ -491,38 +591,34 @@ internal class MapperGenerator
         arguments = [];
         if (type is not INamedTypeSymbol named)
             return false;
-        var expected = metadataShape.Substring(0, metadataShape.IndexOf('<'));
-        if (expected.StartsWith(TypeFullNames._global, StringComparison.Ordinal))
-            expected = expected.Substring(TypeFullNames._global.Length);
-        if (IsExpectedType(named, expected))
-        {
-            arguments = named.TypeArguments.ToArray();
-            return true;
-        }
-
-        var matchingInterface = named.AllInterfaces.FirstOrDefault(i => IsExpectedType(i, expected));
+        var matchingInterface = named.AllInterfaces.FirstOrDefault(i =>
+            i.OriginalDefinition.GetFullName() == metadataShape
+        );
         if (matchingInterface is null)
             return false;
         arguments = matchingInterface.TypeArguments.ToArray();
         return true;
-
-        static bool IsExpectedType(INamedTypeSymbol candidate, string expectedName)
-        {
-            var name = candidate.ContainingNamespace.ToDisplayString() + "." + candidate.Name;
-            return string.Equals(name, expectedName, StringComparison.Ordinal);
-        }
     }
 
     private readonly struct ElementMapping
     {
-        public ElementMapping(Func<string, string> toTarget, Func<string, string> toSource)
+        public ElementMapping(
+            Func<string, string>? toTarget,
+            Func<string, string>? toSource,
+            bool canMapTo,
+            bool canMapFrom
+        )
         {
             ToTarget = toTarget;
             ToSource = toSource;
+            CanMapTo = canMapTo;
+            CanMapFrom = canMapFrom;
         }
 
-        public Func<string, string> ToTarget { get; }
-        public Func<string, string> ToSource { get; }
+        public Func<string, string>? ToTarget { get; }
+        public Func<string, string>? ToSource { get; }
+        public bool CanMapTo { get; }
+        public bool CanMapFrom { get; }
     }
 
     private static void TryAddConfig(MapTargetInfo mapTarget)
