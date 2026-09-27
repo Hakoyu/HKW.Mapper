@@ -36,11 +36,11 @@ public sealed class MapConfigPropertyConverterTests
         var source = new RedirectSource { Original = 3 };
         var target = new RedirectTarget();
 
-        source.MapToRedirectTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(103, target.Mapped);
         target.Mapped = 205;
-        source.MapFromRedirectTarget(target);
+        source.MapFrom(target);
         Assert.AreEqual(5, source.Original);
     }
 }

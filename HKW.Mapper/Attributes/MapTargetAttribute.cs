@@ -7,8 +7,13 @@ namespace HKW.HKWMapper;
 /// <para>自动为当前类型生成双向映射扩展方法</para>
 /// <para><see langword="TargetName"/> 默认为 <see langword="TargetType.Name"/>
 /// <code><![CDATA[
-/// MapTo{TargetName}(Target)
-/// MapFrom{TargetName}(Target)
+/// MapTo(this Source, Target)
+/// MapFrom(this Source, Target)
+/// ]]></code>
+/// 当 <see langword="TargetName"/> 设置为不等于 <see langword="TargetType.Name"/> 的自定义名称时：
+/// <code><![CDATA[
+/// MapTo{TargetName}(this Source, Target)
+/// MapFrom{TargetName}(this Source, Target)
 /// ]]></code>
 /// </para>
 /// </summary>

@@ -40,12 +40,12 @@ public sealed class UserDto
 var user = new User { Id = 1, Name = "Ada" };
 var dto = new UserDto();
 
-user.MapToUserDto(dto);
+user.MapTo(dto);
 // dto.Id == 1
 // dto.Name == "Ada"
 
 dto.Id = 2;
-user.MapFromUserDto(dto);
+user.MapFrom(dto);
 // user.Id == 2
 ```
 
@@ -240,7 +240,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 
 | 声明 | 生成的方法 |
 | --- | --- |
-| 默认目标名称 | `MapTo{TargetTypeName}`、`MapFrom{TargetTypeName}` |
+| 默认目标名称（`TargetName == TargetType.Name`） | `MapTo`、`MapFrom` |
 | 设置 `TargetName = "Custom"` | `MapToCustom`、`MapFromCustom` |
 | 异步配置动作 | 额外生成对应的 `MapTo...Async`、`MapFrom...Async` |
 

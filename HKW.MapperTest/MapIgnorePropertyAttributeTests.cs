@@ -11,14 +11,14 @@ public sealed class MapIgnorePropertyAttributeTests
         var source = new IgnoreSource { Mapped = 7, Ignored = 8 };
         var target = new IgnoreTarget { Mapped = 1, Ignored = 2 };
 
-        source.MapToIgnoreTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(7, target.Mapped);
         Assert.AreEqual(2, target.Ignored);
 
         target.Mapped = 9;
         target.Ignored = 10;
-        source.MapFromIgnoreTarget(target);
+        source.MapFrom(target);
 
         Assert.AreEqual(9, source.Mapped);
         Assert.AreEqual(8, source.Ignored);

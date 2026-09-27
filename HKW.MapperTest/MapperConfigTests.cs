@@ -12,12 +12,12 @@ public sealed class MapperConfigTests
         var source = new ConfigSource();
         var target = new ConfigTarget();
 
-        source.MapToConfigTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(actionLog, source.ActionLog);
 
         source.ActionLog = string.Empty;
-        source.MapFromConfigTarget(target);
+        source.MapFrom(target);
 
         Assert.AreEqual(actionLog, source.ActionLog);
     }
@@ -45,11 +45,11 @@ public sealed class MapperConfigTests
         var source = new PrioritySource { Value = 2 };
         var target = new PriorityTarget();
 
-        source.MapToPriorityTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(12, target.Value);
         target.Value = 20;
-        source.MapFromPriorityTarget(target);
+        source.MapFrom(target);
         Assert.AreEqual(10, source.Value);
     }
 }

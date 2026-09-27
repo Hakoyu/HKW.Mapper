@@ -11,13 +11,13 @@ public sealed class MapPropertyAttributeTests
         var source = new ConstructSource { Value = new ConstructValue(7) };
         var target = new ConstructTarget { Value = new ConstructValue(1) };
 
-        source.MapToConstructTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(7, target.Value.Value);
         Assert.AreNotSame(source.Value, target.Value);
 
         target.Value = new ConstructValue(12);
-        source.MapFromConstructTarget(target);
+        source.MapFrom(target);
 
         Assert.AreEqual(12, source.Value.Value);
         Assert.AreNotSame(source.Value, target.Value);
@@ -29,11 +29,11 @@ public sealed class MapPropertyAttributeTests
         var source = new PropertyNameSource { Original = 3 };
         var target = new PropertyNameTarget();
 
-        source.MapToPropertyNameTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(3, target.Mapped);
         target.Mapped = 8;
-        source.MapFromPropertyNameTarget(target);
+        source.MapFrom(target);
         Assert.AreEqual(8, source.Original);
     }
 
@@ -43,11 +43,11 @@ public sealed class MapPropertyAttributeTests
         var source = new ConverterTypeSource { Number = 4 };
         var target = new ConverterTypeTarget();
 
-        source.MapToConverterTypeTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual("number:4", target.Text);
         target.Text = "number:9";
-        source.MapFromConverterTypeTarget(target);
+        source.MapFrom(target);
         Assert.AreEqual(9, source.Number);
     }
 
@@ -57,11 +57,11 @@ public sealed class MapPropertyAttributeTests
         var source = new PropertyIgnoreSource { Value = 7 };
         var target = new PropertyIgnoreTarget { Value = 1 };
 
-        source.MapToPropertyIgnoreTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(1, target.Value);
         target.Value = 9;
-        source.MapFromPropertyIgnoreTarget(target);
+        source.MapFrom(target);
         Assert.AreEqual(7, source.Value);
     }
 }

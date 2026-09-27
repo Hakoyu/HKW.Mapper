@@ -11,14 +11,14 @@ public sealed class MapTargetAttributeTests
         var source = new BasicSource { Id = 7, Name = 2 };
         var target = new BasicTarget { Id = 1, Name = 1 };
 
-        source.MapToBasicTarget(target);
+        source.MapTo(target);
 
         Assert.AreEqual(7, target.Id);
         Assert.AreEqual(2, target.Name);
 
         target.Id = 12;
         target.Name = 3;
-        source.MapFromBasicTarget(target);
+        source.MapFrom(target);
         Assert.AreEqual(12, source.Id);
         Assert.AreEqual(3, source.Name);
     }
@@ -29,11 +29,11 @@ public sealed class MapTargetAttributeTests
         var source = new RenamedSource { Number = 4 };
         var target = new RenamedTarget();
 
-        source.MapToRenamedTarget(target);
+        source.MapToRenamed(target);
         Assert.AreEqual(4, target.Number);
 
         target.Number = 9;
-        source.MapFromRenamedTarget(target);
+        source.MapFromRenamed(target);
         Assert.AreEqual(9, source.Number);
     }
 }
@@ -51,7 +51,7 @@ public sealed class BasicTarget
     public int Name { get; set; }
 }
 
-[MapTarget(typeof(RenamedTarget), TargetName = "RenamedTarget")]
+[MapTarget(typeof(RenamedTarget), TargetName = "Renamed")]
 public sealed class RenamedSource
 {
     public int Number { get; set; }

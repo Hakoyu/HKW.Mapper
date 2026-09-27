@@ -181,8 +181,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
 
     public INamedTypeSymbol SourceType { get; }
     public string TargetName { get; }
-    public string MapToName => "MapTo" + TargetName;
-    public string MapFromName => "MapFrom" + TargetName;
+    public string MapToName => TargetName == TargetType.Name ? "MapTo" : "MapTo" + TargetName;
+    public string MapFromName => TargetName == TargetType.Name ? "MapFrom" : "MapFrom" + TargetName;
 
     public Dictionary<string, IPropertySymbol> PropertyByName { get; } = [];
 
