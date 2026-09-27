@@ -380,7 +380,7 @@ internal class MapperGenerator
             var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
             mapTarget.MapToMethod.Contents.Add("{");
             mapTarget.MapToMethod.Contents.Add(
-                $"{target} = new {targetArray.GetFullName()}[{source}.Length];"
+                $"{target} = new {targetArray.ElementType.GetFullName()}[{source}.Length];"
             );
             mapTarget.MapToMethod.Contents.Add($"for (var i = 0; i < {source}.Length; i++)");
             mapTarget.MapToMethod.Contents.Add(
@@ -390,7 +390,7 @@ internal class MapperGenerator
 
             mapTarget.MapFromMethod.Contents.Add("{");
             mapTarget.MapFromMethod.Contents.Add(
-                $"{source} = new {sourceArray.GetFullName()}[{target}.Length];"
+                $"{source} = new {sourceArray.ElementType.GetFullName()}[{target}.Length];"
             );
             mapTarget.MapFromMethod.Contents.Add($"for (var i = 0; i < {target}.Length; i++)");
             mapTarget.MapFromMethod.Contents.Add(
@@ -409,13 +409,13 @@ internal class MapperGenerator
                 return false;
             var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
             var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
-            var genericName = sourceCollection[0].GetFullName();
+            var targetGenericName = targetCollection[0].GetFullName();
 
             mapTarget.MapToMethod.Contents.Add("{");
             mapTarget.MapToMethod.Contents.Add($"if({target} is null) {target} = new();");
             mapTarget.MapToMethod.Contents.Add($"else if({target}.Count > 0) {target}.Clear();");
             mapTarget.MapToMethod.Contents.Add(
-                $"foreach (var item in {source}) (({TypeFullNames.ICollectionNeedGeneric}<{genericName}>){target}).Add({map.ToTarget("item")});"
+                $"foreach (var item in {source}) (({TypeFullNames.ICollectionNeedGeneric}<{targetGenericName}>){target}).Add({map.ToTarget("item")});"
             );
             mapTarget.MapToMethod.Contents.Add("}");
 
@@ -423,7 +423,7 @@ internal class MapperGenerator
             mapTarget.MapFromMethod.Contents.Add($"if({source} is null) {source} = new();");
             mapTarget.MapFromMethod.Contents.Add($"else if({source}.Count > 0) {source}.Clear();");
             mapTarget.MapFromMethod.Contents.Add(
-                $"foreach (var item in {target}) (({TypeFullNames.ICollectionNeedGeneric}<{genericName}>){source}).Add({map.ToSource("item")});"
+                $"foreach (var item in {target}) (({TypeFullNames.ICollectionNeedGeneric}<{sourceCollection[0].GetFullName()}>){source}).Add({map.ToSource("item")});"
             );
             mapTarget.MapFromMethod.Contents.Add("}");
             return true;
@@ -456,7 +456,9 @@ internal class MapperGenerator
             )
         )
         {
-            var extensionType = nested.SourceType.GetFullName().Replace('.', '_');
+            var extensionType = nested
+                .SourceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)
+                .Replace('.', '_');
             mapping = new(
                 value =>
                     $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nested.MapToName}({value}, new {targetType.GetFullName()}())",
@@ -487,14 +489,28 @@ internal class MapperGenerator
     )
     {
         arguments = [];
-        if (type is not INamedTypeSymbol named || named.TypeArguments.Length == 0)
+        if (type is not INamedTypeSymbol named)
             return false;
         var expected = metadataShape.Substring(0, metadataShape.IndexOf('<'));
-        var name = named.ContainingNamespace.ToDisplayString() + "." + named.Name;
-        if (!string.Equals(name, expected, StringComparison.Ordinal))
+        if (expected.StartsWith(TypeFullNames._global, StringComparison.Ordinal))
+            expected = expected.Substring(TypeFullNames._global.Length);
+        if (IsExpectedType(named, expected))
+        {
+            arguments = named.TypeArguments.ToArray();
+            return true;
+        }
+
+        var matchingInterface = named.AllInterfaces.FirstOrDefault(i => IsExpectedType(i, expected));
+        if (matchingInterface is null)
             return false;
-        arguments = named.TypeArguments.ToArray();
+        arguments = matchingInterface.TypeArguments.ToArray();
         return true;
+
+        static bool IsExpectedType(INamedTypeSymbol candidate, string expectedName)
+        {
+            var name = candidate.ContainingNamespace.ToDisplayString() + "." + candidate.Name;
+            return string.Equals(name, expectedName, StringComparison.Ordinal);
+        }
     }
 
     private readonly struct ElementMapping

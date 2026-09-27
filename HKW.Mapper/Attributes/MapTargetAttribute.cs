@@ -65,12 +65,12 @@ public enum MapDirections
     /// <summary>
     /// 映射至
     /// </summary>
-    To = 0 << 1,
+    To = 1 << 0,
 
     /// <summary>
     /// 映射回源
     /// </summary>
-    From = 0 << 2,
+    From = 1 << 1,
 
     /// <summary>
     /// 双向映射

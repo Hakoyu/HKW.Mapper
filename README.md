@@ -65,7 +65,7 @@ public sealed class User
 
 ### 忽略属性
 
-在源属性上添加 `[MapIgnoreAttribute]` 后，该属性在两个方向都不会被映射：
+在源属性上添加 `[MapIgnorePropertyAttribute]` 后，该属性在两个方向都不会被映射：
 
 ```csharp
 [MapTarget(typeof(UserDto))]
@@ -73,14 +73,14 @@ public sealed class User
 {
     public int Id { get; set; }
 
-    [MapIgnore]
+    [MapIgnoreProperty]
     public string InternalToken { get; set; } = string.Empty;
 }
 ```
 
 ### 重命名属性
 
-使用固定的公共 `[MapProperty]` 配置目标类型或目标名称，不再生成专用属性特性：
+使用固定的公共 `[MapPropertyAttribute]` 配置目标类型或目标名称，不再生成专用属性特性：
 
 ```text
 [MapProperty(typeof(UserDto), "Name")]
@@ -97,13 +97,13 @@ public sealed class User
 }
 ```
 
-`MapProperty` 的目标类型或目标名称必须匹配当前源类型上的一个 `[MapTarget]`；未匹配或重复匹配会产生编译诊断。若不需要属性级设置，则同名属性会自动映射。
+`MapProperty` 的目标类型或目标名称必须匹配当前源类型上的一个 `[MapTargetAttribute]`；未匹配或重复匹配会产生编译诊断。若不需要属性级设置，则同名属性会自动映射。
 
 ## 自定义转换器
 
 ### 属性级转换器
 
-实现 `IMapConverter<TSourceValue, TTargetValue>`，然后在 `[MapProperty]` 上指定转换器类型：
+实现 `IMapConverter<TSourceValue, TTargetValue>`，然后在 `[MapPropertyAttribute]` 上指定转换器类型：
 
 ```csharp
 public sealed class NumberTextConverter : IMapConverter<int, string>
