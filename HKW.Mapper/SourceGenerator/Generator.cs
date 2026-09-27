@@ -12,13 +12,14 @@ internal partial class Generator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var candidates = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                TypeFullNames.MapTargetAttribute.Substring(TypeFullNames._global.Length),
+        var candidates = context
+            .SyntaxProvider.ForAttributeWithMetadataName(
+                typeof(MapTargetAttribute).GetFullName(),
                 static (node, _) => node is ClassDeclarationSyntax,
                 static (attributeContext, _) =>
                 {
-                    return attributeContext.TargetSymbol is INamedTypeSymbol symbol
+                    return
+                        attributeContext.TargetSymbol is INamedTypeSymbol symbol
                         && attributeContext.TargetNode is ClassDeclarationSyntax syntax
                         ? new Candidate(syntax, symbol)
                         : null;
@@ -39,22 +40,15 @@ internal partial class Generator : IIncrementalGenerator
                     if (ClassValidator(candidate.Syntax, candidate.Symbol) is { } classInfo)
                         classInfos.Add(classInfo);
                 }
-                var allMapTargets = classInfos
-                    .SelectMany(i => i.MapTargets)
-                    .GroupBy(GetMapTargetKey)
-                    .ToDictionary(group => group.Key, group => group.First());
+                var mapTargetDic = classInfos.ToDictionary(x => x.ClassSymbol, x => x.MapTargets);
+
                 foreach (var classInfo in classInfos)
                 {
-                    MapperGenerator.Generate(classInfo, allMapTargets);
+                    MapperGenerator.Generate(classInfo, mapTargetDic);
                     ClassSourceWriter.Execute(classInfo);
                 }
             }
         );
-    }
-
-    private static string GetMapTargetKey(MapTargetInfo mapTarget)
-    {
-        return $"{mapTarget.SourceType.GetFullName()}->{mapTarget.TargetType.GetFullName()}";
     }
 
     private sealed class Candidate
@@ -69,7 +63,10 @@ internal partial class Generator : IIncrementalGenerator
         public INamedTypeSymbol Symbol { get; }
     }
 
-    private static ClassInfo? ClassValidator(ClassDeclarationSyntax classSyntax, INamedTypeSymbol classSymbol)
+    private static ClassInfo? ClassValidator(
+        ClassDeclarationSyntax classSyntax,
+        INamedTypeSymbol classSymbol
+    )
     {
         var atts = classSymbol.GetAttributes();
         var mapTargets = new List<AttributeData>();

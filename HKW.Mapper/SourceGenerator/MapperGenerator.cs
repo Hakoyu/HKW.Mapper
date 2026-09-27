@@ -10,30 +10,26 @@ namespace HKW.HKWMapper.SourceGenerator;
 
 internal class MapperGenerator
 {
-    public static MapperGenerator Generate(
+    public static void Generate(
         ClassInfo classInfo,
-        IReadOnlyDictionary<string, MapTargetInfo> mapTargets
+        IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> mapTargetDic
     )
     {
-        var x = new MapperGenerator(classInfo, mapTargets);
+        var x = new MapperGenerator(classInfo, mapTargetDic);
         x.Execute();
-        return x;
     }
 
     public MapperGenerator(
         ClassInfo classInfo,
-        IReadOnlyDictionary<string, MapTargetInfo> mapTargets
+        IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> mapTargetDic
     )
     {
         ClassInfo = classInfo;
-        AllMapTargets = mapTargets;
+        MapTargetDic = mapTargetDic;
     }
 
     public ClassInfo ClassInfo { get; }
-    public IReadOnlyDictionary<string, MapTargetInfo> AllMapTargets { get; }
-
-    public INamedTypeSymbol MapConverterType { get; private set; } = null!;
-    public INamedTypeSymbol MapConfigType { get; private set; } = null!;
+    public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
 
     public void Execute()
     {
@@ -347,8 +343,10 @@ internal class MapperGenerator
         var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
         var sourceNullable = IsNullable(sourceProperty.Type);
         var targetNullable = IsNullable(targetProperty.Type);
-        var toExpression = sourceNullable && !targetNullable ? $"{source} ?? default!" : source;
-        var fromExpression = targetNullable && !sourceNullable ? $"{target} ?? default!" : target;
+        var toExpression =
+            sourceNullable && targetNullable is false ? $"{source} ?? default!" : source;
+        var fromExpression =
+            targetNullable && sourceNullable is false ? $"{target} ?? default!" : target;
         mapTarget.MapToMethod.Contents.Add($"{target} = {toExpression};");
         mapTarget.MapFromMethod.Contents.Add($"{source} = {fromExpression};");
         return sourceNullable || targetNullable;
@@ -376,7 +374,12 @@ internal class MapperGenerator
         )
         {
             if (
-                !TryGetElementMapping(sourceArray.ElementType, targetArray.ElementType, out var map)
+                TryGetElementMapping(
+                    (INamedTypeSymbol)sourceArray.ElementType,
+                    (INamedTypeSymbol)targetArray.ElementType,
+                    out var map
+                )
+                is false
             )
                 return false;
             var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
@@ -443,9 +446,9 @@ internal class MapperGenerator
     )
     {
         if (
-            !TryGetGeneric(sourceType, TypeFullNames.ICollectionT, out var sourceArgs)
-            || !TryGetGeneric(targetType, TypeFullNames.ICollectionT, out var targetArgs)
-            || !TryGetElementMapping(sourceArgs[0], targetArgs[0], out var map)
+            TryGetGeneric(sourceType, TypeFullNames.ICollectionT, out var sourceArgs) is false
+            || TryGetGeneric(targetType, TypeFullNames.ICollectionT, out var targetArgs) is false
+            || TryGetElementMapping(sourceArgs[0], targetArgs[0], out var map) is false
         )
             return false;
         var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
@@ -486,10 +489,10 @@ internal class MapperGenerator
     )
     {
         if (
-            !TryGetGeneric(sourceType, TypeFullNames.IDictionaryT, out var sourceArgs)
-            || !TryGetGeneric(targetType, TypeFullNames.IDictionaryT, out var targetArgs)
-            || !TryGetElementMapping(sourceArgs[0], targetArgs[0], out var keyMap)
-            || !TryGetElementMapping(sourceArgs[1], targetArgs[1], out var valueMap)
+            TryGetGeneric(sourceType, TypeFullNames.IDictionaryT, out var sourceArgs) is false
+            || TryGetGeneric(targetType, TypeFullNames.IDictionaryT, out var targetArgs) is false
+            || TryGetElementMapping(sourceArgs[0], targetArgs[0], out var keyMap) is false
+            || TryGetElementMapping(sourceArgs[1], targetArgs[1], out var valueMap) is false
         )
             return false;
         var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
@@ -524,8 +527,8 @@ internal class MapperGenerator
     }
 
     private bool TryGetElementMapping(
-        ITypeSymbol sourceType,
-        ITypeSymbol targetType,
+        INamedTypeSymbol sourceType,
+        INamedTypeSymbol targetType,
         out ElementMapping mapping
     )
     {
@@ -534,11 +537,10 @@ internal class MapperGenerator
             mapping = new(value => value, value => value, true, true);
             return true;
         }
-
-        AllMapTargets.TryGetValue(
-            $"{sourceType.GetFullName()}->{targetType.GetFullName()}",
-            out var nested
-        );
+        mapping = default;
+        if (MapTargetDic.TryGetValue(sourceType, out var targets) is false)
+            return false;
+        var nested = targets.FirstOrDefault(t => t.TargetType.SymbolEquals(targetType));
         var canMapTo = nested?.Direction.HasFlag(MapDirections.To) is true;
         var canMapFrom = nested?.Direction.HasFlag(MapDirections.From) is true;
         if (
@@ -567,8 +569,6 @@ internal class MapperGenerator
             );
             return true;
         }
-
-        mapping = default;
         return false;
     }
 
@@ -585,7 +585,7 @@ internal class MapperGenerator
     private static bool TryGetGeneric(
         ITypeSymbol type,
         string metadataShape,
-        out ITypeSymbol[] arguments
+        out INamedTypeSymbol[] arguments
     )
     {
         arguments = [];
@@ -596,7 +596,7 @@ internal class MapperGenerator
         );
         if (matchingInterface is null)
             return false;
-        arguments = matchingInterface.TypeArguments.ToArray();
+        arguments = matchingInterface.TypeArguments.Cast<INamedTypeSymbol>().ToArray();
         return true;
     }
 

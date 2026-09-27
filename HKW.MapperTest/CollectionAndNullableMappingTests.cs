@@ -3,22 +3,22 @@ using HKW.HKWMapper;
 namespace HKW.MapperTest;
 
 [TestClass]
-public sealed class CollectionAndNullableMappingTests
+public sealed class ArrayAndNullableMappingTests
 {
     [TestMethod]
     public void MapsArraysInBothDirections()
     {
-        var source = new CollectionSource { Values = [1, 2, 3] };
-        var target = new CollectionTarget { Values = [9] };
+        var source = new ArraySource { Values = [1, 2, 3] };
+        var target = new ArrayTarget { Values = [9] };
 
-        var returnedTarget = source.MapToCollectionTarget(target);
+        var returnedTarget = source.MapToArrayTarget(target);
 
         Assert.AreSame(target, returnedTarget);
         Assert.AreSequenceEqual(new[] { 1, 2, 3 }, target.Values);
         Assert.AreNotSame(source.Values, target.Values);
 
         target.Values = [4, 5];
-        var returnedSource = source.MapFromCollectionTarget(target);
+        var returnedSource = source.MapFromArrayTarget(target);
 
         Assert.AreSame(source, returnedSource);
         Assert.AreSequenceEqual(new[] { 4, 5 }, source.Values);
@@ -138,13 +138,13 @@ public sealed class CollectionAndNullableMappingTests
     }
 }
 
-[MapTarget(typeof(CollectionTarget))]
-public sealed class CollectionSource
+[MapTarget(typeof(ArrayTarget))]
+public sealed class ArraySource
 {
     public int[] Values { get; set; } = [];
 }
 
-public sealed class CollectionTarget
+public sealed class ArrayTarget
 {
     public int[] Values { get; set; } = [];
 }
