@@ -64,19 +64,27 @@ internal class MapperGenerator
             )
             .ToArray();
         // 获取当前映射目标有效的特性
-        var matchingAttributes = propertyAttributes.Where(a => IsForTarget(a, mapTarget)).ToArray();
-        //if (propertyAttributes.Length > 0 && matchingAttributes.Length == 0)
-        //{
-        //    var diagnostic = Diagnostic.Create(
-        //        Descriptors.MapPropertyTargetNotFound,
-        //        propertySymbol.Locations[0],
-        //        GetMapPropertyTargetText(propertyAttributes[0]),
-        //        mapTarget.SourceType.GetName()
-        //    );
-        //    GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
-        //    return;
-        //}
-        if (matchingAttributes.Length > 1)
+        var matchingAttributes = new List<AttributeData>();
+        foreach (var att in propertyAttributes)
+        {
+            var targetName = GetMapPropertyTargetName(att);
+            if (mapTarget.TargetName == targetName)
+            {
+                matchingAttributes.Add(att);
+            }
+            else if (ClassInfo.MapTargets.All(x => x.TargetName != targetName))
+            {
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.MapPropertyTargetNotFound,
+                    att.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                        att.ApplicationSyntaxReference.Span
+                    ),
+                    targetName
+                );
+                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            }
+        }
+        if (matchingAttributes.Count > 1)
         {
             var diagnostic = Diagnostic.Create(
                 Descriptors.MapPropertyTargetAmbiguous,
@@ -122,7 +130,7 @@ internal class MapperGenerator
         AddAfterPropertyAction(mapTarget, propertySymbol);
     }
 
-    private static bool IsForTarget(AttributeData attribute, MapTargetInfo mapTarget)
+    private static string GetMapPropertyTargetName(AttributeData attribute)
     {
         var ps = attribute.GetParams();
         var targetName = string.Empty;
@@ -140,26 +148,7 @@ internal class MapperGenerator
             targetName = name;
         }
 
-        return mapTarget.TargetName == targetName;
-    }
-
-    private static string GetMapPropertyTargetText(AttributeData attribute)
-    {
-        if (attribute.ConstructorArguments.Length == 0)
-            return "<missing>";
-        var argument = attribute.ConstructorArguments[0];
-        if (argument.Value is INamedTypeSymbol type)
-        {
-            return argument.Kind is TypedConstantKind.Type
-                ? type.GetFullName()
-                : argument.Value?.ToString() ?? "<invalid>";
-        }
-        else
-        {
-            return argument.Kind is TypedConstantKind.Type
-                ? "<invalid>"
-                : argument.Value?.ToString() ?? "<invalid>";
-        }
+        return targetName;
     }
 
     private static void TryReplacePropertyAction(
@@ -306,32 +295,30 @@ internal class MapperGenerator
             GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
-
-        if (propertySymbol.Type.HasInterface(TypeFullNames.ICloneable))
+        if (propertySymbol.Type.SpecialType != SpecialType.System_String)
         {
-            // 如果实现了 ICloneable, 则克隆
-            mapTarget.MapToMethod.Contents.Add(
-                $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}.{nameof(ICloneable.Clone)}();"
-            );
-            mapTarget.MapFromMethod.Contents.Add(
-                $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}.{nameof(ICloneable.Clone)}();"
-            );
-            return;
-        }
-        if (
-            propertySymbol.Type.IsReferenceType
-            && propertySymbol.Type.SpecialType != SpecialType.System_String
-            && mapType is not MapPropertyType.Reference
-        )
-        {
-            // 如果是引用类型, 则错误
-            var diagnostic = Diagnostic.Create(
-                Descriptors.PropertyIsReferenceType,
-                propertySymbol.Locations[0],
-                $"{mapTarget.SourceType.Name}.{propertySymbol.Name}"
-            );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
-            return;
+            if (propertySymbol.Type.HasInterface(TypeFullNames.ICloneable))
+            {
+                // 如果实现了 ICloneable, 则克隆
+                mapTarget.MapToMethod.Contents.Add(
+                    $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}?.{nameof(ICloneable.Clone)}()!;"
+                );
+                mapTarget.MapFromMethod.Contents.Add(
+                    $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}?.{nameof(ICloneable.Clone)}()!;"
+                );
+                return;
+            }
+            if (propertySymbol.Type.IsReferenceType && mapType is not MapPropertyType.Reference)
+            {
+                // 如果是引用类型, 则错误
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.PropertyIsReferenceType,
+                    propertySymbol.Locations[0],
+                    $"{mapTarget.SourceType.Name}.{propertySymbol.Name}"
+                );
+                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                return;
+            }
         }
 
         // 正常赋值

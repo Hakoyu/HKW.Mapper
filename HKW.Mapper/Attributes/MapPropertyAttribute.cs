@@ -39,6 +39,44 @@ public sealed class MapPropertyAttribute : Attribute
         this.PropertyName = PropertyName;
     }
 
+    /// <inheritdoc/>
+    /// <param name="TargetType">目标类型</param>
+    /// <param name="ConverterType">转换器类型</param>
+    public MapPropertyAttribute(Type TargetType, Type ConverterType)
+        : this(TargetType)
+    {
+        this.ConverterType = ConverterType;
+    }
+
+    /// <inheritdoc/>
+    /// <param name="TargetName">目标名称</param>
+    /// <param name="ConverterType">转换器类型</param>
+    public MapPropertyAttribute(string TargetName, Type ConverterType)
+        : this(TargetName)
+    {
+        this.ConverterType = ConverterType;
+    }
+
+    /// <inheritdoc/>
+    /// <param name="TargetType">目标类型</param>
+    /// <param name="PropertyName">属性名称</param>
+    /// <param name="ConverterType">转换器类型</param>
+    public MapPropertyAttribute(Type TargetType, string PropertyName, Type ConverterType)
+        : this(TargetType, PropertyName)
+    {
+        this.ConverterType = ConverterType;
+    }
+
+    /// <inheritdoc/>
+    /// <param name="TargetName">目标名称</param>
+    /// <param name="PropertyName">属性名称</param>
+    /// <param name="ConverterType">转换器类型</param>
+    public MapPropertyAttribute(string TargetName, string PropertyName, Type ConverterType)
+        : this(TargetName, PropertyName)
+    {
+        this.ConverterType = ConverterType;
+    }
+
     /// <summary>
     /// 目标名称
     /// </summary>
@@ -57,7 +95,7 @@ public sealed class MapPropertyAttribute : Attribute
     /// <summary>
     /// 转换器类型, 目标必须实现 <see cref="IMapConverter{TSourceValue, TTargetValue}"/>
     /// </summary>
-    public Type? ConverterType { get; set; }
+    public Type? ConverterType { get; }
 
     /// <summary>
     /// 忽视属性

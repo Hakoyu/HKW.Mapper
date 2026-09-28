@@ -78,6 +78,22 @@ public sealed class MapPropertyAttributeTests
         source.MapFrom(target);
         Assert.AreEqual(7, source.Value);
     }
+
+    [TestMethod]
+    public void CloneableProperty()
+    {
+        var source = new CloneablePropertySource { Value = new(123) };
+        var target = new CloneablePropertyTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual(123, target.Value.Value);
+        Assert.AreNotSame(source.Value, target.Value);
+        target.Value.Value = 8;
+        source.MapFrom(target);
+        Assert.AreEqual(8, source.Value.Value);
+        Assert.AreNotSame(source.Value, target.Value);
+    }
 }
 
 public sealed class ConstructValue
@@ -133,7 +149,7 @@ public sealed class PropertyTargetNameTarget
 [MapTarget(typeof(PropertyConverterTypeSource))]
 public sealed class PropertyConverterTypeSource
 {
-    [MapProperty(typeof(PropertyConverterTypeTarget), ConverterType = typeof(NumberToDoubleNumber))]
+    [MapProperty(typeof(PropertyConverterTypeTarget), typeof(NumberToDoubleNumber))]
     public double Value { get; set; }
 }
 
@@ -142,10 +158,22 @@ public sealed class PropertyConverterTypeTarget
     public double Value { get; set; }
 }
 
+[MapTarget(typeof(CloneablePropertyTarget))]
+public sealed class CloneablePropertySource
+{
+    [MapProperty(typeof(CloneablePropertyTarget))]
+    public CloneableValue Value { get; set; } = default!;
+}
+
+public sealed class CloneablePropertyTarget
+{
+    public CloneableValue Value { get; set; } = default!;
+}
+
 [MapTarget(typeof(ConverterTypeTarget))]
 public sealed class ConverterTypeSource
 {
-    [MapProperty(typeof(ConverterTypeTarget), "Text", ConverterType = typeof(NumberTextConverter))]
+    [MapProperty(typeof(ConverterTypeTarget), "Text", typeof(NumberTextConverter))]
     public int Number { get; set; }
 }
 
@@ -188,10 +216,15 @@ public class NumberToDoubleNumber : IMapConverter<double, double>
 
 public class CloneableValue : ICloneable
 {
+    public CloneableValue(int value)
+    {
+        Value = value;
+    }
+
     public int Value { get; set; }
 
     public object Clone()
     {
-        return new CloneableValue() { Value = this.Value };
+        return new CloneableValue(Value);
     }
 }

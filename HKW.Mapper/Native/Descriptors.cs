@@ -144,9 +144,9 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor MapPropertyTargetNotFound = new(
         id: "M0017",
         title: "Map property target not found",
-        messageFormat: "MapProperty target '{0}' does not match any MapTarget on '{1}'.",
+        messageFormat: "MapProperty target is '{0}', but not any MapTarget target is '{0}'.",
         category: _category,
-        DiagnosticSeverity.Error,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
     public static readonly DiagnosticDescriptor MapPropertyTargetAmbiguous = new(
