@@ -65,17 +65,17 @@ internal class MapperGenerator
             .ToArray();
         // 获取当前映射目标有效的特性
         var matchingAttributes = propertyAttributes.Where(a => IsForTarget(a, mapTarget)).ToArray();
-        if (propertyAttributes.Length > 0 && matchingAttributes.Length == 0)
-        {
-            var diagnostic = Diagnostic.Create(
-                Descriptors.MapPropertyTargetNotFound,
-                propertySymbol.Locations[0],
-                GetMapPropertyTargetText(propertyAttributes[0]),
-                mapTarget.SourceType.GetName()
-            );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
-            return;
-        }
+        //if (propertyAttributes.Length > 0 && matchingAttributes.Length == 0)
+        //{
+        //    var diagnostic = Diagnostic.Create(
+        //        Descriptors.MapPropertyTargetNotFound,
+        //        propertySymbol.Locations[0],
+        //        GetMapPropertyTargetText(propertyAttributes[0]),
+        //        mapTarget.SourceType.GetName()
+        //    );
+        //    GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+        //    return;
+        //}
         if (matchingAttributes.Length > 1)
         {
             var diagnostic = Diagnostic.Create(
@@ -307,14 +307,14 @@ internal class MapperGenerator
             return;
         }
 
-        if (propertySymbol.Type.InheritedFrom(TypeFullNames.ICloneable))
+        if (propertySymbol.Type.HasInterface(TypeFullNames.ICloneable))
         {
             // 如果实现了 ICloneable, 则克隆
             mapTarget.MapToMethod.Contents.Add(
-                $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}.Clone();"
+                $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}.{nameof(ICloneable.Clone)}();"
             );
             mapTarget.MapFromMethod.Contents.Add(
-                $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}.Clone();"
+                $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}.{nameof(ICloneable.Clone)}();"
             );
             return;
         }

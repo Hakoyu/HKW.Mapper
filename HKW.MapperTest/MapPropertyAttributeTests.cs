@@ -129,6 +129,19 @@ public sealed class PropertyTargetNameTarget
     public int Mapped { get; set; }
 }
 
+//[MapTarget(typeof(PropertyConverterTypeTarget))]
+[MapTarget(typeof(PropertyConverterTypeSource))]
+public sealed class PropertyConverterTypeSource
+{
+    [MapProperty(typeof(PropertyConverterTypeTarget), ConverterType = typeof(NumberToDoubleNumber))]
+    public double Value { get; set; }
+}
+
+public sealed class PropertyConverterTypeTarget
+{
+    public double Value { get; set; }
+}
+
 [MapTarget(typeof(ConverterTypeTarget))]
 public sealed class ConverterTypeSource
 {
@@ -158,4 +171,27 @@ public sealed class PropertyIgnoreSource
 public sealed class PropertyIgnoreTarget
 {
     public int Value { get; set; }
+}
+
+public class NumberToDoubleNumber : IMapConverter<double, double>
+{
+    public double Convert(object source, double value)
+    {
+        return value * 2;
+    }
+
+    public double ConvertBack(object source, double value)
+    {
+        return value / 2;
+    }
+}
+
+public class CloneableValue : ICloneable
+{
+    public int Value { get; set; }
+
+    public object Clone()
+    {
+        return new CloneableValue() { Value = this.Value };
+    }
 }

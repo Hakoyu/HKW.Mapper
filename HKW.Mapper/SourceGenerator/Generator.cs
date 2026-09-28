@@ -28,6 +28,7 @@ internal partial class Generator : IIncrementalGenerator
             .Where(static candidate => candidate is not null)
             .Select(static (candidate, _) => candidate!)
             .Collect();
+
         context.RegisterSourceOutput(
             context.CompilationProvider.Combine(candidates),
             static (spc, input) =>

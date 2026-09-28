@@ -38,6 +38,8 @@ internal class ClassInfo
         // 分析所有成员
         foreach (var propertySymbol in classSymbol.GetMembers().OfType<IPropertySymbol>())
         {
+            if (propertySymbol.IsStatic)
+                continue;
             Properties.Add(propertySymbol);
         }
     }
