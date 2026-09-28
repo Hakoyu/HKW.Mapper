@@ -26,15 +26,15 @@ public sealed class MapperConfigTests
     public async Task ActionsAndConverterAreUsedByGeneratedMappingAsync()
     {
         const string actionLog = "start;before;replace;after;end";
-        var source = new ConfigSource();
+        var source = new ConfigSourceAsync();
         var target = new ConfigTarget();
 
-        await source.MapToConfigTargetAsync(target);
+        await source.MapToAsync(target);
 
         Assert.AreEqual(actionLog, source.ActionLog);
 
         source.ActionLog = string.Empty;
-        await source.MapFromConfigTargetAsync(target);
+        await source.MapFromAsync(target);
 
         Assert.AreEqual(actionLog, source.ActionLog);
     }
@@ -55,8 +55,16 @@ public sealed class MapperConfigTests
 }
 
 [MapTarget(typeof(ConfigTarget), typeof(TestMapperConfig))]
-[MapTarget(typeof(ConfigTarget), typeof(TestMapperAsyncConfig), TargetName = "ConfigTargetAsync")]
 public sealed class ConfigSource
+{
+    public int Number { get; set; }
+
+    [MapIgnoreProperty]
+    public string ActionLog { get; set; } = string.Empty;
+}
+
+[MapTarget(typeof(ConfigTarget), typeof(TestMapperAsyncConfig))]
+public sealed class ConfigSourceAsync
 {
     public int Number { get; set; }
 
@@ -98,13 +106,13 @@ public sealed class TestMapperConfig : MapperConfig<ConfigSource, ConfigTarget>
     public void End() => Source.ActionLog += "end";
 }
 
-public sealed class TestMapperAsyncConfig : MapperConfig<ConfigSource, ConfigTarget>
+public sealed class TestMapperAsyncConfig : MapperConfig<ConfigSourceAsync, ConfigTarget>
 {
-    public TestMapperAsyncConfig(ConfigSource source, ConfigTarget target)
+    public TestMapperAsyncConfig(ConfigSourceAsync source, ConfigTarget target)
         : base(source, target) { }
 
     public MapConfigPropertyConverter<int, int> NumberConverter { get; } =
-        new(nameof(ConfigSource.Number), (_, value) => value + 10, (_, value) => value - 10);
+        new(nameof(ConfigSourceAsync.Number), (_, value) => value + 10, (_, value) => value - 10);
 
     [MapToConfigAction(MapConfigActionMode.Start)]
     [MapFromConfigAction(MapConfigActionMode.Start)]
@@ -114,24 +122,24 @@ public sealed class TestMapperAsyncConfig : MapperConfig<ConfigSource, ConfigTar
         Source.ActionLog += "start;";
     }
 
-    [MapToConfigAction(MapConfigActionMode.BeforeProperty, nameof(ConfigSource.Number))]
-    [MapFromConfigAction(MapConfigActionMode.BeforeProperty, nameof(ConfigSource.Number))]
+    [MapToConfigAction(MapConfigActionMode.BeforeProperty, nameof(ConfigSourceAsync.Number))]
+    [MapFromConfigAction(MapConfigActionMode.BeforeProperty, nameof(ConfigSourceAsync.Number))]
     public async Task BeforeNumber()
     {
         await Task.Delay(1);
         Source.ActionLog += "before;";
     }
 
-    [MapToConfigAction(MapConfigActionMode.ReplaceProperty, nameof(ConfigSource.Number))]
-    [MapFromConfigAction(MapConfigActionMode.ReplaceProperty, nameof(ConfigSource.Number))]
+    [MapToConfigAction(MapConfigActionMode.ReplaceProperty, nameof(ConfigSourceAsync.Number))]
+    [MapFromConfigAction(MapConfigActionMode.ReplaceProperty, nameof(ConfigSourceAsync.Number))]
     public async Task ReplaceNumber()
     {
         await Task.Delay(1);
         Source.ActionLog += "replace;";
     }
 
-    [MapToConfigAction(MapConfigActionMode.AfterProperty, nameof(ConfigSource.Number))]
-    [MapFromConfigAction(MapConfigActionMode.AfterProperty, nameof(ConfigSource.Number))]
+    [MapToConfigAction(MapConfigActionMode.AfterProperty, nameof(ConfigSourceAsync.Number))]
+    [MapFromConfigAction(MapConfigActionMode.AfterProperty, nameof(ConfigSourceAsync.Number))]
     public async Task AfterNumber()
     {
         await Task.Delay(1);
@@ -150,7 +158,7 @@ public sealed class TestMapperAsyncConfig : MapperConfig<ConfigSource, ConfigTar
 [MapTarget(typeof(PriorityTarget), typeof(PriorityConfig))]
 public sealed class PrioritySource
 {
-    [MapProperty(typeof(PriorityTarget), ConverterType = typeof(AttributePriorityConverter))]
+    [MapProperty(typeof(PriorityTarget), typeof(AttributePriorityConverter))]
     public int Value { get; set; }
 }
 

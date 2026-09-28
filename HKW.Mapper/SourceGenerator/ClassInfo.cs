@@ -112,7 +112,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             if (configType.InheritedFrom(TypeFullNames.MapConfigClass) is false)
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.WrongMapConfigType,
+                    Descriptors.MapConfigTypeError,
                     attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
                         attributeData.ApplicationSyntaxReference.Span
                     ),
@@ -122,6 +122,26 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                 IsInvalid = true;
                 return;
             }
+            if (
+                sourceType.SymbolEquals(configType.BaseType!.TypeArguments[0]) is false
+                || TargetType?.SymbolEquals(configType.BaseType.TypeArguments[1]) is not true
+            )
+            {
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.MapConfigGenericTypeError,
+                    attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                        attributeData.ApplicationSyntaxReference.Span
+                    ),
+                    configType.BaseType.TypeArguments[0].GetName(),
+                    configType.BaseType.TypeArguments[1].GetName(),
+                    sourceType.GetName(),
+                    TargetType?.GetName()
+                );
+                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                IsInvalid = true;
+                return;
+            }
+
             ConfigInfo = new(configType);
         }
 
@@ -183,8 +203,14 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
 
     public INamedTypeSymbol SourceType { get; }
     public string TargetName { get; }
-    public string MapToName => TargetName == TargetType.Name ? "MapTo" : "MapTo" + TargetName;
-    public string MapFromName => TargetName == TargetType.Name ? "MapFrom" : "MapFrom" + TargetName;
+    public string MapToName =>
+        $"MapTo"
+        + $"{(TargetName == TargetType.Name ? "" : TargetName)}"
+        + $"{(ConfigInfo?.MapTo.IsAsync is true ? "Async" : "")}";
+    public string MapFromName =>
+        $"MapFrom"
+        + $"{(TargetName == TargetType.Name ? "" : TargetName)}"
+        + $"{(ConfigInfo?.MapFrom.IsAsync is true ? "Async" : "")}";
 
     public Dictionary<string, IPropertySymbol> PropertyByName { get; } = [];
 

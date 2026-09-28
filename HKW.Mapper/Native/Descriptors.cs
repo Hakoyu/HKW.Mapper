@@ -26,9 +26,9 @@ internal static class Descriptors
         isEnabledByDefault: true
     );
 
-    public static readonly DiagnosticDescriptor WrongMapConfigType = new(
+    public static readonly DiagnosticDescriptor MapConfigTypeError = new(
         id: "M0003",
-        title: "Wrong map config type",
+        title: "Map config type error",
         messageFormat: "The map config '{0}' not inherited MapperConfig<TSource, TTarget>.",
         category: _category,
         DiagnosticSeverity.Error,
@@ -153,6 +153,15 @@ internal static class Descriptors
         id: "M0018",
         title: "Map property target is ambiguous",
         messageFormat: "MapProperty on '{0}' matches more than one mapping target.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor MapConfigGenericTypeError = new(
+        id: "M0019",
+        title: "Map config generic type error",
+        messageFormat: "The MapConfig generic type '<{0},{1}>' cannot be applied to MapTarget type <{2}, {3}>.",
         category: _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
