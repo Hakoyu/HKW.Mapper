@@ -36,6 +36,34 @@ public sealed class MapTargetAttributeTests
         source.MapFromRenamed(target);
         Assert.AreEqual(9, source.Number);
     }
+
+    [TestMethod]
+    public void MapsPropertyInheritedByTarget()
+    {
+        var source = new FoodSource { Name = "Apple" };
+        var target = new Food();
+
+        source.MapTo(target);
+        Assert.AreEqual("Apple", target.Name);
+
+        target.Name = "Bread";
+        source.MapFrom(target);
+        Assert.AreEqual("Bread", source.Name);
+    }
+
+    [TestMethod]
+    public void MapsPropertyInherited()
+    {
+        var source = new Food { Name = "Apple" };
+        var target = new Food();
+
+        source.MapTo(target);
+        Assert.AreEqual("Apple", target.Name);
+
+        target.Name = "Bread";
+        source.MapFrom(target);
+        Assert.AreEqual("Bread", source.Name);
+    }
 }
 
 [MapTarget(typeof(BasicTarget))]
@@ -61,3 +89,17 @@ public sealed class RenamedTarget
 {
     public int Number { get; set; }
 }
+
+[MapTarget(typeof(Food))]
+public sealed class FoodSource
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+public class FoodBase
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+[MapTarget(typeof(Food))]
+public sealed class Food : FoodBase;

@@ -36,11 +36,15 @@ internal class ClassInfo
             }
         }
         // 分析所有成员
-        foreach (var propertySymbol in classSymbol.GetMembers().OfType<IPropertySymbol>())
+        var resolvedSourceType = ClassSymbol;
+        for (var type = resolvedSourceType; type is not null; type = type.BaseType)
         {
-            if (propertySymbol.IsStatic)
-                continue;
-            Properties.Add(propertySymbol);
+            foreach (var propertySymbol in type.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (propertySymbol.IsStatic)
+                    continue;
+                Properties.Add(propertySymbol);
+            }
         }
     }
 
@@ -54,7 +58,7 @@ internal class ClassInfo
 
     public HashSet<MapTargetInfo> MapTargets { get; } = [];
 
-    public List<IPropertySymbol> Properties { get; } = [];
+    public HashSet<IPropertySymbol> Properties { get; } = [];
 
     public List<FieldGenerateInfo> MapConverters { get; } = [];
     public List<FieldGenerateInfo> MapConfigs { get; } = [];
@@ -158,17 +162,21 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
 
         if (IsInvalid)
             return;
-        // 分析所有成员
-        foreach (var property in TargetType!.GetMembers().OfType<IPropertySymbol>())
+        var resolvedTargetType = TargetType!;
+        // 分析所有成员，派生类型中隐藏的属性优先于基类属性
+        for (var type = resolvedTargetType; type is not null; type = type.BaseType)
         {
-            PropertyByName.Add(property.Name, property);
+            foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
+            {
+                PropertyByName.TryAdd(property.Name, property);
+            }
         }
-        var lowestAccessibility = sourceType.GetLowestAccessibility(targetType);
+        var lowestAccessibility = sourceType.GetLowestAccessibility(resolvedTargetType);
         // MapTo扩展方法
         MapToMethod = new(
             ConfigInfo?.MapTo.IsAsync is true
-                ? $"async {GeneratorHelper.TaskTypeFullName}<{TargetType.GetFullName()}>"
-                : TargetType.GetFullName(),
+                ? $"async {GeneratorHelper.TaskTypeFullName}<{resolvedTargetType.GetFullName()}>"
+                : resolvedTargetType.GetFullName(),
             MapToName,
             string.Empty
         )
@@ -178,7 +186,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             Params =
             [
                 new(SourceType, SourceParamName) { GenerateType = ParameterGenerateType.This },
-                new(TargetType, TargetParamName),
+                new(resolvedTargetType, TargetParamName),
             ],
         };
 
@@ -196,7 +204,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             Params =
             [
                 new(SourceType, SourceParamName) { GenerateType = ParameterGenerateType.This },
-                new(TargetType, TargetParamName),
+                new(resolvedTargetType, TargetParamName),
             ],
         };
     }
