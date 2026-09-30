@@ -8,11 +8,15 @@ namespace HKW.HKWMapper.SourceGenerator;
 internal class ClassInfo
 {
     public ClassInfo(
+        SourceProductionContext productionContext,
+        Compilation compilation,
         ClassDeclarationSyntax classSyntax,
         INamedTypeSymbol classSymbol,
         List<AttributeData> attributeDatas
     )
     {
+        ProductionContext = productionContext;
+        Compilation = compilation;
         ClassSyntax = classSyntax;
         ClassSymbol = classSymbol;
         Name = classSymbol.Name;
@@ -20,7 +24,7 @@ internal class ClassInfo
 
         foreach (var attributeData in attributeDatas)
         {
-            var mapTarget = new MapTargetInfo(classSymbol, attributeData);
+            var mapTarget = new MapTargetInfo(this, classSymbol, attributeData);
             if (mapTarget.IsInvalid)
                 continue;
             if (MapTargets.Add(mapTarget) is false)
@@ -32,14 +36,18 @@ internal class ClassInfo
                     ),
                     mapTarget.TargetName
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                ProductionContext.ReportDiagnostic(diagnostic);
             }
         }
         // 分析所有成员
         var resolvedSourceType = ClassSymbol;
         for (var type = resolvedSourceType; type is not null; type = type.BaseType)
         {
-            foreach (var propertySymbol in type.GetMembers().OfType<IPropertySymbol>())
+            foreach (
+                var propertySymbol in type.GetMembers()
+                    .OfType<IPropertySymbol>()
+                    .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+            )
             {
                 if (propertySymbol.IsStatic)
                     continue;
@@ -48,6 +56,8 @@ internal class ClassInfo
         }
     }
 
+    public Compilation Compilation { get; }
+    public SourceProductionContext ProductionContext { get; }
     public string Namespace { get; }
     public string Name { get; }
     public string TypeName => $"{Name}{ClassSyntax.TypeParameterList}";
@@ -65,7 +75,7 @@ internal class ClassInfo
 
     public void AddConverters(INamedTypeSymbol typeSymbol, out string fieldName)
     {
-        var typeFullName = typeSymbol.GetFullName();
+        var typeFullName = typeSymbol.GetGlobalFullName();
         var baseFieldName = "_" + typeSymbol.GetName().FirstLetterToLower();
         fieldName = baseFieldName;
         var count = 0;
@@ -93,25 +103,28 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     public const string TargetParamName = "target";
 
 #pragma warning disable CS8618
-    public MapTargetInfo(INamedTypeSymbol sourceType, AttributeData attributeData)
+    public MapTargetInfo(
+        ClassInfo classInfo,
+        INamedTypeSymbol sourceType,
+        AttributeData attributeData
+    )
 #pragma warning restore CS8618
     {
         SourceType = sourceType;
 
-        var ps = attributeData.GetParams();
+        var attributeInfo = attributeData.GetInfo()!;
+        TargetType = attributeInfo.GetParam<INamedTypeSymbol>(
+            nameof(MapTargetAttribute.TargetType)
+        );
+        if (TargetType is null)
+            IsInvalid = true;
+
         if (
-            ps.TryGetParam<INamedTypeSymbol>(
-                nameof(MapTargetAttribute.TargetType),
-                out var targetType
+            attributeInfo.TryGetParam<INamedTypeSymbol>(
+                nameof(MapTargetAttribute.Config),
+                out var configType
             )
         )
-        {
-            TargetType = targetType;
-            if (TargetType is null)
-                IsInvalid = true;
-        }
-
-        if (ps.TryGetParam<INamedTypeSymbol>(nameof(MapTargetAttribute.Config), out var configType))
         {
             if (configType.InheritedFrom(TypeFullNames.MapConfigClass) is false)
             {
@@ -122,7 +135,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                     ),
                     configType.GetName()
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 IsInvalid = true;
                 return;
             }
@@ -141,24 +154,34 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                     sourceType.GetName(),
                     TargetType?.GetName()
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 IsInvalid = true;
                 return;
             }
 
-            ConfigInfo = new(configType);
+            ConfigInfo = new(classInfo, configType);
         }
 
-        if (ps.TryGetParam<string>(nameof(MapTargetAttribute.TargetName), out var targetName))
+        if (
+            attributeInfo.TryGetParam<string>(
+                nameof(MapTargetAttribute.TargetName),
+                out var targetName
+            )
+        )
         {
             TargetName = targetName;
         }
-        if (ps.TryGetParam<MapDirections>(nameof(MapTargetAttribute.Direction), out var direction))
+        if (string.IsNullOrWhiteSpace(TargetName))
+            TargetName = TargetType!.Name;
+        if (
+            attributeInfo.TryGetParam<MapDirections>(
+                nameof(MapTargetAttribute.Direction),
+                out var direction
+            )
+        )
             Direction = direction;
         else
             Direction = MapDirections.Both;
-        if (string.IsNullOrWhiteSpace(TargetName))
-            TargetName = TargetType!.Name;
 
         if (IsInvalid)
             return;
@@ -166,7 +189,11 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         // 分析所有成员，派生类型中隐藏的属性优先于基类属性
         for (var type = resolvedTargetType; type is not null; type = type.BaseType)
         {
-            foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
+            foreach (
+                var property in type.GetMembers()
+                    .OfType<IPropertySymbol>()
+                    .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+            )
             {
                 PropertyByName.TryAdd(property.Name, property);
             }
@@ -175,8 +202,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         // MapTo扩展方法
         MapToMethod = new(
             ConfigInfo?.MapTo.IsAsync is true
-                ? $"async {GeneratorHelper.TaskTypeFullName}<{resolvedTargetType.GetFullName()}>"
-                : resolvedTargetType.GetFullName(),
+                ? $"async {GeneratorHelper.TaskTypeFullName}<{resolvedTargetType.GetGlobalFullName()}>"
+                : resolvedTargetType.GetGlobalFullName(),
             MapToName,
             string.Empty
         )
@@ -193,8 +220,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         // MapFrom扩展方法
         MapFromMethod = new(
             ConfigInfo?.MapFrom.IsAsync is true
-                ? $"async {GeneratorHelper.TaskTypeFullName}<{SourceType.GetFullName()}>"
-                : SourceType.GetFullName(),
+                ? $"async {GeneratorHelper.TaskTypeFullName}<{SourceType.GetGlobalFullName()}>"
+                : SourceType.GetGlobalFullName(),
             MapFromName,
             string.Empty
         )
@@ -256,8 +283,9 @@ internal sealed class MapConfigInfo
 {
     public const string ConfigName = "__config__";
 
-    public MapConfigInfo(INamedTypeSymbol configType)
+    public MapConfigInfo(ClassInfo classInfo, INamedTypeSymbol configType)
     {
+        _classInfo = classInfo;
         Type = configType;
         foreach (var member in configType.GetMembers())
         {
@@ -275,13 +303,15 @@ internal sealed class MapConfigInfo
         }
     }
 
+    private readonly ClassInfo _classInfo;
+
     public INamedTypeSymbol Type { get; }
     public Dictionary<string, (string TargetName, IPropertySymbol Property)> Converters { get; } =
     [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
 
-    private static bool CheckProperty(
+    private bool CheckProperty(
         IPropertySymbol propertySymbol,
         out string sourceName,
         out string targetName
@@ -297,7 +327,7 @@ internal sealed class MapConfigInfo
         if (syntaxReference.GetSyntax() is not PropertyDeclarationSyntax propertySyntax)
             return false;
 
-        var semanticModel = GeneratorHelper.Compilation.GetSemanticModel(propertySyntax.SyntaxTree);
+        var semanticModel = _classInfo.Compilation.GetSemanticModel(propertySyntax.SyntaxTree);
         // 获取属性初始化器来解析参数
         if (
             propertySyntax.Initializer?.Value is not ImplicitObjectCreationExpressionSyntax creation
@@ -325,7 +355,7 @@ internal sealed class MapConfigInfo
                 Descriptors.MapConfigPropertyConverterPropertyNameError,
                 propertySymbol.Locations[0]
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return false;
         }
 
@@ -343,7 +373,7 @@ internal sealed class MapConfigInfo
             CheckMapAction(methodSymbol, mapFromAtt, MapFrom);
     }
 
-    private static void CheckMapAction(
+    private void CheckMapAction(
         IMethodSymbol methodSymbol,
         AttributeData att,
         MapActionInfo actionInfo
@@ -355,7 +385,7 @@ internal sealed class MapConfigInfo
                 Descriptors.MapConfigActionCannotHaveParameters,
                 methodSymbol.Locations[0]
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
 
@@ -365,13 +395,13 @@ internal sealed class MapConfigInfo
                 Descriptors.MapConfigActionInsufficientAccessibility,
                 methodSymbol.Locations[0]
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
 
-        var aps = att.GetParams();
+        var attributeInfo = att.GetInfo()!;
         if (
-            aps.TryGetParam<MapConfigActionMode>(
+            attributeInfo.TryGetParam<MapConfigActionMode>(
                 nameof(MapToConfigActionAttribute.Mode),
                 out var mode
             )
@@ -385,14 +415,17 @@ internal sealed class MapConfigInfo
             actionInfo.EndActions.Add(methodSymbol);
         else
         {
-            aps.TryGetParam<string>(nameof(MapToConfigActionAttribute.PropertyName), out var name);
+            attributeInfo.TryGetParam<string>(
+                nameof(MapToConfigActionAttribute.PropertyName),
+                out var name
+            );
             if (string.IsNullOrEmpty(name))
             {
                 var diagnostic = Diagnostic.Create(
                     Descriptors.MapConfigActionModePropertyNameError,
                     methodSymbol.Locations[0]
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 return;
             }
             var result = mode switch
@@ -417,7 +450,7 @@ internal sealed class MapConfigInfo
                     Descriptors.MapConfigActionHasSameProperty,
                     methodSymbol.Locations[0]
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             }
         }
 

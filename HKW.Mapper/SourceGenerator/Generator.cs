@@ -12,6 +12,7 @@ internal partial class Generator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        GeneratorHelper.Initialize();
         var candidates = context
             .SyntaxProvider.ForAttributeWithMetadataName(
                 typeof(MapTargetAttribute).GetFullName(),
@@ -33,12 +34,13 @@ internal partial class Generator : IIncrementalGenerator
             context.CompilationProvider.Combine(candidates),
             static (spc, input) =>
             {
-                var compilation = input.Left;
-                GeneratorHelper.Initialize(spc, compilation);
                 var classInfos = new List<ClassInfo>();
                 foreach (var candidate in input.Right)
                 {
-                    if (ClassValidator(candidate.Syntax, candidate.Symbol) is { } classInfo)
+                    if (
+                        ClassValidator(spc, input.Left, candidate.Syntax, candidate.Symbol) is
+                        { } classInfo
+                    )
                         classInfos.Add(classInfo);
                 }
                 var mapTargetDic = classInfos.ToDictionary(x => x.ClassSymbol, x => x.MapTargets);
@@ -65,6 +67,8 @@ internal partial class Generator : IIncrementalGenerator
     }
 
     private static ClassInfo? ClassValidator(
+        SourceProductionContext productionContext,
+        Compilation compilation,
         ClassDeclarationSyntax classSyntax,
         INamedTypeSymbol classSymbol
     )
@@ -73,9 +77,11 @@ internal partial class Generator : IIncrementalGenerator
         var mapTargets = new List<AttributeData>();
         foreach (var att in atts)
         {
-            if (att.AttributeClass!.GetFullName() == TypeFullNames.MapTargetAttribute)
+            if (att.AttributeClass!.GetGlobalFullName() == TypeFullNames.MapTargetAttribute)
                 mapTargets.Add(att);
         }
-        return mapTargets.Count == 0 ? null : new ClassInfo(classSyntax, classSymbol, mapTargets);
+        return mapTargets.Count == 0
+            ? null
+            : new ClassInfo(productionContext, compilation, classSyntax, classSymbol, mapTargets);
     }
 }

@@ -61,7 +61,7 @@ internal class ClassSourceWriter
         _writer.WriteLine("}");
         _writer.Indent--;
         _writer.WriteLine("}");
-        GeneratorHelper.ProductionContext.AddSource(
+        _classInfo.ProductionContext.AddSource(
             $"{_classInfo.FullTypeName.ReplaceBraces()}MapExtensions.g.cs",
             ((StringWriter)_writer.InnerWriter).ToString()
         );

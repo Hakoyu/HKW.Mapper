@@ -24,20 +24,20 @@ internal class MapperGenerator
         IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> mapTargetDic
     )
     {
-        ClassInfo = classInfo;
+        _classInfo = classInfo;
         MapTargetDic = mapTargetDic;
     }
 
-    public ClassInfo ClassInfo { get; }
+    private readonly ClassInfo _classInfo;
     public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
 
     public void Execute()
     {
-        foreach (var target in ClassInfo.MapTargets)
+        foreach (var target in _classInfo.MapTargets)
         {
             TryAddConfig(target);
             AddStartAction(target);
-            foreach (var property in ClassInfo.Properties)
+            foreach (var property in _classInfo.Properties)
             {
                 ParseProperty(target, property);
             }
@@ -55,12 +55,12 @@ internal class MapperGenerator
         // 检查全局忽略属性
         if (
             atts.Any(a =>
-                a.AttributeClass?.GetFullName() == TypeFullNames.MapIgnorePropertyAttribute
+                a.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapIgnorePropertyAttribute
             )
         )
             return;
         var propertyAttributes = atts.Where(a =>
-                a.AttributeClass?.GetFullName() == TypeFullNames.MapPropertyAttribute
+                a.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapPropertyAttribute
             )
             .ToArray();
         // 获取当前映射目标有效的特性
@@ -72,7 +72,7 @@ internal class MapperGenerator
             {
                 matchingAttributes.Add(att);
             }
-            else if (ClassInfo.MapTargets.All(x => x.TargetName != targetName))
+            else if (_classInfo.MapTargets.All(x => x.TargetName != targetName))
             {
                 var diagnostic = Diagnostic.Create(
                     Descriptors.MapPropertyTargetNotFound,
@@ -81,7 +81,7 @@ internal class MapperGenerator
                     ),
                     targetName
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             }
         }
         if (matchingAttributes.Count > 1)
@@ -91,7 +91,7 @@ internal class MapperGenerator
                 propertySymbol.Locations[0],
                 propertySymbol.Name
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
         var attributeData = matchingAttributes.FirstOrDefault();
@@ -132,10 +132,10 @@ internal class MapperGenerator
 
     private static string GetMapPropertyTargetName(AttributeData attribute)
     {
-        var ps = attribute.GetParams();
+        var attributeInfo = attribute.GetInfo()!;
         var targetName = string.Empty;
         if (
-            ps.TryGetParam<INamedTypeSymbol>(
+            attributeInfo.TryGetParam<INamedTypeSymbol>(
                 nameof(MapPropertyAttribute.TargetType),
                 out var targetType
             )
@@ -143,7 +143,9 @@ internal class MapperGenerator
         {
             targetName = targetType.Name;
         }
-        else if (ps.TryGetParam<string>(nameof(MapPropertyAttribute.TargetName), out var name))
+        else if (
+            attributeInfo.TryGetParam<string>(nameof(MapPropertyAttribute.TargetName), out var name)
+        )
         {
             targetName = name;
         }
@@ -292,7 +294,7 @@ internal class MapperGenerator
                 propertySymbol.Locations[0],
                 targetProperty.ToString()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
         if (propertySymbol.Type.SpecialType != SpecialType.System_String)
@@ -301,10 +303,10 @@ internal class MapperGenerator
             {
                 // 如果实现了 ICloneable, 则克隆
                 mapTarget.MapToMethod.Contents.Add(
-                    $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}?.{nameof(ICloneable.Clone)}()!;"
+                    $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetGlobalFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}?.{nameof(ICloneable.Clone)}()!;"
                 );
                 mapTarget.MapFromMethod.Contents.Add(
-                    $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}?.{nameof(ICloneable.Clone)}()!;"
+                    $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetGlobalFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}?.{nameof(ICloneable.Clone)}()!;"
                 );
                 return;
             }
@@ -316,7 +318,7 @@ internal class MapperGenerator
                     propertySymbol.Locations[0],
                     $"{mapTarget.SourceType.Name}.{propertySymbol.Name}"
                 );
-                GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 return;
             }
         }
@@ -390,7 +392,7 @@ internal class MapperGenerator
             {
                 mapTarget.MapToMethod.Contents.Add("{");
                 mapTarget.MapToMethod.Contents.Add(
-                    $"{target} = new {targetArray.ElementType.GetFullName()}[{source}.Length];"
+                    $"{target} = new {targetArray.ElementType.GetGlobalFullName()}[{source}.Length];"
                 );
                 mapTarget.MapToMethod.Contents.Add($"for (var i = 0; i < {source}.Length; i++)");
                 mapTarget.MapToMethod.Contents.Add(
@@ -403,7 +405,7 @@ internal class MapperGenerator
             {
                 mapTarget.MapFromMethod.Contents.Add("{");
                 mapTarget.MapFromMethod.Contents.Add(
-                    $"{source} = new {sourceArray.ElementType.GetFullName()}[{target}.Length];"
+                    $"{source} = new {sourceArray.ElementType.GetGlobalFullName()}[{target}.Length];"
                 );
                 mapTarget.MapFromMethod.Contents.Add($"for (var i = 0; i < {target}.Length; i++)");
                 mapTarget.MapFromMethod.Contents.Add(
@@ -560,11 +562,11 @@ internal class MapperGenerator
             mapping = new(
                 canMapTo
                     ? value =>
-                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapToName}({value}, new {targetType.GetFullName()}())"
+                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapToName}({value}, new {targetType.GetGlobalFullName()}())"
                     : null,
                 canMapFrom
                     ? value =>
-                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapFromName}(new {sourceType.GetFullName()}(), {value})"
+                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapFromName}(new {sourceType.GetGlobalFullName()}(), {value})"
                     : null,
                 canMapTo,
                 canMapFrom
@@ -594,7 +596,7 @@ internal class MapperGenerator
         if (type is not INamedTypeSymbol named)
             return false;
         var matchingInterface = named.AllInterfaces.FirstOrDefault(i =>
-            i.OriginalDefinition.GetFullName() == metadataShape
+            i.OriginalDefinition.GetGlobalFullName() == metadataShape
         );
         if (matchingInterface is null)
             return false;
@@ -628,14 +630,14 @@ internal class MapperGenerator
         if (mapTarget.ConfigInfo is null)
             return;
         mapTarget.MapToMethod.Contents.Add(
-            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
+            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetGlobalFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
         );
         mapTarget.MapFromMethod.Contents.Add(
-            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
+            $"var {MapConfigInfo.ConfigName} = new {mapTarget.ConfigInfo.Type.GetGlobalFullName()}({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName});"
         );
     }
 
-    private static bool TryUseConfigPropertyConverter(
+    private bool TryUseConfigPropertyConverter(
         MapTargetInfo mapTarget,
         IPropertySymbol propertySymbol,
         IPropertySymbol targetProperty
@@ -662,7 +664,7 @@ internal class MapperGenerator
                 propertySymbol.Type.GetName(),
                 targetProperty.Type.GetName()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return false;
         }
         var convertName = $"{MapConfigInfo.ConfigName}.{data.Property.Name}";
@@ -694,7 +696,7 @@ internal class MapperGenerator
             return false;
 
         var converterInterface = converterType.Interfaces.FirstOrDefault(i =>
-            i.OriginalDefinition.GetFullName() == TypeFullNames.MapConverterInterface
+            i.OriginalDefinition.GetGlobalFullName() == TypeFullNames.MapConverterInterface
         );
         // 判断转换器是否实现转换器接口
         if (converterInterface is null)
@@ -706,7 +708,7 @@ internal class MapperGenerator
                 ),
                 targetProperty.ToString()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return false;
         }
         // 判断转换器泛型类型是否与映射类型相同
@@ -725,10 +727,10 @@ internal class MapperGenerator
                 propertySymbol.Type.GetName(),
                 targetProperty.Type.GetName()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return false;
         }
-        ClassInfo.AddConverters(converterType, out var fieldName);
+        _classInfo.AddConverters(converterType, out var fieldName);
         // 使用转换器转换
         mapTarget.MapToMethod.Contents.Add(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {fieldName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName},{MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
@@ -739,7 +741,7 @@ internal class MapperGenerator
         return true;
     }
 
-    private static IPropertySymbol? GetTargetProperty(
+    private IPropertySymbol? GetTargetProperty(
         MapTargetInfo mapTarget,
         IPropertySymbol property,
         string targetPropertyName
@@ -756,7 +758,7 @@ internal class MapperGenerator
                 property.Locations[0],
                 mapTarget.TargetType.GetName() + "." + property.Name
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
         // 只读属性
@@ -767,7 +769,7 @@ internal class MapperGenerator
                 property.Locations[0],
                 targetProperty.ToString()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
         // 静态属性
@@ -778,7 +780,7 @@ internal class MapperGenerator
                 property.Locations[0],
                 targetProperty.ToString()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
         if (targetProperty.SetMethod.DeclaredAccessibility == Accessibility.Public)
@@ -792,7 +794,7 @@ internal class MapperGenerator
             // 在主程序集
             if (
                 targetProperty.SetMethod.ContainingAssembly.SymbolEquals(
-                    GeneratorHelper.Compilation.Assembly
+                    _classInfo.Compilation.Assembly
                 )
             )
                 return targetProperty;
@@ -802,7 +804,7 @@ internal class MapperGenerator
                 property.Locations[0],
                 targetProperty.ToString()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
         // 更低的可访问性
@@ -813,7 +815,7 @@ internal class MapperGenerator
                 property.Locations[0],
                 targetProperty.ToString()
             );
-            GeneratorHelper.ProductionContext.ReportDiagnostic(diagnostic);
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
         return targetProperty;
