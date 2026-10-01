@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Immutable;
+using System.Text;
 using HKW.SourceGeneratorUtils;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -40,19 +41,17 @@ internal class ClassInfo
             }
         }
         // 分析所有成员
-        var resolvedSourceType = ClassSymbol;
-        for (var type = resolvedSourceType; type is not null; type = type.BaseType)
+
+        foreach (
+            var propertySymbol in classSymbol
+                .GetMembers()
+                .OfType<IPropertySymbol>()
+                .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+        )
         {
-            foreach (
-                var propertySymbol in type.GetMembers()
-                    .OfType<IPropertySymbol>()
-                    .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
-            )
-            {
-                if (propertySymbol.IsStatic)
-                    continue;
-                Properties.Add(propertySymbol);
-            }
+            if (propertySymbol.IsStatic)
+                continue;
+            Properties.Add(propertySymbol);
         }
     }
 

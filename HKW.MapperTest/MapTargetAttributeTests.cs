@@ -50,20 +50,6 @@ public sealed class MapTargetAttributeTests
         source.MapFrom(target);
         Assert.AreEqual("Bread", source.Name);
     }
-
-    [TestMethod]
-    public void MapsPropertyInherited()
-    {
-        var source = new Food { Name = "Apple" };
-        var target = new Food();
-
-        source.MapTo(target);
-        Assert.AreEqual("Apple", target.Name);
-
-        target.Name = "Bread";
-        source.MapFrom(target);
-        Assert.AreEqual("Bread", source.Name);
-    }
 }
 
 [MapTarget(typeof(BasicTarget))]
@@ -101,5 +87,4 @@ public class FoodBase
     public string Name { get; set; } = string.Empty;
 }
 
-[MapTarget(typeof(Food))]
 public sealed class Food : FoodBase;

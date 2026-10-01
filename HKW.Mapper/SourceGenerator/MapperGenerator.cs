@@ -556,9 +556,7 @@ internal class MapperGenerator
         )
         {
             var nestedTarget = nested!;
-            var extensionType = nestedTarget
-                .SourceType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)
-                .Replace('.', '_');
+            var extensionType = nestedTarget.SourceType.GetFullName().ReplaceDotToUnderline();
             mapping = new(
                 canMapTo
                     ? value =>
