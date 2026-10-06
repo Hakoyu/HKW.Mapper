@@ -13,9 +13,9 @@ public sealed class ConverterTypeCompatibilityTests
 
         source.MapTo(target);
 
-        CollectionAssert.AreEqual(new[] { "1", "2" }, target.Values);
+        Assert.AreEqual("1,2", target.Values);
 
-        target.Values = ["3", "4"];
+        target.Values = "3,4";
         source.MapFrom(target);
 
         CollectionAssert.AreEqual(new[] { 3, 4 }, source.Values);
@@ -24,7 +24,10 @@ public sealed class ConverterTypeCompatibilityTests
     [TestMethod]
     public void ConverterSupportsConcreteSubtypeForInterfaceProperties()
     {
-        var source = new CompatibleSubtypeSource { Values = new List<int> { 9, 10 } };
+        var source = new CompatibleSubtypeSource
+        {
+            Values = new List<int> { 9, 10 },
+        };
         var target = new CompatibleSubtypeTarget();
 
         source.MapTo(target);
@@ -43,6 +46,25 @@ public sealed class ConverterTypeCompatibilityTests
         var source = new CompatibleSubtypeSource { Values = new[] { 1, 2 } };
 
         Assert.Throws<InvalidCastException>(() => source.MapTo(new CompatibleSubtypeTarget()));
+    }
+
+    [TestMethod]
+    public void ConverterSupportsBoxingToEnumBaseTypeInBothDirections()
+    {
+        var source = new EnumWrapperSource
+        {
+            Mode = new EnumWrapper<CompatibleMode>(CompatibleMode.First),
+        };
+        var target = new EnumWrapperTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual(CompatibleMode.First, target.Mode);
+
+        target.Mode = CompatibleMode.Second;
+        source.MapFrom(target);
+
+        Assert.AreEqual(CompatibleMode.Second, source.Mode.Value);
     }
 
     [TestMethod]
@@ -98,17 +120,15 @@ public sealed class ConverterTypeCompatibilityTests
     }
 }
 
-public sealed class CompatibleListConverter : IMapConverter<IList<int>, IList<string>>
+public sealed class CompatibleListConverter : IMapConverter<IList<int>, string>
 {
-    public IList<string> Convert(object source, IList<int> value) =>
-        value.Select(x => x.ToString()).ToList();
+    public string Convert(object source, IList<int> value) => string.Join(',', value);
 
-    public IList<int> ConvertBack(object target, IList<string> value) =>
-        value.Select(int.Parse).ToList();
+    public IList<int> ConvertBack(object target, string value) =>
+        value.Split(',').Select(int.Parse).ToList();
 }
 
-public sealed class CompatibleConcreteListConverter
-    : IMapConverter<List<int>, List<string>>
+public sealed class CompatibleConcreteListConverter : IMapConverter<List<int>, List<string>>
 {
     public List<string> Convert(object source, List<int> value) =>
         value.Select(x => x.ToString()).ToList();
@@ -129,6 +149,45 @@ public sealed class CompatibleSubtypeTarget
     public IList<string> Values { get; set; } = new List<string>();
 }
 
+public interface IEnumWrapper
+{
+    Enum Value { get; }
+}
+
+public sealed class EnumWrapper<TEnum>(TEnum value) : IEnumWrapper
+    where TEnum : struct, Enum
+{
+    public TEnum Value { get; } = value;
+
+    Enum IEnumWrapper.Value => Value;
+}
+
+public enum CompatibleMode
+{
+    First,
+    Second,
+}
+
+public sealed class CompatibleEnumConverter : IMapConverter<IEnumWrapper, Enum>
+{
+    public Enum Convert(object source, IEnumWrapper value) => value.Value;
+
+    public IEnumWrapper ConvertBack(object target, Enum value) =>
+        new EnumWrapper<CompatibleMode>((CompatibleMode)value);
+}
+
+[MapTarget(typeof(EnumWrapperTarget))]
+public sealed class EnumWrapperSource
+{
+    [MapProperty(typeof(EnumWrapperTarget), typeof(CompatibleEnumConverter))]
+    public EnumWrapper<CompatibleMode> Mode { get; set; } = new(CompatibleMode.First);
+}
+
+public sealed class EnumWrapperTarget
+{
+    public CompatibleMode Mode { get; set; }
+}
+
 [MapTarget(typeof(CompatibleAttributeTarget))]
 public sealed class CompatibleAttributeSource
 {
@@ -138,7 +197,7 @@ public sealed class CompatibleAttributeSource
 
 public sealed class CompatibleAttributeTarget
 {
-    public List<string> Values { get; set; } = [];
+    public string Values { get; set; } = string.Empty;
 }
 
 [MapTarget(typeof(CompatibleConfigTarget), typeof(CompatibleMapperConfig))]
@@ -167,7 +226,10 @@ public sealed class CompatibleMapperConfig
 }
 
 public sealed class CompatibleCompositeConverter
-    : ICompositeMapConverter<IList<int>, (IList<string> TextValues, IReadOnlyList<int> DoubledValues)>
+    : ICompositeMapConverter<
+        IList<int>,
+        (IList<string> TextValues, IReadOnlyList<int> DoubledValues)
+    >
 {
     public (IList<string> TextValues, IReadOnlyList<int> DoubledValues) Convert(
         object source,
@@ -222,8 +284,7 @@ public sealed class CompatibleCompositeMapperConfig
     public MapConfigCompositePropertyConverter<
         IList<int>,
         (IList<string> TextValues, IReadOnlyList<int> DoubledValues)
-    > ValuesConverter
-    { get; } =
+    > ValuesConverter { get; } =
         new(
             nameof(CompatibleCompositeConfigSource.Values),
             [
@@ -231,10 +292,7 @@ public sealed class CompatibleCompositeMapperConfig
                 nameof(CompatibleCompositeConfigTarget.DoubledValues),
             ],
             (_, values) =>
-                (
-                    values.Select(x => x.ToString()).ToList(),
-                    values.Select(x => x * 2).ToList()
-                ),
+                (values.Select(x => x.ToString()).ToList(), values.Select(x => x * 2).ToList()),
             (_, values) => values.TextValues.Select(int.Parse).ToList()
         );
 }

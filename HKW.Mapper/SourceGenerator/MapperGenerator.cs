@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using HKW.SourceGeneratorUtils;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace HKW.HKWMapper.SourceGenerator;
@@ -704,10 +705,8 @@ internal class MapperGenerator
     )
     {
         if (
-            mapTarget.ConfigInfo?.CompositeConverters.TryGetValue(
-                propertySymbol.Name,
-                out var data
-            ) is not true
+            mapTarget.ConfigInfo?.CompositeConverters.TryGetValue(propertySymbol.Name, out var data)
+            is not true
         )
             return false;
 
@@ -731,13 +730,12 @@ internal class MapperGenerator
             || tupleType.IsTupleType is false
         )
         {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(
-                    Descriptors.CompositeConverterRequiresTuple,
-                    location,
-                    converterType.GetName()
-                )
+            var diagnostic = Diagnostic.Create(
+                Descriptors.CompositeConverterRequiresTuple,
+                location,
+                converterType.GetName()
             );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return true;
         }
 
@@ -766,14 +764,13 @@ internal class MapperGenerator
         var tupleElements = tupleType.TupleElements;
         if (tupleElements.Length != targetPropertyNames.Length)
         {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(
-                    Descriptors.CompositePropertyCountMismatch,
-                    location,
-                    targetPropertyNames.Length,
-                    tupleElements.Length
-                )
+            var diagnostic = Diagnostic.Create(
+                Descriptors.CompositePropertyCountMismatch,
+                location,
+                targetPropertyNames.Length,
+                tupleElements.Length
             );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
 
@@ -787,21 +784,17 @@ internal class MapperGenerator
             );
             if (targetProperty is null)
                 return;
-            if (
-                AreConverterTypesCompatible(tupleElements[i].Type, targetProperty.Type)
-                is false
-            )
+            if (AreConverterTypesCompatible(tupleElements[i].Type, targetProperty.Type) is false)
             {
-                _classInfo.ProductionContext.ReportDiagnostic(
-                    Diagnostic.Create(
-                        Descriptors.CompositePropertyTypeMismatch,
-                        location,
-                        targetProperty.Name,
-                        targetProperty.Type.GetName(),
-                        i + 1,
-                        tupleElements[i].Type.GetName()
-                    )
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.CompositePropertyTypeMismatch,
+                    location,
+                    targetProperty.Name,
+                    targetProperty.Type.GetName(),
+                    i + 1,
+                    tupleElements[i].Type.GetName()
                 );
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 return;
             }
             targetProperties.Add(targetProperty);
@@ -878,9 +871,11 @@ internal class MapperGenerator
                 != targetPropertyNames.Length
         )
         {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(Descriptors.CompositeTargetPropertiesInvalid, location)
+            var diagnostic = Diagnostic.Create(
+                Descriptors.CompositeTargetPropertiesInvalid,
+                location
             );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
 
@@ -889,26 +884,24 @@ internal class MapperGenerator
         );
         if (converterInterface is null)
         {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(
-                    Descriptors.CompositeConverterNotImplemented,
-                    location,
-                    converterType.GetName()
-                )
+            var diagnostic = Diagnostic.Create(
+                Descriptors.CompositeConverterNotImplemented,
+                location,
+                converterType.GetName()
             );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
         var converterSourceType = converterInterface.TypeArguments[0];
         if (AreConverterTypesCompatible(converterSourceType, propertySymbol.Type) is false)
         {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(
-                    Descriptors.CompositeSourceTypeMismatch,
-                    location,
-                    converterInterface.TypeArguments[0].GetName(),
-                    propertySymbol.Type.GetName()
-                )
+            var diagnostic = Diagnostic.Create(
+                Descriptors.CompositeSourceTypeMismatch,
+                location,
+                converterInterface.TypeArguments[0].GetName(),
+                propertySymbol.Type.GetName()
             );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
         if (
@@ -916,13 +909,12 @@ internal class MapperGenerator
             || tupleType.IsTupleType is false
         )
         {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(
-                    Descriptors.CompositeConverterRequiresTuple,
-                    location,
-                    converterType.GetName()
-                )
+            var diagnostic = Diagnostic.Create(
+                Descriptors.CompositeConverterRequiresTuple,
+                location,
+                converterType.GetName()
             );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return;
         }
 
@@ -1027,19 +1019,16 @@ internal class MapperGenerator
 
     private bool AreConverterTypesCompatible(ITypeSymbol converterType, ITypeSymbol propertyType)
     {
-        return HasImplicitReferenceOrIdentityConversion(converterType, propertyType)
-            || HasImplicitReferenceOrIdentityConversion(propertyType, converterType);
+        return HasImplicitCompatibleConversion(converterType, propertyType)
+            || HasImplicitCompatibleConversion(propertyType, converterType);
     }
 
-    private bool HasImplicitReferenceOrIdentityConversion(
-        ITypeSymbol sourceType,
-        ITypeSymbol targetType
-    )
+    private bool HasImplicitCompatibleConversion(ITypeSymbol sourceType, ITypeSymbol targetType)
     {
-        var conversion = _classInfo.Compilation.ClassifyCommonConversion(sourceType, targetType);
+        var conversion = ClassifyConversion(sourceType, targetType);
         return conversion.Exists
             && conversion.IsImplicit
-            && (conversion.IsIdentity || conversion.IsReference);
+            && (conversion.IsIdentity || conversion.IsReference || conversion.IsBoxing);
     }
 
     private string ConvertExpression(
@@ -1048,10 +1037,18 @@ internal class MapperGenerator
         ITypeSymbol targetType
     )
     {
-        var conversion = _classInfo.Compilation.ClassifyCommonConversion(sourceType, targetType);
+        var conversion = ClassifyConversion(sourceType, targetType);
         if (conversion.Exists && conversion.IsImplicit)
             return expression;
         return $"({targetType.GetGlobalFullName()})({expression})";
+    }
+
+    private Conversion ClassifyConversion(ITypeSymbol sourceType, ITypeSymbol targetType)
+    {
+        return ((CSharpCompilation)_classInfo.Compilation).ClassifyConversion(
+            sourceType,
+            targetType
+        );
     }
 
     private bool TryUseConfigPropertyConverter(

@@ -127,7 +127,7 @@ public sealed class NumberDto
 }
 ```
 
-`Convert` 用于源到目标的映射，`ConvertBack` 用于目标到源的映射。转换器泛型类型可以与属性类型相同，也可以是存在引用转换关系的基类、子类或接口。例如，`List<int>` 属性可以使用基于 `IList<int>` 声明的转换器。仅能显式转换时，生成代码会执行强制转换；若运行时对象不是所需具体类型，将抛出 `InvalidCastException`。
+`Convert` 用于源到目标的映射，`ConvertBack` 用于目标到源的映射。转换器泛型类型可以与属性类型相同，也可以是存在引用或装箱转换关系的基类、子类或接口。例如，`List<int>` 属性可以使用基于 `IList<int>` 声明的转换器，枚举属性也可以使用基于 `Enum` 声明的转换器。仅能显式转换时，生成代码会执行强制转换；若运行时对象不是所需具体类型，将抛出 `InvalidCastException`。
 
 ### 配置类转换器
 
@@ -166,7 +166,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 一个源属性需要拆分到多个目标属性时，实现
 `ICompositeMapConverter<TSourceValue, TTargetValues>`，并通过
 `[MapCompositeProperty]` 按顺序声明目标属性。`TTargetValues` 必须是强类型值元组，
-其元素数量必须与目标属性一致；元素类型可与目标属性类型相同，或具有基类、子类、接口引用转换关系：
+其元素数量必须与目标属性一致；元素类型可与目标属性类型相同，或具有基类、子类、接口引用或装箱转换关系：
 
 ```csharp
 public readonly record struct Range(int Min, int Max);

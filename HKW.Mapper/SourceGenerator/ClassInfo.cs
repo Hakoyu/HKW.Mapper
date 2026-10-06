@@ -295,11 +295,7 @@ internal sealed class MapConfigInfo
                     Converters.Add(sourceName, (targetName, propertySymbol));
                 }
                 else if (
-                    CheckCompositeProperty(
-                        propertySymbol,
-                        out sourceName,
-                        out var targetNames
-                    )
+                    CheckCompositeProperty(propertySymbol, out sourceName, out var targetNames)
                 )
                 {
                     CompositeConverters.Add(sourceName, (targetNames, propertySymbol));
@@ -317,8 +313,10 @@ internal sealed class MapConfigInfo
     public INamedTypeSymbol Type { get; }
     public Dictionary<string, (string TargetName, IPropertySymbol Property)> Converters { get; } =
     [];
-    public Dictionary<string, (string[] TargetNames, IPropertySymbol Property)> CompositeConverters { get; } =
-    [];
+    public Dictionary<
+        string,
+        (string[] TargetNames, IPropertySymbol Property)
+    > CompositeConverters { get; } = [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
 
@@ -388,7 +386,7 @@ internal sealed class MapConfigInfo
             return false;
         if (
             propertySymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-                is not PropertyDeclarationSyntax propertySyntax
+            is not PropertyDeclarationSyntax propertySyntax
         )
             return false;
 
@@ -414,8 +412,8 @@ internal sealed class MapConfigInfo
         var targetExpression = argumentList.Arguments[1].Expression;
         IEnumerable<ExpressionSyntax>? targetExpressions = targetExpression switch
         {
-            CollectionExpressionSyntax collection => collection.Elements
-                .OfType<ExpressionElementSyntax>()
+            CollectionExpressionSyntax collection => collection
+                .Elements.OfType<ExpressionElementSyntax>()
                 .Select(x => x.Expression),
             ArrayCreationExpressionSyntax array => array.Initializer?.Expressions,
             ImplicitArrayCreationExpressionSyntax array => array.Initializer.Expressions,
