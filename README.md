@@ -161,6 +161,68 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 
 配置类转换器按源属性名和目标属性名查找。对于同一属性，它的优先级高于属性级转换器。
 
+### 复合属性转换器
+
+一个源属性需要拆分到多个目标属性时，实现
+`ICompositeMapConverter<TSourceValue, TTargetValues>`，并通过
+`[MapCompositeProperty]` 按顺序声明目标属性。`TTargetValues` 必须是强类型值元组，
+其元素数量和类型必须与目标属性完全一致：
+
+```csharp
+public readonly record struct Range(int Min, int Max);
+
+public sealed class RangeConverter
+    : ICompositeMapConverter<Range, (int Min, int Max)>
+{
+    public (int Min, int Max) Convert(object source, Range value) =>
+        (value.Min, value.Max);
+
+    public Range ConvertBack(object target, (int Min, int Max) values) =>
+        new(values.Min, values.Max);
+}
+
+[MapTarget(typeof(RangeDto))]
+public sealed class RangeModel
+{
+    [MapCompositeProperty(
+        typeof(RangeDto),
+        typeof(RangeConverter),
+        nameof(RangeDto.Min),
+        nameof(RangeDto.Max))]
+    public Range Range { get; set; }
+}
+
+public sealed class RangeDto
+{
+    public int Min { get; set; }
+    public int Max { get; set; }
+}
+```
+
+`MapTo` 会拆分转换器返回的元组并依次写入 `Min`、`Max`；`MapFrom` 会按相同顺序
+读取目标属性、组成元组并调用 `ConvertBack`。目标属性声明顺序是映射契约的一部分。
+
+也可以在 `MapperConfig<TSource, TTarget>` 中使用复合配置转换器，无需在源属性上添加特性：
+
+```csharp
+public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
+{
+    public RangeMapperConfig(RangeModel source, RangeDto target)
+        : base(source, target) { }
+
+    public MapConfigCompositePropertyConverter<Range, (int Min, int Max)> RangeConverter { get; } =
+        new(
+            nameof(RangeModel.Range),
+            [nameof(RangeDto.Min), nameof(RangeDto.Max)],
+            (_, value) => (value.Min, value.Max),
+            (_, values) => new(values.Min, values.Max));
+}
+```
+
+若同一个源属性同时配置了 `MapConfigCompositePropertyConverter` 和
+`[MapCompositeProperty]`，配置类中的目标属性列表及转换逻辑具有更高优先级。
+目标属性数组必须直接写在配置属性初始化器中，以便源生成器在编译期分析。
+
 ## 引用类型属性
 
 为避免意外共享对象引用，普通引用类型默认不会自动复制，并会产生编译诊断。集合和已注册的嵌套映射会递归生成；数组、`List<T>` 和 `Dictionary<TKey,TValue>` 使用编译期生成的循环映射。nullable 使用统一策略：目标可空类型保留 null，目标不可空类型对 null 使用 `default`。

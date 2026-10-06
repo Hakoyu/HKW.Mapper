@@ -31,7 +31,7 @@ public interface IMapConverter<TSourceValue, TTargetValue>
 /// </summary>
 /// <typeparam name="TSourceValue">源值类型</typeparam>
 /// <typeparam name="TTargetValue">目标值类型</typeparam>
-public class MapConfigPropertyConverter<TSourceValue, TTargetValue>
+public sealed class MapConfigPropertyConverter<TSourceValue, TTargetValue>
     : IMapConverter<TSourceValue, TTargetValue>
 {
     /// <inheritdoc/>

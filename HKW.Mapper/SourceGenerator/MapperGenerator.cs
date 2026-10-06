@@ -29,6 +29,12 @@ internal class MapperGenerator
     }
 
     private readonly ClassInfo _classInfo;
+    private readonly Dictionary<
+        MapTargetInfo,
+        Dictionary<string, IPropertySymbol>
+    > _mappedTargets = [];
+    private int _compositeVariableIndex;
+
     public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
 
     public void Execute()
@@ -59,6 +65,26 @@ internal class MapperGenerator
             )
         )
             return;
+        if (TryUseConfigCompositePropertyConverter(mapTarget, propertySymbol))
+            return;
+        var compositeAttributes = atts.Where(a =>
+                a.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapCompositePropertyAttribute
+            )
+            .ToArray();
+        var matchingCompositeAttributes = GetMatchingAttributes(
+            mapTarget,
+            propertySymbol,
+            compositeAttributes,
+            GetCompositePropertyTargetName
+        );
+        if (matchingCompositeAttributes is null)
+            return;
+        if (matchingCompositeAttributes.Count == 1)
+        {
+            MapCompositeProperty(mapTarget, propertySymbol, matchingCompositeAttributes[0]);
+            return;
+        }
+
         var propertyAttributes = atts.Where(a =>
                 a.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapPropertyAttribute
             )
@@ -117,6 +143,8 @@ internal class MapperGenerator
         var targetProperty = GetTargetProperty(mapTarget, propertySymbol, targetPropertyName);
         if (targetProperty is null)
             return;
+        if (TryReserveTargetProperties(mapTarget, propertySymbol, [targetProperty]) is false)
+            return;
         AddBeforePropertyAction(mapTarget, propertySymbol);
         if (
             TryUseConfigPropertyConverter(mapTarget, propertySymbol, targetProperty) is false
@@ -128,6 +156,53 @@ internal class MapperGenerator
         }
         TryReplacePropertyAction(mapTarget, propertySymbol);
         AddAfterPropertyAction(mapTarget, propertySymbol);
+    }
+
+    private List<AttributeData>? GetMatchingAttributes(
+        MapTargetInfo mapTarget,
+        IPropertySymbol propertySymbol,
+        IEnumerable<AttributeData> attributes,
+        Func<AttributeData, string> getTargetName
+    )
+    {
+        var matchingAttributes = new List<AttributeData>();
+        foreach (var attribute in attributes)
+        {
+            var targetName = getTargetName(attribute);
+            if (mapTarget.TargetName == targetName)
+            {
+                matchingAttributes.Add(attribute);
+            }
+            else if (_classInfo.MapTargets.All(x => x.TargetName != targetName))
+            {
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.MapPropertyTargetNotFound,
+                    attribute.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                        attribute.ApplicationSyntaxReference.Span
+                    ),
+                    targetName
+                );
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
+            }
+        }
+        if (matchingAttributes.Count <= 1)
+            return matchingAttributes;
+
+        var ambiguousDiagnostic = Diagnostic.Create(
+            Descriptors.MapPropertyTargetAmbiguous,
+            propertySymbol.Locations[0],
+            propertySymbol.Name
+        );
+        _classInfo.ProductionContext.ReportDiagnostic(ambiguousDiagnostic);
+        return null;
+    }
+
+    private static string GetCompositePropertyTargetName(AttributeData attribute)
+    {
+        var target = attribute.ConstructorArguments[0];
+        return target.Value is INamedTypeSymbol targetType
+            ? targetType.Name
+            : target.Value as string ?? string.Empty;
     }
 
     private static string GetMapPropertyTargetName(AttributeData attribute)
@@ -623,6 +698,365 @@ internal class MapperGenerator
         public bool CanMapFrom { get; }
     }
 
+    private bool TryUseConfigCompositePropertyConverter(
+        MapTargetInfo mapTarget,
+        IPropertySymbol propertySymbol
+    )
+    {
+        if (
+            mapTarget.ConfigInfo?.CompositeConverters.TryGetValue(
+                propertySymbol.Name,
+                out var data
+            ) is not true
+        )
+            return false;
+
+        var converterType = (INamedTypeSymbol)data.Property.Type;
+        var location = data.Property.Locations[0];
+        if (converterType.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositeSourceTypeMismatch,
+                    location,
+                    converterType.TypeArguments[0].GetName(),
+                    propertySymbol.Type.GetName()
+                )
+            );
+            return true;
+        }
+        if (
+            converterType.TypeArguments[1] is not INamedTypeSymbol tupleType
+            || tupleType.IsTupleType is false
+        )
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositeConverterRequiresTuple,
+                    location,
+                    converterType.GetName()
+                )
+            );
+            return true;
+        }
+
+        GenerateConfigCompositeMapping(
+            mapTarget,
+            propertySymbol,
+            data.TargetNames,
+            tupleType,
+            $"{MapConfigInfo.ConfigName}.{data.Property.Name}",
+            location
+        );
+        return true;
+    }
+
+    private void GenerateConfigCompositeMapping(
+        MapTargetInfo mapTarget,
+        IPropertySymbol propertySymbol,
+        string[] targetPropertyNames,
+        INamedTypeSymbol tupleType,
+        string converterExpression,
+        Location location
+    )
+    {
+        var tupleElements = tupleType.TupleElements;
+        if (tupleElements.Length != targetPropertyNames.Length)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositePropertyCountMismatch,
+                    location,
+                    targetPropertyNames.Length,
+                    tupleElements.Length
+                )
+            );
+            return;
+        }
+
+        var targetProperties = new List<IPropertySymbol>(targetPropertyNames.Length);
+        for (var i = 0; i < targetPropertyNames.Length; i++)
+        {
+            var targetProperty = GetCompositeTargetProperty(
+                mapTarget,
+                propertySymbol,
+                targetPropertyNames[i]
+            );
+            if (targetProperty is null)
+                return;
+            if (targetProperty.Type.SymbolEquals(tupleElements[i].Type) is false)
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.CompositePropertyTypeMismatch,
+                        location,
+                        targetProperty.Name,
+                        targetProperty.Type.GetName(),
+                        i + 1,
+                        tupleElements[i].Type.GetName()
+                    )
+                );
+                return;
+            }
+            targetProperties.Add(targetProperty);
+        }
+        if (TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties) is false)
+            return;
+
+        var variablePrefix = $"__composite{_compositeVariableIndex++}";
+        var variables = targetProperties
+            .Select((_, index) => $"{variablePrefix}_{index}")
+            .ToArray();
+        AddBeforePropertyAction(mapTarget, propertySymbol);
+        var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
+        var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
+        mapTarget.MapToMethod.Contents.Add(
+            $"var ({string.Join(", ", variables)}) = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+        );
+        for (var i = 0; i < targetProperties.Count; i++)
+        {
+            mapTarget.MapToMethod.Contents.Add(
+                $"{MapTargetInfo.TargetParamName}.{targetProperties[i].Name} = {variables[i]};"
+            );
+        }
+        var targetValues = string.Join(
+            ", ",
+            targetProperties.Select(x => $"{MapTargetInfo.TargetParamName}.{x.Name}")
+        );
+        mapTarget.MapFromMethod.Contents.Add(
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.ConvertBack)}({MapTargetInfo.TargetParamName}, ({targetValues}));"
+        );
+        TryReplaceCompositePropertyAction(
+            mapTarget,
+            propertySymbol,
+            mapToContentStart,
+            mapFromContentStart
+        );
+        AddAfterPropertyAction(mapTarget, propertySymbol);
+    }
+
+    private void MapCompositeProperty(
+        MapTargetInfo mapTarget,
+        IPropertySymbol propertySymbol,
+        AttributeData attribute
+    )
+    {
+        var location = attribute.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+            attribute.ApplicationSyntaxReference.Span
+        );
+        if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol converterType)
+            return;
+
+        var targetPropertyNames = attribute
+            .ConstructorArguments[2]
+            .Values.Select(x => x.Value as string ?? string.Empty)
+            .ToArray();
+        if (
+            targetPropertyNames.Length < 2
+            || targetPropertyNames.Any(string.IsNullOrWhiteSpace)
+            || targetPropertyNames.Distinct(StringComparer.Ordinal).Count()
+                != targetPropertyNames.Length
+        )
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(Descriptors.CompositeTargetPropertiesInvalid, location)
+            );
+            return;
+        }
+
+        var converterInterface = converterType.AllInterfaces.FirstOrDefault(i =>
+            i.OriginalDefinition.GetGlobalFullName() == TypeFullNames.CompositeMapConverterInterface
+        );
+        if (converterInterface is null)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositeConverterNotImplemented,
+                    location,
+                    converterType.GetName()
+                )
+            );
+            return;
+        }
+        if (converterInterface.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositeSourceTypeMismatch,
+                    location,
+                    converterInterface.TypeArguments[0].GetName(),
+                    propertySymbol.Type.GetName()
+                )
+            );
+            return;
+        }
+        if (
+            converterInterface.TypeArguments[1] is not INamedTypeSymbol tupleType
+            || tupleType.IsTupleType is false
+        )
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositeConverterRequiresTuple,
+                    location,
+                    converterType.GetName()
+                )
+            );
+            return;
+        }
+
+        var tupleElements = tupleType.TupleElements;
+        if (tupleElements.Length != targetPropertyNames.Length)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.CompositePropertyCountMismatch,
+                    location,
+                    targetPropertyNames.Length,
+                    tupleElements.Length
+                )
+            );
+            return;
+        }
+
+        var targetProperties = new List<IPropertySymbol>(targetPropertyNames.Length);
+        for (var i = 0; i < targetPropertyNames.Length; i++)
+        {
+            var targetProperty = GetCompositeTargetProperty(
+                mapTarget,
+                propertySymbol,
+                targetPropertyNames[i]
+            );
+            if (targetProperty is null)
+                return;
+            if (targetProperty.Type.SymbolEquals(tupleElements[i].Type) is false)
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.CompositePropertyTypeMismatch,
+                        location,
+                        targetProperty.Name,
+                        targetProperty.Type.GetName(),
+                        i + 1,
+                        tupleElements[i].Type.GetName()
+                    )
+                );
+                return;
+            }
+            targetProperties.Add(targetProperty);
+        }
+        if (TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties) is false)
+            return;
+
+        _classInfo.AddConverters(converterType, out var fieldName);
+        var variablePrefix = $"__composite{_compositeVariableIndex++}";
+        var variables = targetProperties
+            .Select((_, index) => $"{variablePrefix}_{index}")
+            .ToArray();
+
+        AddBeforePropertyAction(mapTarget, propertySymbol);
+        var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
+        var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
+        mapTarget.MapToMethod.Contents.Add(
+            $"var ({string.Join(", ", variables)}) = {fieldName}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+        );
+        for (var i = 0; i < targetProperties.Count; i++)
+        {
+            mapTarget.MapToMethod.Contents.Add(
+                $"{MapTargetInfo.TargetParamName}.{targetProperties[i].Name} = {variables[i]};"
+            );
+        }
+        var targetValues = string.Join(
+            ", ",
+            targetProperties.Select(x => $"{MapTargetInfo.TargetParamName}.{x.Name}")
+        );
+        mapTarget.MapFromMethod.Contents.Add(
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {fieldName}.{nameof(ICompositeMapConverter<object, ValueTuple>.ConvertBack)}({MapTargetInfo.TargetParamName}, ({targetValues}));"
+        );
+        TryReplaceCompositePropertyAction(
+            mapTarget,
+            propertySymbol,
+            mapToContentStart,
+            mapFromContentStart
+        );
+        AddAfterPropertyAction(mapTarget, propertySymbol);
+    }
+
+    private static void TryReplaceCompositePropertyAction(
+        MapTargetInfo mapTarget,
+        IPropertySymbol propertySymbol,
+        int mapToContentStart,
+        int mapFromContentStart
+    )
+    {
+        if (mapTarget.ConfigInfo is null)
+            return;
+        if (
+            mapTarget.ConfigInfo.MapTo.ReplacePropertyActions.TryGetValue(
+                propertySymbol.Name,
+                out var mapToMethod
+            )
+        )
+        {
+            mapTarget.MapToMethod.Contents.RemoveRange(
+                mapToContentStart,
+                mapTarget.MapToMethod.Contents.Count - mapToContentStart
+            );
+            mapTarget.MapToMethod.Contents.Add($"// Replace {propertySymbol.Name}");
+            mapTarget.MapToMethod.Contents.Add(
+                mapToMethod.BuildInvocationStatement(MapConfigInfo.ConfigName)
+            );
+        }
+        if (
+            mapTarget.ConfigInfo.MapFrom.ReplacePropertyActions.TryGetValue(
+                propertySymbol.Name,
+                out var mapFromMethod
+            )
+        )
+        {
+            mapTarget.MapFromMethod.Contents.RemoveRange(
+                mapFromContentStart,
+                mapTarget.MapFromMethod.Contents.Count - mapFromContentStart
+            );
+            mapTarget.MapFromMethod.Contents.Add($"// Replace {propertySymbol.Name}");
+            mapTarget.MapFromMethod.Contents.Add(
+                mapFromMethod.BuildInvocationStatement(MapConfigInfo.ConfigName)
+            );
+        }
+    }
+
+    private bool TryReserveTargetProperties(
+        MapTargetInfo mapTarget,
+        IPropertySymbol sourceProperty,
+        IEnumerable<IPropertySymbol> targetProperties
+    )
+    {
+        if (_mappedTargets.TryGetValue(mapTarget, out var mappedProperties) is false)
+        {
+            mappedProperties = new(StringComparer.Ordinal);
+            _mappedTargets.Add(mapTarget, mappedProperties);
+        }
+        foreach (var targetProperty in targetProperties)
+        {
+            if (mappedProperties.TryGetValue(targetProperty.Name, out var firstSourceProperty))
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.SameMapTargetProperty,
+                        sourceProperty.Locations[0],
+                        firstSourceProperty.Name,
+                        sourceProperty.Name,
+                        targetProperty.Name
+                    )
+                );
+                return false;
+            }
+        }
+        foreach (var targetProperty in targetProperties)
+            mappedProperties.Add(targetProperty.Name, sourceProperty);
+        return true;
+    }
+
     private static void TryAddConfig(MapTargetInfo mapTarget)
     {
         if (mapTarget.ConfigInfo is null)
@@ -737,6 +1171,66 @@ internal class MapperGenerator
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName},{MapTargetInfo.TargetParamName}.{targetProperty.Name});"
         );
         return true;
+    }
+
+    private IPropertySymbol? GetCompositeTargetProperty(
+        MapTargetInfo mapTarget,
+        IPropertySymbol property,
+        string targetPropertyName
+    )
+    {
+        if (mapTarget.Direction.HasFlag(MapDirections.To))
+            return GetTargetProperty(mapTarget, property, targetPropertyName);
+        if (
+            mapTarget.PropertyByName.TryGetValue(targetPropertyName, out var targetProperty)
+            is false
+        )
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.TargetPropertyNotExists,
+                    property.Locations[0],
+                    mapTarget.TargetType.GetName() + "." + targetPropertyName
+                )
+            );
+            return null;
+        }
+        if (targetProperty.IsStatic)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.TargetPropertyIsStatic,
+                    property.Locations[0],
+                    targetProperty.ToString()
+                )
+            );
+            return null;
+        }
+        if (
+            targetProperty.GetMethod is null
+            || IsAccessorAccessible(targetProperty.GetMethod) is false
+        )
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.TargetPropertyAccessibilityInsufficient,
+                    property.Locations[0],
+                    targetProperty.ToString()
+                )
+            );
+            return null;
+        }
+        return targetProperty;
+    }
+
+    private bool IsAccessorAccessible(IMethodSymbol accessor)
+    {
+        if (accessor.DeclaredAccessibility == Accessibility.Public)
+            return true;
+        return (
+                accessor.DeclaredAccessibility == Accessibility.Internal
+                || accessor.DeclaredAccessibility == Accessibility.ProtectedOrInternal
+            ) && accessor.ContainingAssembly.SymbolEquals(_classInfo.Compilation.Assembly);
     }
 
     private IPropertySymbol? GetTargetProperty(

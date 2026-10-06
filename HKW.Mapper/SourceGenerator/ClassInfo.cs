@@ -290,10 +290,20 @@ internal sealed class MapConfigInfo
         {
             if (member is IPropertySymbol propertySymbol)
             {
-                if (CheckProperty(propertySymbol, out var sourceName, out var targetName) is false)
-                    continue;
-
-                Converters.Add(sourceName, (targetName, propertySymbol));
+                if (CheckProperty(propertySymbol, out var sourceName, out var targetName))
+                {
+                    Converters.Add(sourceName, (targetName, propertySymbol));
+                }
+                else if (
+                    CheckCompositeProperty(
+                        propertySymbol,
+                        out sourceName,
+                        out var targetNames
+                    )
+                )
+                {
+                    CompositeConverters.Add(sourceName, (targetNames, propertySymbol));
+                }
             }
             else if (member is IMethodSymbol methodSymbol)
             {
@@ -306,6 +316,8 @@ internal sealed class MapConfigInfo
 
     public INamedTypeSymbol Type { get; }
     public Dictionary<string, (string TargetName, IPropertySymbol Property)> Converters { get; } =
+    [];
+    public Dictionary<string, (string[] TargetNames, IPropertySymbol Property)> CompositeConverters { get; } =
     [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
@@ -358,6 +370,86 @@ internal sealed class MapConfigInfo
             return false;
         }
 
+        return true;
+    }
+
+    private bool CheckCompositeProperty(
+        IPropertySymbol propertySymbol,
+        out string sourceName,
+        out string[] targetNames
+    )
+    {
+        sourceName = string.Empty;
+        targetNames = [];
+        if (
+            propertySymbol.Type.InheritedFrom(TypeFullNames.MapConfigCompositePropertyConverter)
+            is false
+        )
+            return false;
+        if (
+            propertySymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                is not PropertyDeclarationSyntax propertySyntax
+        )
+            return false;
+
+        var argumentList = propertySyntax.Initializer?.Value switch
+        {
+            ImplicitObjectCreationExpressionSyntax creation => creation.ArgumentList,
+            ObjectCreationExpressionSyntax creation => creation.ArgumentList,
+            _ => null,
+        };
+        if (argumentList?.Arguments.Count != 4)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MapConfigCompositeInitializerError,
+                    propertySymbol.Locations[0]
+                )
+            );
+            return false;
+        }
+
+        var semanticModel = _classInfo.Compilation.GetSemanticModel(propertySyntax.SyntaxTree);
+        sourceName = argumentList.Arguments[0].Expression.GetConstantString(semanticModel)!;
+        var targetExpression = argumentList.Arguments[1].Expression;
+        IEnumerable<ExpressionSyntax>? targetExpressions = targetExpression switch
+        {
+            CollectionExpressionSyntax collection => collection.Elements
+                .OfType<ExpressionElementSyntax>()
+                .Select(x => x.Expression),
+            ArrayCreationExpressionSyntax array => array.Initializer?.Expressions,
+            ImplicitArrayCreationExpressionSyntax array => array.Initializer.Expressions,
+            _ => null,
+        };
+        if (targetExpressions is null)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MapConfigCompositeInitializerError,
+                    propertySymbol.Locations[0]
+                )
+            );
+            return false;
+        }
+
+        targetNames = targetExpressions
+            .Select(x => x.GetConstantString(semanticModel) ?? string.Empty)
+            .ToArray();
+        if (
+            string.IsNullOrWhiteSpace(sourceName)
+            || targetNames.Length < 2
+            || targetNames.Any(string.IsNullOrWhiteSpace)
+            || targetNames.Distinct(StringComparer.Ordinal).Count() != targetNames.Length
+        )
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MapConfigCompositePropertyNameError,
+                    propertySymbol.Locations[0]
+                )
+            );
+            return false;
+        }
         return true;
     }
 
