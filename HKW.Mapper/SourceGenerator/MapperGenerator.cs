@@ -712,8 +712,9 @@ internal class MapperGenerator
             return false;
 
         var converterType = (INamedTypeSymbol)data.Property.Type;
+        var converterSourceType = converterType.TypeArguments[0];
         var location = data.Property.Locations[0];
-        if (converterType.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false)
+        if (AreConverterTypesCompatible(converterSourceType, propertySymbol.Type) is false)
         {
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
@@ -743,6 +744,7 @@ internal class MapperGenerator
         GenerateConfigCompositeMapping(
             mapTarget,
             propertySymbol,
+            converterSourceType,
             data.TargetNames,
             tupleType,
             $"{MapConfigInfo.ConfigName}.{data.Property.Name}",
@@ -754,6 +756,7 @@ internal class MapperGenerator
     private void GenerateConfigCompositeMapping(
         MapTargetInfo mapTarget,
         IPropertySymbol propertySymbol,
+        ITypeSymbol converterSourceType,
         string[] targetPropertyNames,
         INamedTypeSymbol tupleType,
         string converterExpression,
@@ -784,7 +787,10 @@ internal class MapperGenerator
             );
             if (targetProperty is null)
                 return;
-            if (targetProperty.Type.SymbolEquals(tupleElements[i].Type) is false)
+            if (
+                AreConverterTypesCompatible(tupleElements[i].Type, targetProperty.Type)
+                is false
+            )
             {
                 _classInfo.ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
@@ -810,21 +816,35 @@ internal class MapperGenerator
         AddBeforePropertyAction(mapTarget, propertySymbol);
         var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
         var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
+        var sourceValue = ConvertExpression(
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name}",
+            propertySymbol.Type,
+            converterSourceType
+        );
         mapTarget.MapToMethod.Contents.Add(
-            $"var ({string.Join(", ", variables)}) = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+            $"var ({string.Join(", ", variables)}) = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue});"
         );
         for (var i = 0; i < targetProperties.Count; i++)
         {
             mapTarget.MapToMethod.Contents.Add(
-                $"{MapTargetInfo.TargetParamName}.{targetProperties[i].Name} = {variables[i]};"
+                $"{MapTargetInfo.TargetParamName}.{targetProperties[i].Name} = {ConvertExpression(variables[i], tupleElements[i].Type, targetProperties[i].Type)};"
             );
         }
         var targetValues = string.Join(
             ", ",
-            targetProperties.Select(x => $"{MapTargetInfo.TargetParamName}.{x.Name}")
+            targetProperties.Select(
+                (x, i) =>
+                    ConvertExpression(
+                        $"{MapTargetInfo.TargetParamName}.{x.Name}",
+                        x.Type,
+                        tupleElements[i].Type
+                    )
+            )
         );
+        var convertedSourceValue =
+            $"{converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.ConvertBack)}({MapTargetInfo.TargetParamName}, ({targetValues}))";
         mapTarget.MapFromMethod.Contents.Add(
-            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.ConvertBack)}({MapTargetInfo.TargetParamName}, ({targetValues}));"
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
         );
         TryReplaceCompositePropertyAction(
             mapTarget,
@@ -878,7 +898,8 @@ internal class MapperGenerator
             );
             return;
         }
-        if (converterInterface.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false)
+        var converterSourceType = converterInterface.TypeArguments[0];
+        if (AreConverterTypesCompatible(converterSourceType, propertySymbol.Type) is false)
         {
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
@@ -905,81 +926,16 @@ internal class MapperGenerator
             return;
         }
 
-        var tupleElements = tupleType.TupleElements;
-        if (tupleElements.Length != targetPropertyNames.Length)
-        {
-            _classInfo.ProductionContext.ReportDiagnostic(
-                Diagnostic.Create(
-                    Descriptors.CompositePropertyCountMismatch,
-                    location,
-                    targetPropertyNames.Length,
-                    tupleElements.Length
-                )
-            );
-            return;
-        }
-
-        var targetProperties = new List<IPropertySymbol>(targetPropertyNames.Length);
-        for (var i = 0; i < targetPropertyNames.Length; i++)
-        {
-            var targetProperty = GetCompositeTargetProperty(
-                mapTarget,
-                propertySymbol,
-                targetPropertyNames[i]
-            );
-            if (targetProperty is null)
-                return;
-            if (targetProperty.Type.SymbolEquals(tupleElements[i].Type) is false)
-            {
-                _classInfo.ProductionContext.ReportDiagnostic(
-                    Diagnostic.Create(
-                        Descriptors.CompositePropertyTypeMismatch,
-                        location,
-                        targetProperty.Name,
-                        targetProperty.Type.GetName(),
-                        i + 1,
-                        tupleElements[i].Type.GetName()
-                    )
-                );
-                return;
-            }
-            targetProperties.Add(targetProperty);
-        }
-        if (TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties) is false)
-            return;
-
         _classInfo.AddConverters(converterType, out var fieldName);
-        var variablePrefix = $"__composite{_compositeVariableIndex++}";
-        var variables = targetProperties
-            .Select((_, index) => $"{variablePrefix}_{index}")
-            .ToArray();
-
-        AddBeforePropertyAction(mapTarget, propertySymbol);
-        var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
-        var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
-        mapTarget.MapToMethod.Contents.Add(
-            $"var ({string.Join(", ", variables)}) = {fieldName}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
-        );
-        for (var i = 0; i < targetProperties.Count; i++)
-        {
-            mapTarget.MapToMethod.Contents.Add(
-                $"{MapTargetInfo.TargetParamName}.{targetProperties[i].Name} = {variables[i]};"
-            );
-        }
-        var targetValues = string.Join(
-            ", ",
-            targetProperties.Select(x => $"{MapTargetInfo.TargetParamName}.{x.Name}")
-        );
-        mapTarget.MapFromMethod.Contents.Add(
-            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {fieldName}.{nameof(ICompositeMapConverter<object, ValueTuple>.ConvertBack)}({MapTargetInfo.TargetParamName}, ({targetValues}));"
-        );
-        TryReplaceCompositePropertyAction(
+        GenerateConfigCompositeMapping(
             mapTarget,
             propertySymbol,
-            mapToContentStart,
-            mapFromContentStart
+            converterSourceType,
+            targetPropertyNames,
+            tupleType,
+            fieldName,
+            location
         );
-        AddAfterPropertyAction(mapTarget, propertySymbol);
     }
 
     private static void TryReplaceCompositePropertyAction(
@@ -1069,6 +1025,35 @@ internal class MapperGenerator
         );
     }
 
+    private bool AreConverterTypesCompatible(ITypeSymbol converterType, ITypeSymbol propertyType)
+    {
+        return HasImplicitReferenceOrIdentityConversion(converterType, propertyType)
+            || HasImplicitReferenceOrIdentityConversion(propertyType, converterType);
+    }
+
+    private bool HasImplicitReferenceOrIdentityConversion(
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    )
+    {
+        var conversion = _classInfo.Compilation.ClassifyCommonConversion(sourceType, targetType);
+        return conversion.Exists
+            && conversion.IsImplicit
+            && (conversion.IsIdentity || conversion.IsReference);
+    }
+
+    private string ConvertExpression(
+        string expression,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    )
+    {
+        var conversion = _classInfo.Compilation.ClassifyCommonConversion(sourceType, targetType);
+        if (conversion.Exists && conversion.IsImplicit)
+            return expression;
+        return $"({targetType.GetGlobalFullName()})({expression})";
+    }
+
     private bool TryUseConfigPropertyConverter(
         MapTargetInfo mapTarget,
         IPropertySymbol propertySymbol,
@@ -1082,10 +1067,11 @@ internal class MapperGenerator
             return false;
 
         var converterType = (INamedTypeSymbol)data.Property.Type;
-        // 判断转换器泛型类型是否与映射类型相同
+        var converterSourceType = converterType.TypeArguments[0];
+        var converterTargetType = converterType.TypeArguments[1];
         if (
-            converterType.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false
-            || converterType.TypeArguments[1].SymbolEquals(targetProperty.Type) is false
+            AreConverterTypesCompatible(converterSourceType, propertySymbol.Type) is false
+            || AreConverterTypesCompatible(converterTargetType, targetProperty.Type) is false
         )
         {
             var diagnostic = Diagnostic.Create(
@@ -1100,12 +1086,25 @@ internal class MapperGenerator
             return false;
         }
         var convertName = $"{MapConfigInfo.ConfigName}.{data.Property.Name}";
-        // 使用转换器转换
+        var sourceValue = ConvertExpression(
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name}",
+            propertySymbol.Type,
+            converterSourceType
+        );
+        var convertedTargetValue =
+            $"{convertName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue})";
+        var targetValue = ConvertExpression(
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}",
+            targetProperty.Type,
+            converterTargetType
+        );
+        var convertedSourceValue =
+            $"{convertName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName}, {targetValue})";
         mapTarget.MapToMethod.Contents.Add(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {convertName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName},{MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );
         mapTarget.MapFromMethod.Contents.Add(
-            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {convertName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName},{MapTargetInfo.TargetParamName}.{targetProperty.Name});"
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
         );
         return true;
     }
@@ -1143,10 +1142,11 @@ internal class MapperGenerator
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return false;
         }
-        // 判断转换器泛型类型是否与映射类型相同
+        var converterSourceType = converterInterface.TypeArguments[0];
+        var converterTargetType = converterInterface.TypeArguments[1];
         if (
-            converterInterface.TypeArguments[0].SymbolEquals(propertySymbol.Type) is false
-            || converterInterface.TypeArguments[1].SymbolEquals(targetProperty.Type) is false
+            AreConverterTypesCompatible(converterSourceType, propertySymbol.Type) is false
+            || AreConverterTypesCompatible(converterTargetType, targetProperty.Type) is false
         )
         {
             var diagnostic = Diagnostic.Create(
@@ -1163,12 +1163,25 @@ internal class MapperGenerator
             return false;
         }
         _classInfo.AddConverters(converterType, out var fieldName);
-        // 使用转换器转换
+        var sourceValue = ConvertExpression(
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name}",
+            propertySymbol.Type,
+            converterSourceType
+        );
+        var convertedTargetValue =
+            $"{fieldName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue})";
+        var targetValue = ConvertExpression(
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}",
+            targetProperty.Type,
+            converterTargetType
+        );
+        var convertedSourceValue =
+            $"{fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName}, {targetValue})";
         mapTarget.MapToMethod.Contents.Add(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {fieldName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName},{MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );
         mapTarget.MapFromMethod.Contents.Add(
-            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName},{MapTargetInfo.TargetParamName}.{targetProperty.Name});"
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
         );
         return true;
     }

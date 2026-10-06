@@ -7,6 +7,10 @@ namespace HKW.HKWMapper;
 /// <summary>
 /// 制图转换器接口
 /// </summary>
+/// <remarks>
+/// 泛型值类型可以与映射属性类型相同，或与其具有基类、子类、接口引用转换关系。
+/// 需要显式引用转换时，实际值的运行时类型必须兼容。
+/// </remarks>
 public interface IMapConverter<TSourceValue, TTargetValue>
 {
     /// <summary>

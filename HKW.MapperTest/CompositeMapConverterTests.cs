@@ -74,11 +74,9 @@ public sealed class CompositeRangeTarget
     public int Max { get; set; }
 }
 
-public sealed class NumericRangeConverter
-    : ICompositeMapConverter<NumericRange, (int Min, int Max)>
+public sealed class NumericRangeConverter : ICompositeMapConverter<NumericRange, (int Min, int Max)>
 {
-    public (int Min, int Max) Convert(object source, NumericRange value) =>
-        (value.Min, value.Max);
+    public (int Min, int Max) Convert(object source, NumericRange value) => (value.Min, value.Max);
 
     public NumericRange ConvertBack(object target, (int Min, int Max) values) =>
         new(values.Min, values.Max);
@@ -124,14 +122,11 @@ public sealed class CompositeTripleTarget
     public bool Enabled { get; set; }
 }
 
-public sealed class TripleValueConverter
-    : ICompositeMapConverter<TripleValue, (int Number, string Text, bool Enabled)>
+public sealed class TripleValueConverter : ICompositeMapConverter<TripleValue, (int, string, bool)>
 {
-    public (int Number, string Text, bool Enabled) Convert(object source, TripleValue value) =>
+    public (int, string, bool) Convert(object source, TripleValue value) =>
         (value.Number, value.Text, value.Enabled);
 
-    public TripleValue ConvertBack(
-        object target,
-        (int Number, string Text, bool Enabled) values
-    ) => new(values.Number, values.Text, values.Enabled);
+    public TripleValue ConvertBack(object target, (int, string, bool) values) =>
+        new(values.Item1, values.Item2, values.Item3);
 }
