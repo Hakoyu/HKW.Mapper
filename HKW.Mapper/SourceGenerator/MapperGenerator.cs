@@ -802,10 +802,6 @@ internal class MapperGenerator
         if (TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties) is false)
             return;
 
-        var variablePrefix = $"__composite{_compositeVariableIndex++}";
-        var variables = targetProperties
-            .Select((_, index) => $"{variablePrefix}_{index}")
-            .ToArray();
         AddBeforePropertyAction(mapTarget, propertySymbol);
         var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
         var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
@@ -815,14 +811,8 @@ internal class MapperGenerator
             converterSourceType
         );
         mapTarget.MapToMethod.Contents.Add(
-            $"var ({string.Join(", ", variables)}) = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue});"
+            $"({string.Join(", ", targetProperties.Select(x => $"{MapTargetInfo.TargetParamName}.{x.Name}"))}) = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue});"
         );
-        for (var i = 0; i < targetProperties.Count; i++)
-        {
-            mapTarget.MapToMethod.Contents.Add(
-                $"{MapTargetInfo.TargetParamName}.{targetProperties[i].Name} = {ConvertExpression(variables[i], tupleElements[i].Type, targetProperties[i].Type)};"
-            );
-        }
         var targetValues = string.Join(
             ", ",
             targetProperties.Select(

@@ -4,9 +4,14 @@ internal class Program
 {
     internal static void Main(string[] args)
     {
-        Value1 = (CloneableValue)Value2?.Clone()!;
+        var i1 = 0;
+        var i2 = 0;
+
+        (i1, i2) = GetInt();
     }
 
-    public static CloneableValue Value1 { get; set; }
-    public static CloneableValue? Value2 { get; set; }
+    public static (int, int) GetInt()
+    {
+        return (1, 2);
+    }
 }
