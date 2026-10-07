@@ -34,7 +34,6 @@ internal class MapperGenerator
         MapTargetInfo,
         Dictionary<string, IPropertySymbol>
     > _mappedTargets = [];
-    private int _compositeVariableIndex;
 
     public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
 

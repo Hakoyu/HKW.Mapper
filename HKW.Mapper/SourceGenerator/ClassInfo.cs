@@ -75,7 +75,7 @@ internal class ClassInfo
     public void AddConverters(INamedTypeSymbol typeSymbol, out string fieldName)
     {
         var typeFullName = typeSymbol.GetGlobalFullName();
-        var baseFieldName = "_" + typeSymbol.GetName().FirstLetterToLower();
+        var baseFieldName = "_" + typeSymbol.Name.FirstLetterToLower();
         fieldName = baseFieldName;
         var count = 0;
         foreach (var converter in MapConverters)
@@ -116,7 +116,10 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             nameof(MapTargetAttribute.TargetType)
         );
         if (TargetType is null)
+        {
             IsInvalid = true;
+            return;
+        }
 
         if (
             attributeInfo.TryGetParam<INamedTypeSymbol>(
@@ -171,7 +174,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             TargetName = targetName;
         }
         if (string.IsNullOrWhiteSpace(TargetName))
-            TargetName = TargetType!.Name;
+            TargetName = TargetType.Name;
         if (
             attributeInfo.TryGetParam<MapDirections>(
                 nameof(MapTargetAttribute.Direction),
@@ -184,7 +187,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
 
         if (IsInvalid)
             return;
-        var resolvedTargetType = TargetType!;
+        var resolvedTargetType = TargetType;
         // 分析所有成员，派生类型中隐藏的属性优先于基类属性
         for (var type = resolvedTargetType; type is not null; type = type.BaseType)
         {
