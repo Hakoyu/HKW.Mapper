@@ -1,4 +1,4 @@
-using HKW.HKWMapper;
+using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -100,7 +100,10 @@ public sealed class ConfigCompositeMapperConfig
     public ConfigCompositeMapperConfig(ConfigCompositeSource source, ConfigCompositeTarget target)
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<NumericRange, (int Min, int Max)> RangeConverter { get; } =
+    public MapConfigCompositePropertyConverter<
+        NumericRange,
+        (int Min, int Max)
+    > RangeConverter { get; } =
         new(
             nameof(ConfigCompositeSource.Range),
             [nameof(ConfigCompositeTarget.Min), nameof(ConfigCompositeTarget.Max)],
@@ -138,13 +141,13 @@ public sealed class PriorityCompositeMapperConfig
     )
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<NumericRange, (int Min, int Max)> RangeConverter { get; } =
+    public MapConfigCompositePropertyConverter<
+        NumericRange,
+        (int Min, int Max)
+    > RangeConverter { get; } =
         new(
             nameof(PriorityCompositeSource.Range),
-            [
-                nameof(PriorityCompositeTarget.ConfigMin),
-                nameof(PriorityCompositeTarget.ConfigMax),
-            ],
+            [nameof(PriorityCompositeTarget.ConfigMin), nameof(PriorityCompositeTarget.ConfigMax)],
             (_, value) => (value.Min + 100, value.Max + 200),
             (_, values) => new(values.Min - 100, values.Max - 200)
         );

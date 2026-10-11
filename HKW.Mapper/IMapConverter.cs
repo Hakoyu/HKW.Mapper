@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 /// <summary>
 /// 制图转换器接口

@@ -1,4 +1,4 @@
-using HKW.HKWMapper;
+using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -214,7 +214,7 @@ public class NumberToDoubleNumber : IMapConverter<double, double>
     }
 }
 
-public class CloneableValue : ICloneable
+public class CloneableValue : ICloneable<CloneableValue>
 {
     public CloneableValue(int value)
     {
@@ -223,8 +223,18 @@ public class CloneableValue : ICloneable
 
     public int Value { get; set; }
 
-    public object Clone()
+    public CloneableValue Clone()
     {
         return new CloneableValue(Value);
     }
+
+    object ICloneable.Clone()
+    {
+        return Clone();
+    }
+}
+
+public interface ICloneable<T> : ICloneable
+{
+    public new T Clone();
 }

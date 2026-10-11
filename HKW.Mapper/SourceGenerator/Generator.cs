@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
-namespace HKW.HKWMapper.SourceGenerator;
+namespace HKW.Mapper.SourceGenerator;
 
 [Generator]
 internal partial class Generator : IIncrementalGenerator

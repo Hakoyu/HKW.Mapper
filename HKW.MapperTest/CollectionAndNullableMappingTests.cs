@@ -1,4 +1,4 @@
-using HKW.HKWMapper;
+using HKW.Mapper;
 
 namespace HKW.MapperTest;
 

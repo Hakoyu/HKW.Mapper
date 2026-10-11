@@ -1,4 +1,4 @@
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 /// <summary>
 /// 配置当前属性在某个目标映射中的名称、转换器或引用类型策略。

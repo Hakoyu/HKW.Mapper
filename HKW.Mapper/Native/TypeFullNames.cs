@@ -6,7 +6,7 @@ using HKW.SourceGeneratorUtils;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 internal static class TypeFullNames
 {

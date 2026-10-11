@@ -16,7 +16,7 @@
 在源类型上使用 `[MapTargetAttribute]`，参数为目标类型：
 
 ```csharp
-using HKW.HKWMapper;
+using HKW.Mapper;
 
 namespace Sample;
 

@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace HKW.HKWMapper.SourceGenerator;
+namespace HKW.Mapper.SourceGenerator;
 
 internal class ClassSourceWriter
 {
@@ -33,7 +33,7 @@ internal class ClassSourceWriter
         // 添加全部引用
         //_writer.WriteLine(_classInfo.Usings);
         // 添加命名空间
-        _writer.WriteLine($"namespace HKW.HKWMapper");
+        _writer.WriteLine($"namespace HKW.Mapper");
         _writer.WriteLine("{");
         _writer.Indent++;
         // 获取可访问性

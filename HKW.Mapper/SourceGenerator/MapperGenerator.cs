@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace HKW.HKWMapper.SourceGenerator;
+namespace HKW.Mapper.SourceGenerator;
 
 internal class MapperGenerator
 {
@@ -635,11 +635,11 @@ internal class MapperGenerator
             mapping = new(
                 canMapTo
                     ? value =>
-                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapToName}({value}, new {targetType.GetGlobalFullName()}())"
+                        $"global::HKW.Mapper.{extensionType}MapExtensions.{nestedTarget.MapToName}({value}, new {targetType.GetGlobalFullName()}())"
                     : null,
                 canMapFrom
                     ? value =>
-                        $"global::HKW.HKWMapper.{extensionType}MapExtensions.{nestedTarget.MapFromName}(new {sourceType.GetGlobalFullName()}(), {value})"
+                        $"global::HKW.Mapper.{extensionType}MapExtensions.{nestedTarget.MapFromName}(new {sourceType.GetGlobalFullName()}(), {value})"
                     : null,
                 canMapTo,
                 canMapFrom
@@ -668,9 +668,7 @@ internal class MapperGenerator
         arguments = [];
         if (type is not INamedTypeSymbol named)
             return false;
-        var matchingInterface = named.AllInterfaces.FirstOrDefault(i =>
-            i.OriginalDefinition.GetGlobalFullName() == metadataShape
-        );
+        var matchingInterface = named.GetInterface(metadataShape);
         if (matchingInterface is null)
             return false;
         arguments = matchingInterface.TypeArguments.Cast<INamedTypeSymbol>().ToArray();
@@ -809,9 +807,24 @@ internal class MapperGenerator
             propertySymbol.Type,
             converterSourceType
         );
+        mapTarget.MapToMethod.Contents.Add("{");
         mapTarget.MapToMethod.Contents.Add(
-            $"({string.Join(", ", targetProperties.Select(x => $"{MapTargetInfo.TargetParamName}.{x.Name}"))}) = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue});"
+            $"var result = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue});"
         );
+        for (var i = 0; i < targetProperties.Count; i++)
+        {
+            var targetProperty = targetProperties[i];
+            var convertedValue = ConvertExpression(
+                $"result.Item{i + 1}",
+                tupleElements[i].Type,
+                targetProperty.Type
+            );
+            mapTarget.MapToMethod.Contents.Add(
+                $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {convertedValue};"
+            );
+        }
+        mapTarget.MapToMethod.Contents.Add("}");
+
         var targetValues = string.Join(
             ", ",
             targetProperties.Select(
@@ -868,8 +881,8 @@ internal class MapperGenerator
             return;
         }
 
-        var converterInterface = converterType.AllInterfaces.FirstOrDefault(i =>
-            i.OriginalDefinition.GetGlobalFullName() == TypeFullNames.CompositeMapConverterInterface
+        var converterInterface = converterType.GetInterface(
+            TypeFullNames.CompositeMapConverterInterface
         );
         if (converterInterface is null)
         {
@@ -977,15 +990,14 @@ internal class MapperGenerator
         {
             if (mappedProperties.TryGetValue(targetProperty.Name, out var firstSourceProperty))
             {
-                _classInfo.ProductionContext.ReportDiagnostic(
-                    Diagnostic.Create(
-                        Descriptors.SameMapTargetProperty,
-                        sourceProperty.Locations[0],
-                        firstSourceProperty.Name,
-                        sourceProperty.Name,
-                        targetProperty.Name
-                    )
+                var diagnostic = Diagnostic.Create(
+                    Descriptors.SameMapTargetProperty,
+                    sourceProperty.Locations[0],
+                    firstSourceProperty.Name,
+                    sourceProperty.Name,
+                    targetProperty.Name
                 );
+                _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 return false;
             }
         }
@@ -1112,9 +1124,7 @@ internal class MapperGenerator
         )
             return false;
 
-        var converterInterface = converterType.Interfaces.FirstOrDefault(i =>
-            i.OriginalDefinition.GetGlobalFullName() == TypeFullNames.MapConverterInterface
-        );
+        var converterInterface = converterType.GetInterface(TypeFullNames.MapConverterInterface);
         // 判断转换器是否实现转换器接口
         if (converterInterface is null)
         {

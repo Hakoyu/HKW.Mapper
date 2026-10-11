@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.Linq.Expressions;
 
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 /// <summary>
 /// 映射配置

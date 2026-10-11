@@ -1,4 +1,4 @@
-﻿namespace HKW.HKWMapper;
+﻿namespace HKW.Mapper;
 
 /// <summary>
 /// 映射至设置行动

@@ -4,7 +4,7 @@ using HKW.SourceGeneratorUtils;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace HKW.HKWMapper.SourceGenerator;
+namespace HKW.Mapper.SourceGenerator;
 
 internal class ClassInfo
 {

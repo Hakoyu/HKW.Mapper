@@ -1,4 +1,4 @@
-﻿namespace HKW.HKWMapper;
+﻿namespace HKW.Mapper;
 
 /// <summary>
 /// 制图跳过属性

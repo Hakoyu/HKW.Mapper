@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Microsoft.CodeAnalysis;
 
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 internal static class Descriptors
 {

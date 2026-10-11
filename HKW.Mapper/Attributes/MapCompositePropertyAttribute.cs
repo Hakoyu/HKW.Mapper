@@ -1,4 +1,4 @@
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 /// <summary>
 /// 配置一个源属性与多个目标属性之间的双向转换

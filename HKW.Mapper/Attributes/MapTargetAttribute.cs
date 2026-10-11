@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace HKW.HKWMapper;
+namespace HKW.Mapper;
 
 /// <summary>
 /// 从目标类型做双向映射
