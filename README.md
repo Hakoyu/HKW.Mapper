@@ -78,6 +78,27 @@ public sealed class User
 }
 ```
 
+映射会包含源类型的可访问父类属性。也可以按映射目标批量忽略源属性；配置类中的忽略项会与 `MapTarget` 上的忽略项合并：
+
+```csharp
+[MapTarget(
+    typeof(UserDto),
+    typeof(UserMapperConfig),
+    IgnoreProperties = new[] { nameof(User.InternalToken) }
+)]
+public sealed class User : UserBase;
+
+public sealed class UserMapperConfig : MapperConfig<User, UserDto>
+{
+    public UserMapperConfig(User source, UserDto target)
+        : base(source, target) { }
+
+    public string[] IgnoreProperties { get; } = [nameof(User.AuditStamp)];
+}
+```
+
+配置类的 `IgnoreProperties` 必须是可静态解析初始化器的 `string[]` 属性。
+
 ### 重命名属性
 
 使用固定的公共 `[MapPropertyAttribute]` 配置目标类型或目标名称，不再生成专用属性特性：

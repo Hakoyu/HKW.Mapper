@@ -41,7 +41,6 @@ internal class ClassInfo
             }
         }
         // 分析所有成员
-
         foreach (
             var propertySymbol in classSymbol
                 .GetMembers()
@@ -52,6 +51,21 @@ internal class ClassInfo
             if (propertySymbol.IsStatic)
                 continue;
             Properties.Add(propertySymbol);
+        }
+
+        var propertyNames = new HashSet<string>(Properties.Select(x => x.Name), StringComparer.Ordinal);
+        for (var type = classSymbol.BaseType; type is not null; type = type.BaseType)
+        {
+            foreach (
+                var propertySymbol in type.GetMembers()
+                    .OfType<IPropertySymbol>()
+                    .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+            )
+            {
+                if (propertySymbol.IsStatic || propertyNames.Add(propertySymbol.Name) is false)
+                    continue;
+                ParentProperties.Add(propertySymbol);
+            }
         }
     }
 
@@ -68,6 +82,7 @@ internal class ClassInfo
     public HashSet<MapTargetInfo> MapTargets { get; } = [];
 
     public HashSet<IPropertySymbol> Properties { get; } = [];
+    public HashSet<IPropertySymbol> ParentProperties { get; } = [];
 
     public List<FieldGenerateInfo> MapConverters { get; } = [];
     public List<FieldGenerateInfo> MapConfigs { get; } = [];
@@ -110,22 +125,21 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
 #pragma warning restore CS8618
     {
         SourceType = sourceType;
+        MapTargetLocation = attributeData.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+            attributeData.ApplicationSyntaxReference.Span
+        ) ?? Location.None;
 
-        var attributeInfo = attributeData.GetInfo()!;
-        TargetType = attributeInfo.GetParam<INamedTypeSymbol>(
-            nameof(MapTargetAttribute.TargetType)
-        );
-        if (TargetType is null)
+        var targetType = attributeData.ConstructorArguments.FirstOrDefault().Value as INamedTypeSymbol;
+        if (targetType is null)
         {
             IsInvalid = true;
             return;
         }
+        TargetType = targetType;
 
         if (
-            attributeInfo.TryGetParam<INamedTypeSymbol>(
-                nameof(MapTargetAttribute.Config),
-                out var configType
-            )
+            attributeData.ConstructorArguments.Length > 1
+            && attributeData.ConstructorArguments[1].Value is INamedTypeSymbol configType
         )
         {
             if (configType.InheritedFrom(TypeFullNames.MapConfigClass) is false)
@@ -164,26 +178,34 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             ConfigInfo = new(classInfo, configType);
         }
 
-        if (
-            attributeInfo.TryGetParam<string>(
-                nameof(MapTargetAttribute.TargetName),
-                out var targetName
-            )
-        )
-        {
+        var targetNameArgument = attributeData.NamedArguments.FirstOrDefault(x =>
+            x.Key == nameof(MapTargetAttribute.TargetName)
+        );
+        if (targetNameArgument.Value.Value is string targetName)
             TargetName = targetName;
-        }
         if (string.IsNullOrWhiteSpace(TargetName))
             TargetName = TargetType.Name;
-        if (
-            attributeInfo.TryGetParam<MapDirections>(
-                nameof(MapTargetAttribute.Direction),
-                out var direction
-            )
-        )
-            Direction = direction;
-        else
-            Direction = MapDirections.Both;
+
+        var directionArgument = attributeData.NamedArguments.FirstOrDefault(x =>
+            x.Key == nameof(MapTargetAttribute.Direction)
+        );
+        Direction = directionArgument.Value.Value is int direction
+            ? (MapDirections)direction
+            : MapDirections.Both;
+
+        var ignoreProperties = attributeData.NamedArguments.FirstOrDefault(x =>
+            x.Key == nameof(MapTargetAttribute.IgnoreProperties)
+        ).Value;
+        if (ignoreProperties.Kind == TypedConstantKind.Array)
+        {
+            foreach (var value in ignoreProperties.Values)
+            {
+                if (value.Value is string propertyName && string.IsNullOrWhiteSpace(propertyName) is false)
+                    IgnoreProperties.Add(propertyName);
+            }
+        }
+        if (ConfigInfo is not null)
+            IgnoreProperties.UnionWith(ConfigInfo.IgnoreProperties);
 
         if (IsInvalid)
             return;
@@ -250,6 +272,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         + $"{(ConfigInfo?.MapFrom.IsAsync is true ? "Async" : "")}";
 
     public Dictionary<string, IPropertySymbol> PropertyByName { get; } = [];
+    public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
+    public Location MapTargetLocation { get; }
 
     public bool IsInvalid { get; }
 
@@ -293,6 +317,8 @@ internal sealed class MapConfigInfo
         {
             if (member is IPropertySymbol propertySymbol)
             {
+                if (CheckIgnoreProperties(propertySymbol))
+                    continue;
                 if (CheckProperty(propertySymbol, out var sourceName, out var targetName))
                 {
                     Converters.Add(sourceName, (targetName, propertySymbol));
@@ -322,6 +348,42 @@ internal sealed class MapConfigInfo
     > CompositeConverters { get; } = [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
+    public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
+
+    private bool CheckIgnoreProperties(IPropertySymbol propertySymbol)
+    {
+        if (
+            propertySymbol.Name != nameof(MapTargetAttribute.IgnoreProperties)
+            || propertySymbol.Type is not IArrayTypeSymbol
+            {
+                ElementType.SpecialType: SpecialType.System_String,
+            }
+            || propertySymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                is not PropertyDeclarationSyntax propertySyntax
+        )
+            return false;
+
+        IEnumerable<ExpressionSyntax>? expressions = propertySyntax.Initializer?.Value switch
+        {
+            CollectionExpressionSyntax collection => collection
+                .Elements.OfType<ExpressionElementSyntax>()
+                .Select(x => x.Expression),
+            ArrayCreationExpressionSyntax array => array.Initializer?.Expressions,
+            ImplicitArrayCreationExpressionSyntax array => array.Initializer.Expressions,
+            _ => null,
+        };
+        if (expressions is null)
+            return true;
+
+        var semanticModel = _classInfo.Compilation.GetSemanticModel(propertySyntax.SyntaxTree);
+        foreach (var expression in expressions)
+        {
+            var propertyName = expression.GetConstantString(semanticModel);
+            if (string.IsNullOrWhiteSpace(propertyName) is false)
+                IgnoreProperties.Add(propertyName!);
+        }
+        return true;
+    }
 
     private bool CheckProperty(
         IPropertySymbol propertySymbol,

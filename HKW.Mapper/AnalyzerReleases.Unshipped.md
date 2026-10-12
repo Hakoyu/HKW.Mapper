@@ -8,7 +8,7 @@ Rule ID | Category | Severity | Notes
 MAP0001 | HKWMapper | Error | Descriptors
 MAP0002 | HKWMapper | Error | Descriptors
 MAP0003 | HKWMapper | Error | Descriptors
-MAP0004 | HKWMapper | Error | Descriptors
+MAP0004 | HKWMapper | Warning | Descriptors
 MAP0005 | HKWMapper | Error | Descriptors
 MAP0006 | HKWMapper | Error | Descriptors
 MAP0007 | HKWMapper | Error | Descriptors

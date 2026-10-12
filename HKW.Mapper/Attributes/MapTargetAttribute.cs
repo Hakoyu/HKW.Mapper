@@ -58,6 +58,11 @@ public sealed class MapTargetAttribute : Attribute
     /// </summary>
     [DefaultValue(MapDirections.Both)]
     public MapDirections Direction { get; set; } = MapDirections.Both;
+
+    /// <summary>
+    /// 要忽略的源属性名称
+    /// </summary>
+    public string[] IgnoreProperties { get; set; } = [];
 }
 
 #pragma warning disable S2346

@@ -47,6 +47,10 @@ internal class MapperGenerator
             {
                 ParseProperty(target, property);
             }
+            foreach (var property in _classInfo.ParentProperties)
+            {
+                ParseProperty(target, property);
+            }
             AddEndAction(target);
             if (target.Direction.HasFlag(MapDirections.To))
                 target.MapToMethod.Contents.Add($"return {MapTargetInfo.TargetParamName};");
@@ -57,6 +61,9 @@ internal class MapperGenerator
 
     private void ParseProperty(MapTargetInfo mapTarget, IPropertySymbol propertySymbol)
     {
+        if (mapTarget.IgnoreProperties.Contains(propertySymbol.Name))
+            return;
+
         var atts = propertySymbol.GetAttributes();
         // 检查全局忽略属性
         if (
@@ -1223,7 +1230,7 @@ internal class MapperGenerator
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
                     Descriptors.TargetPropertyNotExists,
-                    property.Locations[0],
+                    GetPropertyDiagnosticLocation(mapTarget, property),
                     mapTarget.TargetType.GetName() + "." + targetPropertyName
                 )
             );
@@ -1267,6 +1274,16 @@ internal class MapperGenerator
             ) && accessor.ContainingAssembly.SymbolEquals(_classInfo.Compilation.Assembly);
     }
 
+    private Location GetPropertyDiagnosticLocation(
+        MapTargetInfo mapTarget,
+        IPropertySymbol property
+    )
+    {
+        return _classInfo.ParentProperties.Contains(property)
+            ? mapTarget.MapTargetLocation
+            : property.Locations[0];
+    }
+
     private IPropertySymbol? GetTargetProperty(
         MapTargetInfo mapTarget,
         IPropertySymbol property,
@@ -1281,7 +1298,7 @@ internal class MapperGenerator
         {
             var diagnostic = Diagnostic.Create(
                 Descriptors.TargetPropertyNotExists,
-                property.Locations[0],
+                GetPropertyDiagnosticLocation(mapTarget, property),
                 mapTarget.TargetType.GetName() + "." + property.Name
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);

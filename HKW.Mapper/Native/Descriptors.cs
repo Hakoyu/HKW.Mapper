@@ -39,7 +39,7 @@ internal static class Descriptors
         title: "Target property not exists",
         messageFormat: "Target property '{0}' not exists, please set property name or ignore.",
         category: _category,
-        DiagnosticSeverity.Error,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
 

@@ -88,6 +88,57 @@ public sealed class MapperGeneratorDiagnosticTests
         );
     }
 
+    [TestMethod]
+    public void ReportsMissingInheritedTargetPropertyAsWarningOnMapTarget()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            public class BaseSource
+            {
+                public int Missing { get; set; }
+            }
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source : BaseSource;
+
+            public sealed class Target;
+            """;
+
+        var diagnostic = RunGenerator(source).Single(x => x.Id == "MAP0004");
+
+        Assert.AreEqual(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.AreEqual(
+            "MapTarget(typeof(Target))",
+            diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan)
+        );
+    }
+
+    [TestMethod]
+    public void ReportsTypeMismatchForInheritedProperty()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            public class BaseSource
+            {
+                public int Value { get; set; }
+            }
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source : BaseSource;
+
+            public sealed class Target
+            {
+                public string Value { get; set; } = string.Empty;
+            }
+            """;
+
+        var diagnostic = RunGenerator(source).Single(x => x.Id == "MAP0005");
+
+        Assert.AreEqual(DiagnosticSeverity.Error, diagnostic.Severity);
+    }
+
     private static void AssertOverrideDiagnostic(string source, string expectedAttribute)
     {
         var diagnostics = RunGenerator(source).Where(x => x.Id == "MAP0028").ToArray();
