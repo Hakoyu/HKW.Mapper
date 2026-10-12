@@ -231,4 +231,12 @@ internal static class Descriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor MapConfigConverterOverridesAttribute = new(
+        id: "MAP0028",
+        title: "Map config converter overrides property attribute converter",
+        messageFormat: "Only the map config converter is used; remove the converter from this property attribute.",
+        category: _category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
 }

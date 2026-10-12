@@ -32,3 +32,4 @@ MAP0024 | HKWMapper | Error | Descriptors
 MAP0025 | HKWMapper | Error | Descriptors
 MAP0026 | HKWMapper | Error | Descriptors
 MAP0027 | HKWMapper | Error | Descriptors
+MAP0028 | HKWMapper | Warning | Descriptors

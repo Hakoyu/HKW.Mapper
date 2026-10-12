@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" PrivateAssets="all" />
     <PackageReference Include="MSTest" Version="4.5.1" />
   </ItemGroup>
 
@@ -17,11 +18,20 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\HKW.Mapper\HKW.Mapper.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
+    <ProjectReference
+      Include="..\HKW.Mapper\HKW.Mapper.csproj"
+      OutputItemType="Analyzer"
+      ReferenceOutputAssembly="true"
+    />
   </ItemGroup>
   <ItemGroup>
     <!-- 引用的包 -->
-    <PackageReference Include="HKW.SourceGeneratorUtils" Version="0.2.2" PrivateAssets="all" GeneratePathProperty="true" />
+    <PackageReference
+      Include="HKW.SourceGeneratorUtils"
+      Version="0.2.2"
+      PrivateAssets="all"
+      GeneratePathProperty="true"
+    />
     <!-- 项目分析器必须引用包, 否则 FileNotFoundException -->
     <Analyzer Include="$(PkgHKW_SourceGeneratorUtils)\lib\netstandard2.0\*.dll" />
   </ItemGroup>

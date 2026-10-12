@@ -65,12 +65,19 @@ internal class MapperGenerator
             )
         )
             return;
-        if (TryUseConfigCompositePropertyConverter(mapTarget, propertySymbol))
-            return;
         var compositeAttributes = atts.Where(a =>
                 a.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapCompositePropertyAttribute
             )
             .ToArray();
+        if (TryUseConfigCompositePropertyConverter(mapTarget, propertySymbol))
+        {
+            foreach (var attribute in compositeAttributes)
+            {
+                if (GetCompositePropertyTargetName(attribute) == mapTarget.TargetName)
+                    ReportConfigConverterOverridesAttribute(attribute);
+            }
+            return;
+        }
         var matchingCompositeAttributes = GetMatchingAttributes(
             mapTarget,
             propertySymbol,
@@ -146,11 +153,18 @@ internal class MapperGenerator
         if (TryReserveTargetProperties(mapTarget, propertySymbol, [targetProperty]) is false)
             return;
         AddBeforePropertyAction(mapTarget, propertySymbol);
-        if (
-            TryUseConfigPropertyConverter(mapTarget, propertySymbol, targetProperty) is false
-            && TryUsePropertyConverter(mapTarget, propertySymbol, attributeInfo, targetProperty)
-                is false
-        )
+        if (TryUseConfigPropertyConverter(mapTarget, propertySymbol, targetProperty))
+        {
+            if (
+                attributeInfo?.TryGetParam<INamedTypeSymbol>(
+                    nameof(MapPropertyAttribute.ConverterType),
+                    out var converterType
+                ) is true
+                && converterType is not null
+            )
+                ReportConfigConverterOverridesAttribute(attributeData!);
+        }
+        else if (TryUsePropertyConverter(mapTarget, propertySymbol, attributeInfo, targetProperty) is false)
         {
             MapProperty(mapTarget, propertySymbol, attributeInfo, targetProperty);
         }
@@ -203,6 +217,17 @@ internal class MapperGenerator
         return target.Value is INamedTypeSymbol targetType
             ? targetType.Name
             : target.Value as string ?? string.Empty;
+    }
+
+    private void ReportConfigConverterOverridesAttribute(AttributeData attribute)
+    {
+        var syntaxReference = attribute.ApplicationSyntaxReference!;
+        _classInfo.ProductionContext.ReportDiagnostic(
+            Diagnostic.Create(
+                Descriptors.MapConfigConverterOverridesAttribute,
+                syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span)
+            )
+        );
     }
 
     private static string GetMapPropertyTargetName(AttributeData attribute)
