@@ -52,19 +52,24 @@ internal class ClassInfo
                 continue;
             Properties.Add(propertySymbol);
         }
-
-        var propertyNames = new HashSet<string>(Properties.Select(x => x.Name), StringComparer.Ordinal);
-        for (var type = classSymbol.BaseType; type is not null; type = type.BaseType)
+        if (MapTargets.Any(x => x.MapParentProperties))
         {
-            foreach (
-                var propertySymbol in type.GetMembers()
-                    .OfType<IPropertySymbol>()
-                    .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
-            )
+            var propertyNames = new HashSet<string>(
+                Properties.Select(x => x.Name),
+                StringComparer.Ordinal
+            );
+            for (var type = classSymbol.BaseType; type is not null; type = type.BaseType)
             {
-                if (propertySymbol.IsStatic || propertyNames.Add(propertySymbol.Name) is false)
-                    continue;
-                ParentProperties.Add(propertySymbol);
+                foreach (
+                    var propertySymbol in type.GetMembers()
+                        .OfType<IPropertySymbol>()
+                        .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+                )
+                {
+                    if (propertySymbol.IsStatic || propertyNames.Add(propertySymbol.Name) is false)
+                        continue;
+                    ParentProperties.Add(propertySymbol);
+                }
             }
         }
     }
@@ -116,30 +121,41 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     public const string SourceParamName = "source";
     public const string TargetParamName = "target";
 
-#pragma warning disable CS8618
+#pragma warning disable CS8618, S3776
     public MapTargetInfo(
         ClassInfo classInfo,
         INamedTypeSymbol sourceType,
         AttributeData attributeData
     )
-#pragma warning restore CS8618
+#pragma warning restore CS8618, S3776
     {
         SourceType = sourceType;
-        MapTargetLocation = attributeData.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
-            attributeData.ApplicationSyntaxReference.Span
-        ) ?? Location.None;
+        MapTargetLocation =
+            attributeData.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                attributeData.ApplicationSyntaxReference.Span
+            ) ?? Location.None;
+        var attributeInfo = attributeData.GetInfo()!;
 
-        var targetType = attributeData.ConstructorArguments.FirstOrDefault().Value as INamedTypeSymbol;
-        if (targetType is null)
+        if (
+            attributeInfo.TryGetParam<INamedTypeSymbol>(
+                nameof(MapTargetAttribute.TargetType),
+                out var targetType
+            )
+        )
+        {
+            TargetType = targetType;
+        }
+        else
         {
             IsInvalid = true;
             return;
         }
-        TargetType = targetType;
 
         if (
-            attributeData.ConstructorArguments.Length > 1
-            && attributeData.ConstructorArguments[1].Value is INamedTypeSymbol configType
+            attributeInfo.TryGetParam<INamedTypeSymbol>(
+                nameof(MapTargetAttribute.Config),
+                out var configType
+            )
         )
         {
             if (configType.InheritedFrom(TypeFullNames.MapConfigClass) is false)
@@ -178,37 +194,44 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             ConfigInfo = new(classInfo, configType);
         }
 
-        var targetNameArgument = attributeData.NamedArguments.FirstOrDefault(x =>
-            x.Key == nameof(MapTargetAttribute.TargetName)
-        );
-        if (targetNameArgument.Value.Value is string targetName)
-            TargetName = targetName;
+        TargetName = attributeInfo.GetParam<string>(nameof(MapTargetAttribute.TargetName));
         if (string.IsNullOrWhiteSpace(TargetName))
             TargetName = TargetType.Name;
 
-        var directionArgument = attributeData.NamedArguments.FirstOrDefault(x =>
-            x.Key == nameof(MapTargetAttribute.Direction)
-        );
-        Direction = directionArgument.Value.Value is int direction
-            ? (MapDirections)direction
-            : MapDirections.Both;
+        if (IsInvalid)
+            return;
 
-        var ignoreProperties = attributeData.NamedArguments.FirstOrDefault(x =>
-            x.Key == nameof(MapTargetAttribute.IgnoreProperties)
-        ).Value;
-        if (ignoreProperties.Kind == TypedConstantKind.Array)
+        if (
+            attributeInfo.TryGetParam<MapDirections>(
+                nameof(MapTargetAttribute.Direction),
+                out var direction
+            )
+        )
+            Direction = direction;
+
+        if (
+            attributeInfo.TryGetParam<bool>(
+                nameof(MapTargetAttribute.MapParentProperties),
+                out var mapParentProperties
+            )
+        )
+            MapParentProperties = mapParentProperties;
+
+        if (
+            attributeInfo.TryGetParams<string>(
+                nameof(MapTargetAttribute.IgnoreProperties),
+                out var ignoreProperties
+            )
+        )
         {
-            foreach (var value in ignoreProperties.Values)
-            {
-                if (value.Value is string propertyName && string.IsNullOrWhiteSpace(propertyName) is false)
-                    IgnoreProperties.Add(propertyName);
-            }
+            foreach (var p in ignoreProperties)
+                IgnoreProperties.Add(p);
         }
+        MapParentProperties = mapParentProperties;
+
         if (ConfigInfo is not null)
             IgnoreProperties.UnionWith(ConfigInfo.IgnoreProperties);
 
-        if (IsInvalid)
-            return;
         var resolvedTargetType = TargetType;
         // 分析所有成员，派生类型中隐藏的属性优先于基类属性
         for (var type = resolvedTargetType; type is not null; type = type.BaseType)
@@ -272,13 +295,14 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         + $"{(ConfigInfo?.MapFrom.IsAsync is true ? "Async" : "")}";
 
     public Dictionary<string, IPropertySymbol> PropertyByName { get; } = [];
-    public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> IgnoreProperties { get; } = new();
     public Location MapTargetLocation { get; }
 
     public bool IsInvalid { get; }
 
     public INamedTypeSymbol TargetType { get; }
     public MapDirections Direction { get; } = MapDirections.Both;
+    public bool MapParentProperties { get; }
 
     public MethodGenerateInfo MapToMethod { get; }
     public MethodGenerateInfo MapFromMethod { get; }
@@ -354,10 +378,8 @@ internal sealed class MapConfigInfo
     {
         if (
             propertySymbol.Name != nameof(MapTargetAttribute.IgnoreProperties)
-            || propertySymbol.Type is not IArrayTypeSymbol
-            {
-                ElementType.SpecialType: SpecialType.System_String,
-            }
+            || propertySymbol.Type
+                is not IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_String }
             || propertySymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
                 is not PropertyDeclarationSyntax propertySyntax
         )

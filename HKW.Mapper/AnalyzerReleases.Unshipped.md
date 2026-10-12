@@ -20,8 +20,8 @@ MAP0012 | HKWMapper | Error | Descriptors
 MAP0013 | HKWMapper | Error | Descriptors
 MAP0014 | HKWMapper | Error | Descriptors
 MAP0015 | HKWMapper | Error | Descriptors
-MAP0016 | HKWMapper | Error | Descriptors
-MAP0017 | HKWMapper | Warning | Descriptors
+MAP0016 | HKWMapper | Warning | Descriptors
+MAP0017 | HKWMapper | Error | Descriptors
 MAP0018 | HKWMapper | Error | Descriptors
 MAP0019 | HKWMapper | Error | Descriptors
 MAP0020 | HKWMapper | Error | Descriptors
@@ -31,5 +31,4 @@ MAP0023 | HKWMapper | Error | Descriptors
 MAP0024 | HKWMapper | Error | Descriptors
 MAP0025 | HKWMapper | Error | Descriptors
 MAP0026 | HKWMapper | Error | Descriptors
-MAP0027 | HKWMapper | Error | Descriptors
-MAP0028 | HKWMapper | Warning | Descriptors
+MAP0027 | HKWMapper | Warning | Descriptors

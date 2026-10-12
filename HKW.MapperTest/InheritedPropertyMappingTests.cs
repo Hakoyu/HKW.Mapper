@@ -44,6 +44,18 @@ public sealed class InheritedPropertyMappingTests
     }
 
     [TestMethod]
+    public void DoesNotMapParentPropertiesByDefault()
+    {
+        var source = new DefaultParentMappingSource { Own = 1, Parent = 2 };
+        var target = new DefaultParentMappingTarget { Own = 10, Parent = 20 };
+
+        source.MapTo(target);
+
+        Assert.AreEqual(1, target.Own);
+        Assert.AreEqual(20, target.Parent);
+    }
+
+    [TestMethod]
     public void CombinesAttributeAndConfigIgnoreProperties()
     {
         var source = new IgnoredInheritedSource
@@ -91,7 +103,7 @@ public class InheritedParentSource : InheritedGrandparentSource
     public int Parent { get; set; }
 }
 
-[MapTarget(typeof(InheritedTarget))]
+[MapTarget(typeof(InheritedTarget), MapParentProperties = true)]
 public sealed class InheritedSource : InheritedParentSource
 {
     public int Own { get; set; }
@@ -109,7 +121,7 @@ public class HiddenPropertyBase
     public int Value { get; set; }
 }
 
-[MapTarget(typeof(HiddenPropertyTarget))]
+[MapTarget(typeof(HiddenPropertyTarget), MapParentProperties = true)]
 public sealed class HiddenPropertySource : HiddenPropertyBase
 {
     public new int Value { get; set; }
@@ -118,6 +130,23 @@ public sealed class HiddenPropertySource : HiddenPropertyBase
 public sealed class HiddenPropertyTarget
 {
     public int Value { get; set; }
+}
+
+public class DefaultParentMappingBase
+{
+    public int Parent { get; set; }
+}
+
+[MapTarget(typeof(DefaultParentMappingTarget))]
+public sealed class DefaultParentMappingSource : DefaultParentMappingBase
+{
+    public int Own { get; set; }
+}
+
+public sealed class DefaultParentMappingTarget
+{
+    public int Own { get; set; }
+    public int Parent { get; set; }
 }
 
 public class IgnoredInheritedBase
@@ -130,6 +159,7 @@ public class IgnoredInheritedBase
 [MapTarget(
     typeof(IgnoredInheritedTarget),
     typeof(IgnoredInheritedConfig),
+    MapParentProperties = true,
     IgnoreProperties = new[] { nameof(IgnoredByAttribute) }
 )]
 public sealed class IgnoredInheritedSource : IgnoredInheritedBase;
@@ -155,7 +185,11 @@ public class ConvertedInheritedBase
     public int Number { get; set; }
 }
 
-[MapTarget(typeof(ConvertedInheritedTarget), typeof(ConvertedInheritedConfig))]
+[MapTarget(
+    typeof(ConvertedInheritedTarget),
+    typeof(ConvertedInheritedConfig),
+    MapParentProperties = true
+)]
 public sealed class ConvertedInheritedSource : ConvertedInheritedBase;
 
 public sealed class ConvertedInheritedTarget

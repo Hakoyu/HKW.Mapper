@@ -78,12 +78,13 @@ public sealed class User
 }
 ```
 
-映射会包含源类型的可访问父类属性。也可以按映射目标批量忽略源属性；配置类中的忽略项会与 `MapTarget` 上的忽略项合并：
+`MapParentProperties` 默认为 `false`；设置为 `true` 后，映射会包含源类型的可访问父类属性。也可以按映射目标批量忽略源属性；配置类中的忽略项会与 `MapTarget` 上的忽略项合并：
 
 ```csharp
 [MapTarget(
     typeof(UserDto),
     typeof(UserMapperConfig),
+    MapParentProperties = true,
     IgnoreProperties = new[] { nameof(User.InternalToken) }
 )]
 public sealed class User : UserBase;

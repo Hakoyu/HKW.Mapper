@@ -60,6 +60,12 @@ public sealed class MapTargetAttribute : Attribute
     public MapDirections Direction { get; set; } = MapDirections.Both;
 
     /// <summary>
+    /// 是否映射源类型的父类属性
+    /// </summary>
+    [DefaultValue(false)]
+    public bool MapParentProperties { get; set; }
+
+    /// <summary>
     /// 要忽略的源属性名称
     /// </summary>
     public string[] IgnoreProperties { get; set; } = [];

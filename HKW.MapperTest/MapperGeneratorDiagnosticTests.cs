@@ -99,7 +99,7 @@ public sealed class MapperGeneratorDiagnosticTests
                 public int Missing { get; set; }
             }
 
-            [MapTarget(typeof(Target))]
+            [MapTarget(typeof(Target), MapParentProperties = true)]
             public sealed class Source : BaseSource;
 
             public sealed class Target;
@@ -109,7 +109,7 @@ public sealed class MapperGeneratorDiagnosticTests
 
         Assert.AreEqual(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.AreEqual(
-            "MapTarget(typeof(Target))",
+            "MapTarget(typeof(Target), MapParentProperties = true)",
             diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan)
         );
     }
@@ -125,7 +125,7 @@ public sealed class MapperGeneratorDiagnosticTests
                 public int Value { get; set; }
             }
 
-            [MapTarget(typeof(Target))]
+            [MapTarget(typeof(Target), MapParentProperties = true)]
             public sealed class Source : BaseSource;
 
             public sealed class Target
