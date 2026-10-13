@@ -52,6 +52,7 @@ public sealed class MapperGeneratorDiagnosticTests
             [MapTarget(typeof(Target), typeof(Config))]
             public sealed class Source
             {
+                [MapProperty(typeof(Target))]
                 [MapCompositeProperty(typeof(Target), typeof(AttributeConverter), nameof(Target.First), nameof(Target.Second))]
                 public int Value { get; set; }
             }
@@ -86,6 +87,7 @@ public sealed class MapperGeneratorDiagnosticTests
             source,
             "MapCompositeProperty(typeof(Target), typeof(AttributeConverter), nameof(Target.First), nameof(Target.Second))"
         );
+        Assert.AreEqual(1, RunGenerator(source).Count(x => x.Id == "MAP0029"));
     }
 
     [TestMethod]
@@ -139,9 +141,370 @@ public sealed class MapperGeneratorDiagnosticTests
         Assert.AreEqual(DiagnosticSeverity.Error, diagnostic.Severity);
     }
 
+    [TestMethod]
+    public void ReportsMapIgnorePropertyOverrideOnceWhenAllMappingAttributesArePresent()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            [MapTarget(typeof(OtherTarget))]
+            public sealed class Source
+            {
+                [MapIgnoreProperty]
+                [MapProperty(typeof(Target))]
+                [MapCompositeProperty(typeof(Target), typeof(object), "First", "Second")]
+                public int Value { get; set; }
+            }
+
+            public sealed class Target;
+            public sealed class OtherTarget;
+            """;
+
+        var diagnostics = RunGenerator(source).Where(x => x.Id == "MAP0028").ToArray();
+
+        Assert.AreEqual(1, diagnostics.Length);
+        Assert.AreEqual(DiagnosticSeverity.Warning, diagnostics[0].Severity);
+        Assert.AreEqual(
+            "MapIgnoreProperty",
+            diagnostics[0]
+                .Location.SourceTree!
+                .GetText()
+                .ToString(diagnostics[0].Location.SourceSpan)
+        );
+        Assert.IsFalse(RunGenerator(source).Any(x => x.Id == "MAP0029"));
+    }
+
+    [TestMethod]
+    public void ReportsMapIgnorePropertyOverrideForEachOtherMappingAttributeKind()
+    {
+        const string propertySource = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapIgnoreProperty, MapProperty(typeof(Target))]
+                public int Value { get; set; }
+            }
+
+            public sealed class Target;
+            """;
+        const string compositeSource = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapIgnoreProperty, MapCompositeProperty(typeof(Target), typeof(object), "First", "Second")]
+                public int Value { get; set; }
+            }
+
+            public sealed class Target;
+            """;
+
+        Assert.AreEqual(1, RunGenerator(propertySource).Count(x => x.Id == "MAP0028"));
+        Assert.AreEqual(1, RunGenerator(compositeSource).Count(x => x.Id == "MAP0028"));
+    }
+
+    [TestMethod]
+    public void ReportsMapCompositePropertyOverrideForSameTargetOnly()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target))]
+                [MapCompositeProperty(typeof(Target), typeof(Converter), nameof(Target.First), nameof(Target.Second))]
+                public int Value { get; set; }
+            }
+
+            public sealed class Target
+            {
+                public int First { get; set; }
+                public int Second { get; set; }
+            }
+
+            public sealed class Converter : ICompositeMapConverter<int, (int First, int Second)>
+            {
+                public (int First, int Second) Convert(object source, int value) => (value, value);
+                public int ConvertBack(object target, (int First, int Second) values) => values.First;
+            }
+            """;
+
+        var diagnostics = RunGenerator(source);
+        var overrideDiagnostic = diagnostics.Single(x => x.Id == "MAP0029");
+
+        Assert.AreEqual(DiagnosticSeverity.Warning, overrideDiagnostic.Severity);
+        Assert.IsFalse(diagnostics.Any(x => x.Id == "MAP0004"));
+    }
+
+    [TestMethod]
+    public void DoesNotReportMapCompositePropertyOverrideForDifferentTargets()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(CompositeTarget))]
+            [MapTarget(typeof(PropertyTarget))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(PropertyTarget))]
+                [MapCompositeProperty(typeof(CompositeTarget), typeof(Converter), nameof(CompositeTarget.First), nameof(CompositeTarget.Second))]
+                public int Value { get; set; }
+            }
+
+            public sealed class CompositeTarget
+            {
+                public int First { get; set; }
+                public int Second { get; set; }
+            }
+
+            public sealed class PropertyTarget
+            {
+                public int Value { get; set; }
+            }
+
+            public sealed class Converter : ICompositeMapConverter<int, (int First, int Second)>
+            {
+                public (int First, int Second) Convert(object source, int value) => (value, value);
+                public int ConvertBack(object target, (int First, int Second) values) => values.First;
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(x => x.Id == "MAP0029"));
+    }
+
+    [TestMethod]
+    public void ReportsDuplicateTargetPropertyAcrossPropertyAndCompositeMappings()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), nameof(Target.Shared))]
+                public int Value { get; set; }
+
+                [MapCompositeProperty(typeof(Target), typeof(Converter), nameof(Target.Shared), nameof(Target.Other))]
+                public int CompositeValue { get; set; }
+            }
+
+            public sealed class Target
+            {
+                public int Shared { get; set; }
+                public int Other { get; set; }
+            }
+
+            public sealed class Converter : ICompositeMapConverter<int, (int Shared, int Other)>
+            {
+                public (int Shared, int Other) Convert(object source, int value) => (value, value);
+                public int ConvertBack(object target, (int Shared, int Other) values) => values.Shared;
+            }
+            """;
+
+        var diagnostic = RunGenerator(source).Single(x => x.Id == "MAP0002");
+
+        Assert.AreEqual(DiagnosticSeverity.Error, diagnostic.Severity);
+    }
+
+    [TestMethod]
+    public void ReportsInaccessibleSourceGetterForToMapping()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                public int Value { private get; set; }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; set; }
+            }
+            """;
+
+        var diagnostic = RunGenerator(source).Single(x => x.Id == "MAP0030");
+
+        Assert.AreEqual(DiagnosticSeverity.Error, diagnostic.Severity);
+        StringAssert.Contains(diagnostic.GetMessage(), "Value");
+        StringAssert.Contains(diagnostic.GetMessage(), "getter");
+    }
+
+    [TestMethod]
+    public void ReportsMissingSourceGetterForToMapping()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                public int Value { set { } }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; set; }
+            }
+            """;
+
+        StringAssert.Contains(
+            RunGenerator(source).Single(x => x.Id == "MAP0030").GetMessage(),
+            "getter"
+        );
+    }
+
+    [TestMethod]
+    public void ReportsInaccessibleAndMissingSourceSetterForFromMapping()
+    {
+        const string inaccessibleSource = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.From)]
+            public sealed class Source
+            {
+                public int Value { get; private set; }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; set; }
+            }
+            """;
+        const string missingSource = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.From)]
+            public sealed class Source
+            {
+                public int Value { get; }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; set; }
+            }
+            """;
+
+        StringAssert.Contains(
+            RunGenerator(inaccessibleSource).Single(x => x.Id == "MAP0030").GetMessage(),
+            "setter"
+        );
+        StringAssert.Contains(
+            RunGenerator(missingSource).Single(x => x.Id == "MAP0030").GetMessage(),
+            "setter"
+        );
+    }
+
+    [TestMethod]
+    public void DoesNotCheckUnusedSourceAccessorForSingleDirectionMapping()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(ToTarget), Direction = MapDirections.To)]
+            [MapTarget(typeof(FromTarget), Direction = MapDirections.From)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(ToTarget))]
+                public int ToValue { get; private set; }
+
+                [MapProperty(typeof(FromTarget))]
+                public int FromValue { private get; set; }
+            }
+
+            public sealed class ToTarget
+            {
+                public int ToValue { get; set; }
+            }
+
+            public sealed class FromTarget
+            {
+                public int FromValue { get; set; }
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(x => x.Id == "MAP0030"));
+    }
+
+    [TestMethod]
+    public void ReportsOnlySourceGetterFirstForBothMapping()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                public int Value { private get; private set; }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; set; }
+            }
+            """;
+
+        var diagnostics = RunGenerator(source).Where(x => x.Id == "MAP0030").ToArray();
+
+        Assert.AreEqual(1, diagnostics.Length);
+        StringAssert.Contains(diagnostics[0].GetMessage(), "getter");
+    }
+
+    [TestMethod]
+    public void ReportsSourceAccessibilityBeforeTargetAccessibility()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                public int Value { private get; set; }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; private set; }
+            }
+            """;
+
+        var diagnostics = RunGenerator(source);
+
+        Assert.AreEqual(1, diagnostics.Count(x => x.Id == "MAP0030"));
+        Assert.IsFalse(diagnostics.Any(x => x.Id == "MAP0007"));
+    }
+
+    [TestMethod]
+    public void AcceptsAccessibleSourceAccessors()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                internal int Value { get; set; }
+            }
+
+            public sealed class Target
+            {
+                internal int Value { get; set; }
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(x => x.Id == "MAP0030"));
+    }
+
     private static void AssertOverrideDiagnostic(string source, string expectedAttribute)
     {
-        var diagnostics = RunGenerator(source).Where(x => x.Id == "MAP0028").ToArray();
+        var diagnostics = RunGenerator(source).Where(x => x.Id == "MAP0027").ToArray();
 
         Assert.AreEqual(1, diagnostics.Length);
         Assert.AreEqual(DiagnosticSeverity.Warning, diagnostics[0].Severity);

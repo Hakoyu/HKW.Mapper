@@ -34,6 +34,9 @@ internal class MapperGenerator
         MapTargetInfo,
         Dictionary<string, IPropertySymbol>
     > _mappedTargets = [];
+    private readonly HashSet<IPropertySymbol> _reportedIgnoreAttributeConflicts = new(
+        SymbolEqualityComparer.Default
+    );
 
     public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
 
@@ -68,13 +71,53 @@ internal class MapperGenerator
             return;
 
         var atts = propertySymbol.GetAttributes();
-        // 检查全局忽略属性
-        if (atts.Any(a => a.AttributeClass!.IsName(TypeFullNames.MapIgnorePropertyAttribute)))
-            return;
+        var ignoreAttribute = atts.FirstOrDefault(a =>
+            a.AttributeClass!.IsName(TypeFullNames.MapIgnorePropertyAttribute)
+        );
         var compositeAttributes = atts.Where(a =>
                 a.AttributeClass!.IsName(TypeFullNames.MapCompositePropertyAttribute)
             )
             .ToArray();
+        var propertyAttributes = atts.Where(a =>
+                a.AttributeClass!.IsName(TypeFullNames.MapPropertyAttribute)
+            )
+            .ToArray();
+        // 检查全局忽略属性
+        if (ignoreAttribute is not null)
+        {
+            if (
+                (compositeAttributes.Length > 0 || propertyAttributes.Length > 0)
+                && _reportedIgnoreAttributeConflicts.Add(propertySymbol)
+            )
+            {
+                var syntaxReference = ignoreAttribute.ApplicationSyntaxReference!;
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.MapIgnorePropertyOverridesMappingAttributes,
+                        syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span)
+                    )
+                );
+            }
+            return;
+        }
+        var targetCompositeAttributes = compositeAttributes
+            .Where(attribute => GetCompositePropertyTargetName(attribute) == mapTarget.TargetName)
+            .ToArray();
+        if (
+            targetCompositeAttributes.Length == 1
+            && propertyAttributes.Any(attribute =>
+                GetMapPropertyTargetName(attribute) == mapTarget.TargetName
+            )
+        )
+        {
+            var syntaxReference = targetCompositeAttributes[0].ApplicationSyntaxReference!;
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MapCompositePropertyOverridesMapProperty,
+                    syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span)
+                )
+            );
+        }
         if (TryUseConfigCompositePropertyConverter(mapTarget, propertySymbol))
         {
             foreach (var attribute in compositeAttributes)
@@ -98,10 +141,6 @@ internal class MapperGenerator
             return;
         }
 
-        var propertyAttributes = atts.Where(a =>
-                a.AttributeClass!.IsName(TypeFullNames.MapPropertyAttribute)
-            )
-            .ToArray();
         // 获取当前映射目标有效的特性
         var matchingAttributes = new List<AttributeData>();
         foreach (var att in propertyAttributes)
@@ -1248,6 +1287,42 @@ internal class MapperGenerator
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
+        // 源属性诊断
+        if (
+            mapTarget.Direction.HasFlag(MapDirections.To)
+            && (
+                property.GetMethod is null
+                || property.GetMethod.DeclaredAccessibility < Accessibility.Internal
+            )
+        )
+        {
+            var diagnostic = Diagnostic.Create(
+                Descriptors.SourcePropertyAccessibilityInsufficient,
+                GetPropertyDiagnosticLocation(mapTarget, property),
+                property.Name,
+                "getter"
+            );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
+            return null;
+        }
+        if (
+            mapTarget.Direction.HasFlag(MapDirections.From)
+            && (
+                property.SetMethod is null
+                || property.SetMethod.DeclaredAccessibility < Accessibility.Internal
+            )
+        )
+        {
+            var diagnostic = Diagnostic.Create(
+                Descriptors.SourcePropertyAccessibilityInsufficient,
+                GetPropertyDiagnosticLocation(mapTarget, property),
+                property.Name,
+                "setter"
+            );
+            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
+            return null;
+        }
+        // 目标属性诊断
         if (
             mapTarget.Direction.HasFlag(MapDirections.To)
             && (
@@ -1259,7 +1334,8 @@ internal class MapperGenerator
             var diagnostic = Diagnostic.Create(
                 Descriptors.TargetPropertyAccessibilityInsufficient,
                 property.Locations[0],
-                targetProperty.Name
+                targetProperty.Name,
+                "setter"
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
@@ -1276,7 +1352,8 @@ internal class MapperGenerator
             var diagnostic = Diagnostic.Create(
                 Descriptors.TargetPropertyAccessibilityInsufficient,
                 property.Locations[0],
-                targetProperty.Name
+                targetProperty.Name,
+                "setter"
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;

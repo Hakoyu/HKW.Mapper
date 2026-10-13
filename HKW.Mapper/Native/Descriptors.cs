@@ -63,7 +63,7 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor TargetPropertyAccessibilityInsufficient = new(
         id: "MAP0007",
         title: "Target property accessibility insufficient",
-        messageFormat: "Target property '{0}' accessibility insufficient, please ignore or change property.",
+        messageFormat: "Source property '{0}' {1} accessibility insufficient, please ignore or change property.",
         category: _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
@@ -230,6 +230,30 @@ internal static class Descriptors
         messageFormat: "Only the map config converter is used; remove the converter from this property attribute.",
         category: _category,
         DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapIgnorePropertyOverridesMappingAttributes = new(
+        id: "MAP0028",
+        title: "MapIgnoreProperty overrides mapping attributes",
+        messageFormat: "Only MapIgnoreProperty is used; remove other mapping attributes from this property.",
+        category: _category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapCompositePropertyOverridesMapProperty = new(
+        id: "MAP0029",
+        title: "MapCompositeProperty overrides MapProperty",
+        messageFormat: "Only MapCompositeProperty is used for this mapping target; remove MapProperty for the same target.",
+        category: _category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor SourcePropertyAccessibilityInsufficient = new(
+        id: "MAP0030",
+        title: "Source property accessibility insufficient",
+        messageFormat: "Source property '{0}' {1} accessibility insufficient, please ignore or change property.",
+        category: _category,
+        DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
 }
