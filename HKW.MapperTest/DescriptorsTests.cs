@@ -1,0 +1,714 @@
+using HKW.Mapper;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+namespace HKW.MapperTest;
+
+[TestClass]
+public sealed class DescriptorsTests
+{
+    [TestMethod]
+    public void MAP0001_ReportsDuplicateTargetName()
+    {
+        AssertDiagnostic(
+            "MAP0001",
+            DiagnosticSeverity.Error,
+            "MapTarget(typeof(TargetB)",
+            ["Same", "map method name"],
+            """
+            [MapTarget(typeof(TargetA), TargetName = "Same")]
+            [MapTarget(typeof(TargetB), TargetName = "Same")]
+            public sealed class Source;
+            public sealed class TargetA;
+            public sealed class TargetB;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0002_ReportsMultipleSourcePropertiesForSameTargetProperty()
+    {
+        AssertDiagnostic(
+            "MAP0002",
+            DiagnosticSeverity.Error,
+            "Second",
+            ["First", "Second", "Value"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), nameof(Target.Value))]
+                public int First { get; set; }
+                [MapProperty(typeof(Target), nameof(Target.Value))]
+                public int Second { get; set; }
+            }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0003_ReportsInvalidMapperConfigType()
+    {
+        AssertDiagnostic(
+            "MAP0003",
+            DiagnosticSeverity.Error,
+            "MapTarget",
+            ["BadConfig", "MapperConfig"],
+            """
+            [MapTarget(typeof(Target), typeof(BadConfig))]
+            public sealed class Source;
+            public sealed class Target;
+            public sealed class BadConfig;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0004_ReportsMissingTargetProperty()
+    {
+        AssertDiagnostic(
+            "MAP0004",
+            DiagnosticSeverity.Warning,
+            "Value",
+            ["Target.Value", "not exists"],
+            Basic("public int Value { get; set; }", string.Empty)
+        );
+    }
+
+    [TestMethod]
+    public void MAP0005_ReportsPropertyTypeMismatch()
+    {
+        AssertDiagnostic(
+            "MAP0005",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Target.Value", "type error"],
+            Basic("public int Value { get; set; }", "public string Value { get; set; } = string.Empty;")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0006_ReportsStaticTargetProperty()
+    {
+        AssertDiagnostic(
+            "MAP0006",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "static"],
+            Basic("public int Value { get; set; }", "public static int Value { get; set; }")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0007_ReportsInaccessibleTargetSetter()
+    {
+        AssertDiagnostic(
+            "MAP0007",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "setter", "accessibility"],
+            Basic(
+                "public int Value { get; set; }",
+                "public int Value { get; private set; }",
+                "Direction = MapDirections.To"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0008_ReportsReferenceTypeWithoutConverter()
+    {
+        AssertDiagnostic(
+            "MAP0008",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Source.Value", "reference type"],
+            Basic("public Item Value { get; set; } = new();", "public Item Value { get; set; } = new();")
+                + "\npublic sealed class Item;"
+        );
+    }
+
+    [TestMethod]
+    public void MAP0009_ReportsInvalidPropertyConverterType()
+    {
+        AssertDiagnostic(
+            "MAP0009",
+            DiagnosticSeverity.Error,
+            "MapProperty",
+            ["Target.Value", "IMapConverter"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), typeof(BadConverter))]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public int Value { get; set; } }
+            public sealed class BadConverter;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0010_ReportsIncompatiblePropertyConverterTypes()
+    {
+        AssertDiagnostic(
+            "MAP0010",
+            DiagnosticSeverity.Error,
+            "MapProperty",
+            ["string", "int", "cannot be applied"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), typeof(BadConverter))]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public int Value { get; set; } }
+            public sealed class BadConverter : IMapConverter<string, string>
+            {
+                public string Convert(string value, MapConvertArgs args) => value;
+                public string ConvertBack(string value, MapConvertArgs args) => value;
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0011_ReportsInvalidConfigConverterPropertyName()
+    {
+        AssertDiagnostic(
+            "MAP0011",
+            DiagnosticSeverity.Error,
+            "ValueConverter",
+            ["property name", "valid string"],
+            Config(
+                "public MapConfigPropertyConverter<int, int> ValueConverter { get; } = new(\"\", (value, _) => value, (value, _) => value);"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0012_ReportsMissingConfigActionPropertyName()
+    {
+        AssertDiagnostic(
+            "MAP0012",
+            DiagnosticSeverity.Error,
+            "Run",
+            ["action mode", "valid string"],
+            Config("[MapToConfigAction(MapConfigActionMode.BeforeProperty)] public void Run() { }")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0013_ReportsDuplicateConfigActionsForProperty()
+    {
+        AssertDiagnostic(
+            "MAP0013",
+            DiagnosticSeverity.Error,
+            "Second",
+            ["same target property", "one action"],
+            Config(
+                "[MapToConfigAction(MapConfigActionMode.BeforeProperty, nameof(Source.Value))] public void First() { }\n"
+                    + "[MapToConfigAction(MapConfigActionMode.BeforeProperty, nameof(Source.Value))] public void Second() { }"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0014_ReportsConfigActionWithParameters()
+    {
+        AssertDiagnostic(
+            "MAP0014",
+            DiagnosticSeverity.Error,
+            "Run",
+            ["cannot have parameters"],
+            Config("[MapToConfigAction(MapConfigActionMode.Start)] public void Run(int value) { }")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0015_ReportsInaccessibleConfigAction()
+    {
+        AssertDiagnostic(
+            "MAP0015",
+            DiagnosticSeverity.Error,
+            "Run",
+            ["accessibility", "insufficient"],
+            Config("[MapToConfigAction(MapConfigActionMode.Start)] private void Run() { }")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0016_ReportsPropertyMappingForUnconfiguredTarget()
+    {
+        AssertDiagnostic(
+            "MAP0016",
+            DiagnosticSeverity.Warning,
+            "MapProperty",
+            ["Other", "not any MapTarget"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Other))]
+                public int Value { get; set; }
+            }
+            public sealed class Target;
+            public sealed class Other;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0017_ReportsMultiplePropertyMappingsForSameTarget()
+    {
+        AssertDiagnostic(
+            "MAP0017",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "more than one"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target))]
+                [MapProperty(typeof(Target), nameof(Target.Value))]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0018_ReportsMapperConfigTypeMismatch()
+    {
+        AssertDiagnostic(
+            "MAP0018",
+            DiagnosticSeverity.Error,
+            "MapTarget",
+            ["OtherSource", "Source", "Target"],
+            """
+            [MapTarget(typeof(Target), typeof(Config))]
+            public sealed class Source;
+            public sealed class OtherSource;
+            public sealed class Target;
+            public sealed class Config : MapperConfig<OtherSource, Target>
+            {
+                public Config(OtherSource source, Target target) : base(source, target) { }
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0019_ReportsInvalidCompositeConverterType()
+    {
+        AssertDiagnostic(
+            "MAP0019",
+            DiagnosticSeverity.Error,
+            "MapCompositeProperty",
+            ["BadConverter", "IMapCompositeConverter"],
+            Composite("BadConverter", "nameof(Target.First), nameof(Target.Second)", "public sealed class BadConverter;")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0020_ReportsNonTupleCompositeConverterTarget()
+    {
+        AssertDiagnostic(
+            "MAP0020",
+            DiagnosticSeverity.Error,
+            "MapCompositeProperty",
+            ["ScalarConverter", "ValueTuple"],
+            Composite(
+                "ScalarConverter",
+                "nameof(Target.First), nameof(Target.Second)",
+                """
+                public sealed class ScalarConverter : IMapCompositeConverter<int, int>
+                {
+                    public int Convert(int value, MapCompositeConvertArgs args) => value;
+                    public int ConvertBack(int values, MapCompositeConvertArgs args) => values;
+                }
+                """
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0021_ReportsCompositeTargetCountMismatch()
+    {
+        AssertDiagnostic(
+            "MAP0021",
+            DiagnosticSeverity.Error,
+            "MapCompositeProperty",
+            ["3 target properties", "2 elements"],
+            Composite(
+                "TupleConverter",
+                "nameof(Target.First), nameof(Target.Second), nameof(Target.Third)",
+                TupleConverter("int", "int"),
+                "public int Third { get; set; }"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0022_ReportsCompositeTargetTypeMismatch()
+    {
+        AssertDiagnostic(
+            "MAP0022",
+            DiagnosticSeverity.Error,
+            "MapCompositeProperty",
+            ["Second", "int", "element 2", "string"],
+            Composite(
+                "MixedConverter",
+                "nameof(Target.First), nameof(Target.Second)",
+                TupleConverter("int", "string", "MixedConverter")
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0023_ReportsDuplicateCompositeTargetProperties()
+    {
+        AssertDiagnostic(
+            "MAP0023",
+            DiagnosticSeverity.Error,
+            "MapCompositeProperty",
+            ["two unique", "non-empty"],
+            Composite(
+                "TupleConverter",
+                "nameof(Target.First), nameof(Target.First)",
+                TupleConverter("int", "int")
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0024_ReportsCompositeSourceTypeMismatch()
+    {
+        AssertDiagnostic(
+            "MAP0024",
+            DiagnosticSeverity.Error,
+            "MapCompositeProperty",
+            ["string", "int", "source type"],
+            Composite(
+                "StringSourceConverter",
+                "nameof(Target.First), nameof(Target.Second)",
+                """
+                public sealed class StringSourceConverter : IMapCompositeConverter<string, (int, int)>
+                {
+                    public (int, int) Convert(string value, MapCompositeConvertArgs args) => default;
+                    public string ConvertBack((int, int) values, MapCompositeConvertArgs args) => string.Empty;
+                }
+                """
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0025_ReportsDuplicateConfigCompositeTargetProperties()
+    {
+        AssertDiagnostic(
+            "MAP0025",
+            DiagnosticSeverity.Error,
+            "ValueConverter",
+            ["source property", "two unique target properties"],
+            Config(
+                "public MapConfigPropertyCompositeConverter<int, (int, int)> ValueConverter { get; } = "
+                    + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.First)], (value, _) => (value, value), (values, _) => values.Item1);",
+                "public int First { get; set; } public int Second { get; set; }"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0026_ReportsNonInlineConfigCompositeConverter()
+    {
+        AssertDiagnostic(
+            "MAP0026",
+            DiagnosticSeverity.Error,
+            "ValueConverter",
+            ["inline object initializer", "inline target property array"],
+            Config(
+                "public MapConfigPropertyCompositeConverter<int, (int, int)> ValueConverter => "
+                    + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.Second)], (value, _) => (value, value), (values, _) => values.Item1);",
+                "public int First { get; set; } public int Second { get; set; }"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0027_ReportsConfigConverterOverridingAttributeConverter()
+    {
+        AssertDiagnostic(
+            "MAP0027",
+            DiagnosticSeverity.Warning,
+            "MapProperty",
+            ["config converter", "remove the converter"],
+            Config(
+                "public MapConfigPropertyConverter<int, int> ValueConverter { get; } = new(nameof(Source.Value), (value, _) => value, (value, _) => value);",
+                "public int Value { get; set; }",
+                "[MapProperty(typeof(Target), typeof(AttributeConverter))] public int Value { get; set; }",
+                """
+                public sealed class AttributeConverter : IMapConverter<int, int>
+                {
+                    public int Convert(int value, MapConvertArgs args) => value;
+                    public int ConvertBack(int value, MapConvertArgs args) => value;
+                }
+                """
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0028_ReportsIgnoreAttributeOverridingMappingAttribute()
+    {
+        AssertDiagnostic(
+            "MAP0028",
+            DiagnosticSeverity.Warning,
+            "MapIgnoreProperty",
+            ["Only MapIgnoreProperty", "remove other mapping attributes"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapIgnoreProperty, MapProperty(typeof(Target))]
+                public int Value { get; set; }
+            }
+            public sealed class Target;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0029_ReportsCompositeAttributeOverridingPropertyAttribute()
+    {
+        AssertDiagnostic(
+            "MAP0029",
+            DiagnosticSeverity.Warning,
+            "MapCompositeProperty",
+            ["Only MapCompositeProperty", "remove MapProperty"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target))]
+                [MapCompositeProperty(typeof(Target), typeof(TupleConverter), nameof(Target.First), nameof(Target.Second))]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public int First { get; set; } public int Second { get; set; } }
+            """ + TupleConverter("int", "int")
+        );
+    }
+
+    [TestMethod]
+    public void MAP0030_ReportsInaccessibleSourceGetter()
+    {
+        AssertDiagnostic(
+            "MAP0030",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "getter", "accessibility"],
+            Basic(
+                "public int Value { private get; set; }",
+                "public int Value { get; set; }",
+                "Direction = MapDirections.To"
+            )
+        );
+    }
+
+    private static void AssertDiagnostic(
+        string id,
+        DiagnosticSeverity severity,
+        string locationText,
+        string[] messageParts,
+        string source
+    )
+    {
+        var diagnostics = RunGenerator(WithUsings(source));
+        var diagnostic = diagnostics.Single(d => d.Id == id);
+
+        Assert.AreEqual(severity, diagnostic.Severity, diagnostic.ToString());
+        Assert.AreNotEqual(Location.None, diagnostic.Location, diagnostic.ToString());
+        StringAssert.Contains(GetLocationText(diagnostic), locationText, diagnostic.ToString());
+        foreach (var messagePart in messageParts)
+            StringAssert.Contains(diagnostic.GetMessage(), messagePart, diagnostic.ToString());
+    }
+
+    [TestMethod]
+    public void DoesNotReportSourceAccessorDiagnosticForUnusedDirectionalAccessors()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(ToTarget), Direction = MapDirections.To)]
+            [MapTarget(typeof(FromTarget), Direction = MapDirections.From)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(ToTarget))]
+                public int ToValue { get; private set; }
+
+                [MapProperty(typeof(FromTarget))]
+                public int FromValue { private get; set; }
+            }
+
+            public sealed class ToTarget { public int ToValue { get; set; } }
+            public sealed class FromTarget { public int FromValue { get; set; } }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0030"));
+    }
+
+    [TestMethod]
+    public void DoesNotReportSourceAccessorDiagnosticForAccessibleAccessors()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                internal int Value { get; set; }
+            }
+
+            public sealed class Target
+            {
+                internal int Value { get; set; }
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0030"));
+    }
+
+    [TestMethod]
+    public void DoesNotReportCompositeOverrideForDifferentMappingTargets()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(PropertyTarget))]
+            [MapTarget(typeof(CompositeTarget))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(PropertyTarget))]
+                [MapCompositeProperty(typeof(CompositeTarget), typeof(Converter), nameof(CompositeTarget.First), nameof(CompositeTarget.Second))]
+                public int Value { get; set; }
+            }
+
+            public sealed class PropertyTarget { public int Value { get; set; } }
+            public sealed class CompositeTarget
+            {
+                public int First { get; set; }
+                public int Second { get; set; }
+            }
+
+            public sealed class Converter : IMapCompositeConverter<int, (int, int)>
+            {
+                public (int, int) Convert(int value, MapCompositeConvertArgs args) => (value, value);
+                public int ConvertBack((int, int) values, MapCompositeConvertArgs args) => values.Item1;
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0029"));
+    }
+
+    private static string Basic(string sourceProperty, string targetProperty, string? options = null) =>
+        $$"""
+        [MapTarget(typeof(Target){{(options is null ? string.Empty : ", " + options)}})]
+        public sealed class Source { {{sourceProperty}} }
+        public sealed class Target { {{targetProperty}} }
+        """;
+
+    private static string Config(
+        string member,
+        string targetMembers = "public int Value { get; set; }",
+        string sourceMember = "public int Value { get; set; }",
+        string additionalType = ""
+    ) =>
+        $$"""
+        [MapTarget(typeof(Target), typeof(Config))]
+        public sealed class Source { {{sourceMember}} }
+        public sealed class Target { {{targetMembers}} }
+        public sealed class Config : MapperConfig<Source, Target>
+        {
+            public Config(Source source, Target target) : base(source, target) { }
+            {{member}}
+        }
+        {{additionalType}}
+        """;
+
+    private static string Composite(
+        string converterName,
+        string targetNames,
+        string converter,
+        string additionalTargetMember = ""
+    ) =>
+        $$"""
+        [MapTarget(typeof(Target))]
+        public sealed class Source
+        {
+            [MapCompositeProperty(typeof(Target), typeof({{converterName}}), {{targetNames}})]
+            public int Value { get; set; }
+        }
+        public sealed class Target
+        {
+            public int First { get; set; }
+            public int Second { get; set; }
+            {{additionalTargetMember}}
+        }
+        {{converter}}
+        """;
+
+    private static string TupleConverter(
+        string firstType,
+        string secondType,
+        string name = "TupleConverter"
+    ) =>
+        $$"""
+        public sealed class {{name}} : IMapCompositeConverter<int, ({{firstType}}, {{secondType}})>
+        {
+            public ({{firstType}}, {{secondType}}) Convert(int value, MapCompositeConvertArgs args) => default;
+            public int ConvertBack(({{firstType}}, {{secondType}}) values, MapCompositeConvertArgs args) => default;
+        }
+        """;
+
+    private static string WithUsings(string source) =>
+        "using HKW.Mapper;\n" + source;
+
+    private static string GetLocationText(Diagnostic diagnostic) =>
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+
+    private static IReadOnlyList<Diagnostic> RunGenerator(string source)
+    {
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+            .Split(Path.PathSeparator)
+            .Select(path => MetadataReference.CreateFromFile(path))
+            .Append(MetadataReference.CreateFromFile(typeof(MapTargetAttribute).Assembly.Location));
+        var compilation = CSharpCompilation.Create(
+            "DescriptorTests",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+        var inputErrors = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.AreEqual(0, inputErrors.Length, string.Join(Environment.NewLine, inputErrors.Select(d => d.ToString())));
+
+        var generatorType = typeof(MapTargetAttribute).Assembly.GetType(
+            "HKW.Mapper.SourceGenerator.Generator",
+            throwOnError: true
+        )!;
+        var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType, nonPublic: true)!;
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [generator.AsSourceGenerator()],
+            parseOptions: parseOptions
+        );
+
+        driver = driver.RunGenerators(compilation);
+        return driver.GetRunResult().Diagnostics;
+    }
+}
