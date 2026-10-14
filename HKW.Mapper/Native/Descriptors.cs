@@ -163,7 +163,7 @@ internal static class Descriptors
     public static readonly DiagnosticDescriptor CompositeConverterNotImplemented = new(
         id: "MAP0019",
         title: "Composite converter interface not implemented",
-        messageFormat: "Converter '{0}' does not implement ICompositeMapConverter<TSourceValue, TTargetValues>.",
+        messageFormat: "Converter '{0}' does not implement IMapCompositeConverter<TSourceValue, TTargetValues>.",
         category: _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true

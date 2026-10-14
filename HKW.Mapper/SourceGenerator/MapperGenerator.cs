@@ -881,9 +881,15 @@ internal class MapperGenerator
             propertySymbol.Type,
             converterSourceType
         );
+        var targetPropertyNameLiterals = string.Join(
+            ", ",
+            targetProperties.Select(x => $"\"{x.Name}\"")
+        );
+        var convertArgs =
+            $"new global::HKW.Mapper.MapCompositeConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", new global::System.String[] {{ {targetPropertyNameLiterals} }})";
         mapTarget.MapToMethod.Contents.Add("{");
         mapTarget.MapToMethod.Contents.Add(
-            $"var result = {converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue});"
+            $"var result = {converterExpression}.{nameof(IMapCompositeConverter<object, ValueTuple>.Convert)}({sourceValue}, {convertArgs});"
         );
         for (var i = 0; i < targetProperties.Count; i++)
         {
@@ -911,7 +917,7 @@ internal class MapperGenerator
             )
         );
         var convertedSourceValue =
-            $"{converterExpression}.{nameof(ICompositeMapConverter<object, ValueTuple>.ConvertBack)}({MapTargetInfo.TargetParamName}, ({targetValues}))";
+            $"{converterExpression}.{nameof(IMapCompositeConverter<object, ValueTuple>.ConvertBack)}(({targetValues}), {convertArgs})";
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
         );
@@ -956,7 +962,7 @@ internal class MapperGenerator
         }
 
         var converterInterface = converterType.GetInterface(
-            TypeFullNames.CompositeMapConverterInterface
+            TypeFullNames.MapCompositeConverterInterface
         );
         if (converterInterface is null)
         {
@@ -1163,15 +1169,17 @@ internal class MapperGenerator
             propertySymbol.Type,
             converterSourceType
         );
+        var convertArgs =
+            $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", \"{targetProperty.Name}\")";
         var convertedTargetValue =
-            $"{convertName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue})";
+            $"{convertName}.{nameof(IMapConverter<,>.Convert)}({sourceValue}, {convertArgs})";
         var targetValue = ConvertExpression(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}",
             targetProperty.Type,
             converterTargetType
         );
         var convertedSourceValue =
-            $"{convertName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName}, {targetValue})";
+            $"{convertName}.{nameof(IMapConverter<,>.ConvertBack)}({targetValue}, {convertArgs})";
         mapTarget.MapToMethod.Contents.Add(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );
@@ -1238,15 +1246,17 @@ internal class MapperGenerator
             propertySymbol.Type,
             converterSourceType
         );
+        var convertArgs =
+            $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", \"{targetProperty.Name}\")";
         var convertedTargetValue =
-            $"{fieldName}.{nameof(IMapConverter<,>.Convert)}({MapTargetInfo.SourceParamName}, {sourceValue})";
+            $"{fieldName}.{nameof(IMapConverter<,>.Convert)}({sourceValue}, {convertArgs})";
         var targetValue = ConvertExpression(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}",
             targetProperty.Type,
             converterTargetType
         );
         var convertedSourceValue =
-            $"{fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({MapTargetInfo.TargetParamName}, {targetValue})";
+            $"{fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({targetValue}, {convertArgs})";
         mapTarget.MapToMethod.Contents.Add(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );

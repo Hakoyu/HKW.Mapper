@@ -1,44 +1,53 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
 [TestClass]
-public sealed class MapConfigCompositePropertyConverterTests
+public sealed class MapConfigPropertyCompositeConverterTests
 {
     [TestMethod]
     public void ConvertsBothDirectionsAndValidatesArguments()
     {
-        var converter = new MapConfigCompositePropertyConverter<NumericRange, (int Min, int Max)>(
+        var converter = new MapConfigPropertyCompositeConverter<NumericRange, (int Min, int Max)>(
             "Range",
             ["Min", "Max"],
-            (_, value) => (value.Min, value.Max),
-            (_, values) => new(values.Min, values.Max)
+            (value, _) => (value.Min, value.Max),
+            (values, _) => new(values.Min, values.Max)
         );
 
-        Assert.AreEqual((2, 8), converter.Convert(new object(), new(2, 8)));
-        Assert.AreEqual(new NumericRange(3, 9), converter.ConvertBack(new object(), (3, 9)));
+        var source = new object();
+        var target = new object();
+        var targetPropertyNames = new[] { "Min", "Max" };
+        var args = new MapCompositeConvertArgs(source, target, "Range", targetPropertyNames);
+
+        Assert.AreSame(source, args.Source);
+        Assert.AreSame(target, args.Target);
+        Assert.AreEqual("Range", args.SourcePropertyName);
+        CollectionAssert.AreEqual(targetPropertyNames, args.TargetPropertyNames);
+        Assert.AreEqual((2, 8), converter.Convert(new(2, 8), args));
+        Assert.AreEqual(new NumericRange(3, 9), converter.ConvertBack((3, 9), args));
         Assert.Throws<ArgumentException>(() =>
-            new MapConfigCompositePropertyConverter<NumericRange, (int, int)>(
+            new MapConfigPropertyCompositeConverter<NumericRange, (int, int)>(
                 "",
                 ["Min", "Max"],
-                (_, value) => (value.Min, value.Max),
-                (_, values) => new(values.Item1, values.Item2)
+                (value, _) => (value.Min, value.Max),
+                (values, _) => new(values.Item1, values.Item2)
             )
         );
         Assert.Throws<ArgumentException>(() =>
-            new MapConfigCompositePropertyConverter<NumericRange, (int, int)>(
+            new MapConfigPropertyCompositeConverter<NumericRange, (int, int)>(
                 "Range",
                 ["Min", "Min"],
-                (_, value) => (value.Min, value.Max),
-                (_, values) => new(values.Item1, values.Item2)
+                (value, _) => (value.Min, value.Max),
+                (values, _) => new(values.Item1, values.Item2)
             )
         );
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigCompositePropertyConverter<NumericRange, (int, int)>(
+            new MapConfigPropertyCompositeConverter<NumericRange, (int, int)>(
                 "Range",
                 ["Min", "Max"],
                 null!,
-                (_, values) => new(values.Item1, values.Item2)
+                (values, _) => new(values.Item1, values.Item2)
             )
         );
     }
@@ -100,15 +109,35 @@ public sealed class ConfigCompositeMapperConfig
     public ConfigCompositeMapperConfig(ConfigCompositeSource source, ConfigCompositeTarget target)
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<
+    public MapConfigPropertyCompositeConverter<
         NumericRange,
         (int Min, int Max)
     > RangeConverter { get; } =
         new(
             nameof(ConfigCompositeSource.Range),
             [nameof(ConfigCompositeTarget.Min), nameof(ConfigCompositeTarget.Max)],
-            (_, value) => (value.Min, value.Max),
-            (_, values) => new(values.Min, values.Max)
+            (value, args) =>
+            {
+                Assert.IsInstanceOfType<ConfigCompositeSource>(args.Source);
+                Assert.IsInstanceOfType<ConfigCompositeTarget>(args.Target);
+                Assert.AreEqual(nameof(ConfigCompositeSource.Range), args.SourcePropertyName);
+                CollectionAssert.AreEqual(
+                    new[] { nameof(ConfigCompositeTarget.Min), nameof(ConfigCompositeTarget.Max) },
+                    args.TargetPropertyNames
+                );
+                return (value.Min, value.Max);
+            },
+            (values, args) =>
+            {
+                Assert.IsInstanceOfType<ConfigCompositeSource>(args.Source);
+                Assert.IsInstanceOfType<ConfigCompositeTarget>(args.Target);
+                Assert.AreEqual(nameof(ConfigCompositeSource.Range), args.SourcePropertyName);
+                CollectionAssert.AreEqual(
+                    new[] { nameof(ConfigCompositeTarget.Min), nameof(ConfigCompositeTarget.Max) },
+                    args.TargetPropertyNames
+                );
+                return new(values.Min, values.Max);
+            }
         );
 }
 
@@ -141,14 +170,14 @@ public sealed class PriorityCompositeMapperConfig
     )
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<
+    public MapConfigPropertyCompositeConverter<
         NumericRange,
         (int Min, int Max)
     > RangeConverter { get; } =
         new(
             nameof(PriorityCompositeSource.Range),
             [nameof(PriorityCompositeTarget.ConfigMin), nameof(PriorityCompositeTarget.ConfigMax)],
-            (_, value) => (value.Min + 100, value.Max + 200),
-            (_, values) => new(values.Min - 100, values.Max - 200)
+            (value, _) => (value.Min + 100, value.Max + 200),
+            (values, _) => new(values.Min - 100, values.Max - 200)
         );
 }

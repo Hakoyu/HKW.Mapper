@@ -8,26 +8,26 @@ namespace HKW.Mapper;
 /// 制图转换器接口
 /// </summary>
 /// <remarks>
-/// 泛型值类型可以与映射属性类型相同，或与其具有基类、子类、接口引用或装箱转换关系。
-/// 需要显式引用转换时，实际值的运行时类型必须兼容。
+/// 泛型值类型可以与映射属性类型相同，或与其具有基类、子类、接口引用或装箱转换关系
+/// 需要显式引用转换时，实际值的运行时类型必须兼容
 /// </remarks>
 public interface IMapConverter<TSourceValue, TTargetValue>
 {
     /// <summary>
     /// 转换, 在 <see langword="MapTo"/> 方法中使用
     /// </summary>
-    /// <param name="source">源</param>
     /// <param name="value">值</param>
+    /// <param name="args">转换参数</param>
     /// <returns>转换后的值</returns>
-    public TTargetValue Convert(object source, TSourceValue value);
+    public TTargetValue Convert(TSourceValue value, MapConvertArgs args);
 
     /// <summary>
     /// 反转换, 在 <see langword="MapFrom"/> 方法中使用
     /// </summary>
-    /// <param name="target">目标源</param>
     /// <param name="value">值</param>
+    /// <param name="args">转换参数</param>
     /// <returns>反转换后的值</returns>
-    public TSourceValue ConvertBack(object target, TTargetValue value);
+    public TSourceValue ConvertBack(TTargetValue value, MapConvertArgs args);
 }
 
 /// <summary>
@@ -45,8 +45,8 @@ public sealed class MapConfigPropertyConverter<TSourceValue, TTargetValue>
     /// <exception cref="ArgumentNullException">当 <paramref name="convert"/> 或 <paramref name="convertBack"/> 为 <see langword="null"/> 时</exception>
     public MapConfigPropertyConverter(
         string propertyName,
-        Func<object, TSourceValue, TTargetValue> convert,
-        Func<object, TTargetValue, TSourceValue> convertBack
+        Func<TSourceValue, MapConvertArgs, TTargetValue> convert,
+        Func<TTargetValue, MapConvertArgs, TSourceValue> convertBack
     )
         : this(propertyName, propertyName, convert, convertBack) { }
 
@@ -59,8 +59,8 @@ public sealed class MapConfigPropertyConverter<TSourceValue, TTargetValue>
     public MapConfigPropertyConverter(
         string sourceProperty,
         string targetProperty,
-        Func<object, TSourceValue, TTargetValue> convert,
-        Func<object, TTargetValue, TSourceValue> convertBack
+        Func<TSourceValue, MapConvertArgs, TTargetValue> convert,
+        Func<TTargetValue, MapConvertArgs, TSourceValue> convertBack
     )
     {
         if (convert is null)
@@ -72,18 +72,18 @@ public sealed class MapConfigPropertyConverter<TSourceValue, TTargetValue>
         _convertBack = convertBack;
     }
 
-    private readonly Func<object, TSourceValue, TTargetValue> _convert;
-    private readonly Func<object, TTargetValue, TSourceValue> _convertBack;
+    private readonly Func<TSourceValue, MapConvertArgs, TTargetValue> _convert;
+    private readonly Func<TTargetValue, MapConvertArgs, TSourceValue> _convertBack;
 
     /// <inheritdoc/>
-    public TTargetValue Convert(object source, TSourceValue value)
+    public TTargetValue Convert(TSourceValue value, MapConvertArgs args)
     {
-        return _convert(source, value);
+        return _convert(value, args);
     }
 
     /// <inheritdoc/>
-    public TSourceValue ConvertBack(object target, TTargetValue value)
+    public TSourceValue ConvertBack(TTargetValue value, MapConvertArgs args)
     {
-        return _convertBack(target, value);
+        return _convertBack(value, args);
     }
 }

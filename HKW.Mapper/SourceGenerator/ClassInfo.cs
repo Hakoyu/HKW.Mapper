@@ -467,7 +467,7 @@ internal sealed class MapConfigInfo
         sourceName = string.Empty;
         targetNames = [];
         if (
-            propertySymbol.Type.InheritedFrom(TypeFullNames.MapConfigCompositePropertyConverter)
+            propertySymbol.Type.InheritedFrom(TypeFullNames.MapConfigPropertyCompositeConverter)
             is false
         )
             return false;

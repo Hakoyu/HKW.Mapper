@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -27,8 +27,8 @@ public sealed class MapperGeneratorDiagnosticTests
 
             public sealed class AttributeConverter : IMapConverter<int, int>
             {
-                public int Convert(object source, int value) => value;
-                public int ConvertBack(object target, int value) => value;
+                public int Convert(int value, MapConvertArgs args) => value;
+                public int ConvertBack(int value, MapConvertArgs args) => value;
             }
 
             public sealed class Config : MapperConfig<Source, Target>
@@ -36,7 +36,7 @@ public sealed class MapperGeneratorDiagnosticTests
                 public Config(Source source, Target target) : base(source, target) { }
 
                 public MapConfigPropertyConverter<int, int> ValueConverter { get; } =
-                    new(nameof(Source.Value), (_, value) => value, (_, value) => value);
+                    new(nameof(Source.Value), (value, _) => value, (value, _) => value);
             }
             """;
 
@@ -63,22 +63,22 @@ public sealed class MapperGeneratorDiagnosticTests
                 public int Second { get; set; }
             }
 
-            public sealed class AttributeConverter : ICompositeMapConverter<int, (int First, int Second)>
+            public sealed class AttributeConverter : IMapCompositeConverter<int, (int First, int Second)>
             {
-                public (int First, int Second) Convert(object source, int value) => (value, value);
-                public int ConvertBack(object target, (int First, int Second) values) => values.First;
+                public (int First, int Second) Convert(int value, MapCompositeConvertArgs args) => (value, value);
+                public int ConvertBack((int First, int Second) values, MapCompositeConvertArgs args) => values.First;
             }
 
             public sealed class Config : MapperConfig<Source, Target>
             {
                 public Config(Source source, Target target) : base(source, target) { }
 
-                public MapConfigCompositePropertyConverter<int, (int First, int Second)> ValueConverter { get; } =
+                public MapConfigPropertyCompositeConverter<int, (int First, int Second)> ValueConverter { get; } =
                     new(
                         nameof(Source.Value),
                         [nameof(Target.First), nameof(Target.Second)],
-                        (_, value) => (value, value),
-                        (_, values) => values.First
+                        (value, _) => (value, value),
+                        (values, _) => values.First
                     );
             }
             """;
@@ -227,10 +227,10 @@ public sealed class MapperGeneratorDiagnosticTests
                 public int Second { get; set; }
             }
 
-            public sealed class Converter : ICompositeMapConverter<int, (int First, int Second)>
+            public sealed class Converter : IMapCompositeConverter<int, (int First, int Second)>
             {
-                public (int First, int Second) Convert(object source, int value) => (value, value);
-                public int ConvertBack(object target, (int First, int Second) values) => values.First;
+                public (int First, int Second) Convert(int value, MapCompositeConvertArgs args) => (value, value);
+                public int ConvertBack((int First, int Second) values, MapCompositeConvertArgs args) => values.First;
             }
             """;
 
@@ -267,10 +267,10 @@ public sealed class MapperGeneratorDiagnosticTests
                 public int Value { get; set; }
             }
 
-            public sealed class Converter : ICompositeMapConverter<int, (int First, int Second)>
+            public sealed class Converter : IMapCompositeConverter<int, (int First, int Second)>
             {
-                public (int First, int Second) Convert(object source, int value) => (value, value);
-                public int ConvertBack(object target, (int First, int Second) values) => values.First;
+                public (int First, int Second) Convert(int value, MapCompositeConvertArgs args) => (value, value);
+                public int ConvertBack((int First, int Second) values, MapCompositeConvertArgs args) => values.First;
             }
             """;
 
@@ -299,10 +299,10 @@ public sealed class MapperGeneratorDiagnosticTests
                 public int Other { get; set; }
             }
 
-            public sealed class Converter : ICompositeMapConverter<int, (int Shared, int Other)>
+            public sealed class Converter : IMapCompositeConverter<int, (int Shared, int Other)>
             {
-                public (int Shared, int Other) Convert(object source, int value) => (value, value);
-                public int ConvertBack(object target, (int Shared, int Other) values) => values.Shared;
+                public (int Shared, int Other) Convert(int value, MapCompositeConvertArgs args) => (value, value);
+                public int ConvertBack((int Shared, int Other) values, MapCompositeConvertArgs args) => values.Shared;
             }
             """;
 

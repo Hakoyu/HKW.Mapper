@@ -22,12 +22,12 @@ internal static class TypeFullNames
     public static string MapConfigClass { get; } = typeof(MapperConfig<,>).GetGlobalFullName();
     public static string MapConverterInterface { get; } =
         typeof(IMapConverter<,>).GetGlobalFullName();
-    public static string CompositeMapConverterInterface { get; } =
-        typeof(ICompositeMapConverter<,>).GetGlobalFullName();
+    public static string MapCompositeConverterInterface { get; } =
+        typeof(IMapCompositeConverter<,>).GetGlobalFullName();
     public static string MapConfigPropertyConverter { get; } =
         typeof(MapConfigPropertyConverter<,>).GetGlobalFullName();
-    public static string MapConfigCompositePropertyConverter { get; } =
-        typeof(MapConfigCompositePropertyConverter<,>).GetGlobalFullName();
+    public static string MapConfigPropertyCompositeConverter { get; } =
+        typeof(MapConfigPropertyCompositeConverter<,>).GetGlobalFullName();
 
     public static string MapToConfigActionAttribute { get; } =
         typeof(MapToConfigActionAttribute).GetGlobalFullName();

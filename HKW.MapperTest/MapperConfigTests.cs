@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -83,7 +83,7 @@ public sealed class TestMapperConfig : MapperConfig<ConfigSource, ConfigTarget>
         : base(source, target) { }
 
     public MapConfigPropertyConverter<int, int> NumberConverter { get; } =
-        new(nameof(ConfigSource.Number), (_, value) => value + 10, (_, value) => value - 10);
+        new(nameof(ConfigSource.Number), (value, _) => value + 10, (value, _) => value - 10);
 
     [MapToConfigAction(MapConfigActionMode.Start)]
     [MapFromConfigAction(MapConfigActionMode.Start)]
@@ -112,7 +112,7 @@ public sealed class TestMapperAsyncConfig : MapperConfig<ConfigSourceAsync, Conf
         : base(source, target) { }
 
     public MapConfigPropertyConverter<int, int> NumberConverter { get; } =
-        new(nameof(ConfigSourceAsync.Number), (_, value) => value + 10, (_, value) => value - 10);
+        new(nameof(ConfigSourceAsync.Number), (value, _) => value + 10, (value, _) => value - 10);
 
     [MapToConfigAction(MapConfigActionMode.Start)]
     [MapFromConfigAction(MapConfigActionMode.Start)]
@@ -169,9 +169,9 @@ public sealed class PriorityTarget
 
 public sealed class AttributePriorityConverter : IMapConverter<int, int>
 {
-    public int Convert(object source, int value) => value + 1000;
+    public int Convert(int value, MapConvertArgs args) => value + 1000;
 
-    public int ConvertBack(object target, int value) => value - 1000;
+    public int ConvertBack(int value, MapConvertArgs args) => value - 1000;
 }
 
 public sealed class PriorityConfig : MapperConfig<PrioritySource, PriorityTarget>
@@ -180,5 +180,5 @@ public sealed class PriorityConfig : MapperConfig<PrioritySource, PriorityTarget
         : base(source, target) { }
 
     public MapConfigPropertyConverter<int, int> ValueConverter { get; } =
-        new(nameof(PrioritySource.Value), (_, value) => value + 10, (_, value) => value - 10);
+        new(nameof(PrioritySource.Value), (value, _) => value + 10, (value, _) => value - 10);
 }

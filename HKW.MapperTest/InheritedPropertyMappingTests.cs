@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -206,7 +206,7 @@ public sealed class ConvertedInheritedConfig
     public MapConfigPropertyConverter<int, string> NumberConverter { get; } =
         new(
             nameof(ConvertedInheritedSource.Number),
-            (_, value) => value.ToString(),
-            (_, value) => int.Parse(value)
+            (value, _) => value.ToString(),
+            (value, _) => int.Parse(value)
         );
 }

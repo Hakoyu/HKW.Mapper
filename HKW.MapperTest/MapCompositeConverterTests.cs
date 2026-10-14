@@ -1,9 +1,9 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
 [TestClass]
-public sealed class CompositeMapConverterTests
+public sealed class MapCompositeConverterTests
 {
     [TestMethod]
     public void MapsOnePropertyToMultiplePropertiesInBothDirections()
@@ -74,12 +74,30 @@ public sealed class CompositeRangeTarget
     public int Max { get; set; }
 }
 
-public sealed class NumericRangeConverter : ICompositeMapConverter<NumericRange, (int Min, int Max)>
+public sealed class NumericRangeConverter : IMapCompositeConverter<NumericRange, (int Min, int Max)>
 {
-    public (int Min, int Max) Convert(object source, NumericRange value) => (value.Min, value.Max);
+    public (int Min, int Max) Convert(NumericRange value, MapCompositeConvertArgs args)
+    {
+        AssertArgs(args);
+        return (value.Min, value.Max);
+    }
 
-    public NumericRange ConvertBack(object target, (int Min, int Max) values) =>
-        new(values.Min, values.Max);
+    public NumericRange ConvertBack((int Min, int Max) values, MapCompositeConvertArgs args)
+    {
+        AssertArgs(args);
+        return new(values.Min, values.Max);
+    }
+
+    private static void AssertArgs(MapCompositeConvertArgs args)
+    {
+        Assert.IsTrue(args.Source is CompositeRangeSource or CompositeFromOnlySource);
+        Assert.IsTrue(args.Target is CompositeRangeTarget or CompositeFromOnlyTarget);
+        Assert.AreEqual(nameof(CompositeRangeSource.Range), args.SourcePropertyName);
+        CollectionAssert.AreEqual(
+            new[] { nameof(CompositeRangeTarget.Min), nameof(CompositeRangeTarget.Max) },
+            args.TargetPropertyNames
+        );
+    }
 }
 
 [MapTarget(typeof(CompositeFromOnlyTarget), Direction = MapDirections.From)]
@@ -122,11 +140,11 @@ public sealed class CompositeTripleTarget
     public bool Enabled { get; set; }
 }
 
-public sealed class TripleValueConverter : ICompositeMapConverter<TripleValue, (int, string, bool)>
+public sealed class TripleValueConverter : IMapCompositeConverter<TripleValue, (int, string, bool)>
 {
-    public (int, string, bool) Convert(object source, TripleValue value) =>
+    public (int, string, bool) Convert(TripleValue value, MapCompositeConvertArgs args) =>
         (value.Number, value.Text, value.Enabled);
 
-    public TripleValue ConvertBack(object target, (int, string, bool) values) =>
+    public TripleValue ConvertBack((int, string, bool) values, MapCompositeConvertArgs args) =>
         new(values.Item1, values.Item2, values.Item3);
 }

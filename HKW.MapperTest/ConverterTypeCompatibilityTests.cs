@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -122,18 +122,18 @@ public sealed class ConverterTypeCompatibilityTests
 
 public sealed class CompatibleListConverter : IMapConverter<IList<int>, string>
 {
-    public string Convert(object source, IList<int> value) => string.Join(',', value);
+    public string Convert(IList<int> value, MapConvertArgs args) => string.Join(',', value);
 
-    public IList<int> ConvertBack(object target, string value) =>
+    public IList<int> ConvertBack(string value, MapConvertArgs args) =>
         value.Split(',').Select(int.Parse).ToList();
 }
 
 public sealed class CompatibleConcreteListConverter : IMapConverter<List<int>, List<string>>
 {
-    public List<string> Convert(object source, List<int> value) =>
+    public List<string> Convert(List<int> value, MapConvertArgs args) =>
         value.Select(x => x.ToString()).ToList();
 
-    public List<int> ConvertBack(object target, List<string> value) =>
+    public List<int> ConvertBack(List<string> value, MapConvertArgs args) =>
         value.Select(int.Parse).ToList();
 }
 
@@ -170,9 +170,9 @@ public enum CompatibleMode
 
 public sealed class CompatibleEnumConverter : IMapConverter<IEnumWrapper, Enum>
 {
-    public Enum Convert(object source, IEnumWrapper value) => value.Value;
+    public Enum Convert(IEnumWrapper value, MapConvertArgs args) => value.Value;
 
-    public IEnumWrapper ConvertBack(object target, Enum value) =>
+    public IEnumWrapper ConvertBack(Enum value, MapConvertArgs args) =>
         new EnumWrapper<CompatibleMode>((CompatibleMode)value);
 }
 
@@ -220,25 +220,25 @@ public sealed class CompatibleMapperConfig
     public MapConfigPropertyConverter<IList<int>, IList<string>> ValuesConverter { get; } =
         new(
             nameof(CompatibleConfigSource.Values),
-            (_, values) => values.Select(x => x.ToString()).ToList(),
-            (_, values) => values.Select(int.Parse).ToList()
+            (values, _) => values.Select(x => x.ToString()).ToList(),
+            (values, _) => values.Select(int.Parse).ToList()
         );
 }
 
 public sealed class CompatibleCompositeConverter
-    : ICompositeMapConverter<
+    : IMapCompositeConverter<
         IList<int>,
         (IList<string> TextValues, IReadOnlyList<int> DoubledValues)
     >
 {
     public (IList<string> TextValues, IReadOnlyList<int> DoubledValues) Convert(
-        object source,
-        IList<int> value
+        IList<int> value,
+        MapCompositeConvertArgs args
     ) => (value.Select(x => x.ToString()).ToList(), value.Select(x => x * 2).ToList());
 
     public IList<int> ConvertBack(
-        object target,
-        (IList<string> TextValues, IReadOnlyList<int> DoubledValues) values
+        (IList<string> TextValues, IReadOnlyList<int> DoubledValues) values,
+        MapCompositeConvertArgs args
     ) => values.TextValues.Select(int.Parse).ToList();
 }
 
@@ -281,7 +281,7 @@ public sealed class CompatibleCompositeMapperConfig
     )
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<
+    public MapConfigPropertyCompositeConverter<
         IList<int>,
         (IList<string> TextValues, IReadOnlyList<int> DoubledValues)
     > ValuesConverter { get; } =
@@ -291,8 +291,8 @@ public sealed class CompatibleCompositeMapperConfig
                 nameof(CompatibleCompositeConfigTarget.TextValues),
                 nameof(CompatibleCompositeConfigTarget.DoubledValues),
             ],
-            (_, values) =>
+            (values, _) =>
                 (values.Select(x => x.ToString()).ToList(), values.Select(x => x * 2).ToList()),
-            (_, values) => values.TextValues.Select(int.Parse).ToList()
+            (values, _) => values.TextValues.Select(int.Parse).ToList()
         );
 }

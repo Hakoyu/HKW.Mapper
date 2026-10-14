@@ -9,18 +9,18 @@
 /// </remarks>
 /// <typeparam name="TSourceValue">源属性类型</typeparam>
 /// <typeparam name="TTargetValues">由多个目标属性值组成的值元组类型</typeparam>
-public interface ICompositeMapConverter<TSourceValue, TTargetValues>
+public interface IMapCompositeConverter<TSourceValue, TTargetValues>
     where TTargetValues : struct
 {
     /// <summary>
     /// 将源属性转换为多个目标属性值
     /// </summary>
-    public TTargetValues Convert(object source, TSourceValue value);
+    public TTargetValues Convert(TSourceValue value, MapCompositeConvertArgs args);
 
     /// <summary>
     /// 将多个目标属性值转换回源属性
     /// </summary>
-    public TSourceValue ConvertBack(object target, TTargetValues values);
+    public TSourceValue ConvertBack(TTargetValues values, MapCompositeConvertArgs args);
 }
 
 /// <summary>
@@ -28,18 +28,18 @@ public interface ICompositeMapConverter<TSourceValue, TTargetValues>
 /// </summary>
 /// <typeparam name="TSourceValue">源值类型</typeparam>
 /// <typeparam name="TTargetValues">由多个目标属性值组成的值元组类型</typeparam>
-public sealed class MapConfigCompositePropertyConverter<TSourceValue, TTargetValues>
-    : ICompositeMapConverter<TSourceValue, TTargetValues>
+public sealed class MapConfigPropertyCompositeConverter<TSourceValue, TTargetValues>
+    : IMapCompositeConverter<TSourceValue, TTargetValues>
     where TTargetValues : struct
 {
     /// <summary>
     /// 初始化映射设置复合属性转换器
     /// </summary>
-    public MapConfigCompositePropertyConverter(
+    public MapConfigPropertyCompositeConverter(
         string sourceProperty,
         string[] targetProperties,
-        Func<object, TSourceValue, TTargetValues> convert,
-        Func<object, TTargetValues, TSourceValue> convertBack
+        Func<TSourceValue, MapCompositeConvertArgs, TTargetValues> convert,
+        Func<TTargetValues, MapCompositeConvertArgs, TSourceValue> convertBack
     )
     {
         if (string.IsNullOrWhiteSpace(sourceProperty))
@@ -64,13 +64,14 @@ public sealed class MapConfigCompositePropertyConverter<TSourceValue, TTargetVal
         _convertBack = convertBack;
     }
 
-    private readonly Func<object, TSourceValue, TTargetValues> _convert;
-    private readonly Func<object, TTargetValues, TSourceValue> _convertBack;
+    private readonly Func<TSourceValue, MapCompositeConvertArgs, TTargetValues> _convert;
+    private readonly Func<TTargetValues, MapCompositeConvertArgs, TSourceValue> _convertBack;
 
     /// <inheritdoc/>
-    public TTargetValues Convert(object source, TSourceValue value) => _convert(source, value);
+    public TTargetValues Convert(TSourceValue value, MapCompositeConvertArgs args) =>
+        _convert(value, args);
 
     /// <inheritdoc/>
-    public TSourceValue ConvertBack(object target, TTargetValues values) =>
-        _convertBack(target, values);
+    public TSourceValue ConvertBack(TTargetValues values, MapCompositeConvertArgs args) =>
+        _convertBack(values, args);
 }

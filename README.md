@@ -130,9 +130,9 @@ public sealed class User
 ```csharp
 public sealed class NumberTextConverter : IMapConverter<int, string>
 {
-    public string Convert(object source, int value) => $"number:{value}";
+    public string Convert(int value, MapConvertArgs args) => $"number:{value}";
 
-    public int ConvertBack(object target, string value) =>
+    public int ConvertBack(string value, MapConvertArgs args) =>
         int.Parse(value[7..]);
 }
 
@@ -149,7 +149,7 @@ public sealed class NumberDto
 }
 ```
 
-`Convert` 用于源到目标的映射，`ConvertBack` 用于目标到源的映射。转换器泛型类型可以与属性类型相同，也可以是存在引用或装箱转换关系的基类、子类或接口。例如，`List<int>` 属性可以使用基于 `IList<int>` 声明的转换器，枚举属性也可以使用基于 `Enum` 声明的转换器。仅能显式转换时，生成代码会执行强制转换；若运行时对象不是所需具体类型，将抛出 `InvalidCastException`。
+`Convert` 用于源到目标的映射，`ConvertBack` 用于目标到源的映射。两者接收的 `MapConvertArgs` 都包含原始 `Source`、`Target`、`SourcePropertyName` 和 `TargetPropertyName`；这些字段的语义不会随映射方向交换。转换器泛型类型可以与属性类型相同，也可以是存在引用或装箱转换关系的基类、子类或接口。例如，`List<int>` 属性可以使用基于 `IList<int>` 声明的转换器，枚举属性也可以使用基于 `Enum` 声明的转换器。仅能显式转换时，生成代码会执行强制转换；若运行时对象不是所需具体类型，将抛出 `InvalidCastException`。
 
 ### 配置类转换器
 
@@ -175,8 +175,8 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
     public MapConfigPropertyConverter<int, int> AmountConverter { get; } =
         new(
             nameof(Order.Amount),
-            (_, value) => value + 10,
-            (_, value) => value - 10
+            (value, _) => value + 10,
+            (value, _) => value - 10
         );
 }
 ```
@@ -186,7 +186,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 ### 复合属性转换器
 
 一个源属性需要拆分到多个目标属性时，实现
-`ICompositeMapConverter<TSourceValue, TTargetValues>`，并通过
+`IMapCompositeConverter<TSourceValue, TTargetValues>`，并通过
 `[MapCompositeProperty]` 按顺序声明目标属性。`TTargetValues` 必须是强类型值元组，
 其元素数量必须与目标属性一致；元素类型可与目标属性类型相同，或具有基类、子类、接口引用或装箱转换关系：
 
@@ -194,12 +194,12 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 public readonly record struct Range(int Min, int Max);
 
 public sealed class RangeConverter
-    : ICompositeMapConverter<Range, (int Min, int Max)>
+    : IMapCompositeConverter<Range, (int Min, int Max)>
 {
-    public (int Min, int Max) Convert(object source, Range value) =>
+    public (int Min, int Max) Convert(Range value, MapCompositeConvertArgs args) =>
         (value.Min, value.Max);
 
-    public Range ConvertBack(object target, (int Min, int Max) values) =>
+    public Range ConvertBack((int Min, int Max) values, MapCompositeConvertArgs args) =>
         new(values.Min, values.Max);
 }
 
@@ -222,7 +222,8 @@ public sealed class RangeDto
 ```
 
 `MapTo` 会拆分转换器返回的元组并依次写入 `Min`、`Max`；`MapFrom` 会按相同顺序
-读取目标属性、组成元组并调用 `ConvertBack`。目标属性声明顺序是映射契约的一部分。
+读取目标属性、组成元组并调用 `ConvertBack`。两个方向都会通过 `MapCompositeConvertArgs`
+传入原始源对象、目标对象、源属性名以及有序目标属性名。目标属性声明顺序是映射契约的一部分。
 
 也可以在 `MapperConfig<TSource, TTarget>` 中使用复合配置转换器，无需在源属性上添加特性：
 
@@ -232,16 +233,16 @@ public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
     public RangeMapperConfig(RangeModel source, RangeDto target)
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<Range, (int Min, int Max)> RangeConverter { get; } =
+    public MapConfigPropertyCompositeConverter<Range, (int Min, int Max)> RangeConverter { get; } =
         new(
             nameof(RangeModel.Range),
             [nameof(RangeDto.Min), nameof(RangeDto.Max)],
-            (_, value) => (value.Min, value.Max),
-            (_, values) => new(values.Min, values.Max));
+            (value, _) => (value.Min, value.Max),
+            (values, _) => new(values.Min, values.Max));
 }
 ```
 
-若同一个源属性同时配置了 `MapConfigCompositePropertyConverter` 和
+若同一个源属性同时配置了 `MapConfigPropertyCompositeConverter` 和
 `[MapCompositeProperty]`，配置类中的目标属性列表及转换逻辑具有更高优先级。
 目标属性数组必须直接写在配置属性初始化器中，以便源生成器在编译期分析。
 

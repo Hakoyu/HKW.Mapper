@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -184,9 +184,25 @@ public sealed class ConverterTypeTarget
 
 public sealed class NumberTextConverter : IMapConverter<int, string>
 {
-    public string Convert(object source, int value) => $"number:{value}";
+    public string Convert(int value, MapConvertArgs args)
+    {
+        AssertArgs(args);
+        return $"number:{value}";
+    }
 
-    public int ConvertBack(object target, string value) => int.Parse(value[7..]);
+    public int ConvertBack(string value, MapConvertArgs args)
+    {
+        AssertArgs(args);
+        return int.Parse(value[7..]);
+    }
+
+    private static void AssertArgs(MapConvertArgs args)
+    {
+        Assert.IsInstanceOfType<ConverterTypeSource>(args.Source);
+        Assert.IsInstanceOfType<ConverterTypeTarget>(args.Target);
+        Assert.AreEqual(nameof(ConverterTypeSource.Number), args.SourcePropertyName);
+        Assert.AreEqual(nameof(ConverterTypeTarget.Text), args.TargetPropertyName);
+    }
 }
 
 [MapTarget(typeof(PropertyIgnoreTarget))]
@@ -203,12 +219,12 @@ public sealed class PropertyIgnoreTarget
 
 public class NumberToDoubleNumber : IMapConverter<double, double>
 {
-    public double Convert(object source, double value)
+    public double Convert(double value, MapConvertArgs args)
     {
         return value * 2;
     }
 
-    public double ConvertBack(object source, double value)
+    public double ConvertBack(double value, MapConvertArgs args)
     {
         return value / 2;
     }

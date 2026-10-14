@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -11,20 +11,28 @@ public sealed class MapConfigPropertyConverterTests
         var converter = new MapConfigPropertyConverter<int, string>(
             "Number",
             "Text",
-            (_, value) => $"number:{value}",
-            (_, value) => int.Parse(value[7..])
+            (value, _) => $"number:{value}",
+            (value, _) => int.Parse(value[7..])
         );
 
-        Assert.AreEqual("number:5", converter.Convert(new object(), 5));
-        Assert.AreEqual(6, converter.ConvertBack(new object(), "number:6"));
+        var source = new object();
+        var target = new object();
+        var args = new MapConvertArgs(source, target, "Number", "Text");
+
+        Assert.AreSame(source, args.Source);
+        Assert.AreSame(target, args.Target);
+        Assert.AreEqual("Number", args.SourcePropertyName);
+        Assert.AreEqual("Text", args.TargetPropertyName);
+        Assert.AreEqual("number:5", converter.Convert(5, args));
+        Assert.AreEqual(6, converter.ConvertBack("number:6", args));
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyConverter<int, string>("Number", "Text", null!, (_, value) => 0)
+            new MapConfigPropertyConverter<int, string>("Number", "Text", null!, (value, _) => 0)
         );
         Assert.Throws<ArgumentNullException>(() =>
             new MapConfigPropertyConverter<int, string>(
                 "Number",
                 "Text",
-                (_, value) => string.Empty,
+                (value, _) => string.Empty,
                 null!
             )
         );
@@ -66,7 +74,21 @@ public sealed class RedirectConfig : MapperConfig<RedirectSource, RedirectTarget
         new(
             nameof(RedirectSource.Original),
             nameof(RedirectTarget.Mapped),
-            (_, value) => value + 100,
-            (_, value) => value - 200
+            (value, args) =>
+            {
+                Assert.IsInstanceOfType<RedirectSource>(args.Source);
+                Assert.IsInstanceOfType<RedirectTarget>(args.Target);
+                Assert.AreEqual(nameof(RedirectSource.Original), args.SourcePropertyName);
+                Assert.AreEqual(nameof(RedirectTarget.Mapped), args.TargetPropertyName);
+                return value + 100;
+            },
+            (value, args) =>
+            {
+                Assert.IsInstanceOfType<RedirectSource>(args.Source);
+                Assert.IsInstanceOfType<RedirectTarget>(args.Target);
+                Assert.AreEqual(nameof(RedirectSource.Original), args.SourcePropertyName);
+                Assert.AreEqual(nameof(RedirectTarget.Mapped), args.TargetPropertyName);
+                return value - 200;
+            }
         );
 }
