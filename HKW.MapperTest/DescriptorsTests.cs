@@ -48,6 +48,86 @@ public sealed class DescriptorsTests
     }
 
     [TestMethod]
+    public void MAP0002_DoesNotReportDuplicateTargetsForAttributeConverters()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), MapFields = true)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), nameof(Target.Property), typeof(Converter))]
+                public int FirstProperty { get; set; }
+
+                [MapProperty(typeof(Target), nameof(Target.Property), typeof(Converter))]
+                public int SecondProperty { get; set; }
+
+                [MapField(typeof(Target), nameof(Target.Field), typeof(Converter))]
+                public int FirstField;
+
+                [MapField(typeof(Target), nameof(Target.Field), typeof(Converter))]
+                public int SecondField;
+            }
+
+            public sealed class Target
+            {
+                public int Property { get; set; }
+                public int Field;
+            }
+
+            public sealed class Converter : IMapConverter<int, int>
+            {
+                public int Convert(int value, MapConvertArgs args) => value;
+                public int ConvertBack(int value, MapConvertArgs args) => value;
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0002"));
+    }
+
+    [TestMethod]
+    public void MAP0002_DoesNotReportDuplicateTargetsForConfigConverters()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), typeof(Config), MapFields = true)]
+            public sealed class Source
+            {
+                public int FirstProperty { get; set; }
+                public int SecondProperty { get; set; }
+                public int FirstField;
+                public int SecondField;
+            }
+
+            public sealed class Target
+            {
+                public int Property { get; set; }
+                public int Field;
+            }
+
+            public sealed class Config : MapperConfig<Source, Target>
+            {
+                public Config(Source source, Target target) : base(source, target) { }
+
+                public MapConfigPropertyConverter<int, int> FirstPropertyConverter { get; } =
+                    new(nameof(Source.FirstProperty), nameof(Target.Property), (value, _) => value, (value, _) => value);
+
+                public MapConfigPropertyConverter<int, int> SecondPropertyConverter { get; } =
+                    new(nameof(Source.SecondProperty), nameof(Target.Property), (value, _) => value, (value, _) => value);
+
+                public MapConfigFieldConverter<int, int> FirstFieldConverter { get; } =
+                    new(nameof(Source.FirstField), nameof(Target.Field), (value, _) => value, (value, _) => value);
+
+                public MapConfigFieldConverter<int, int> SecondFieldConverter { get; } =
+                    new(nameof(Source.SecondField), nameof(Target.Field), (value, _) => value, (value, _) => value);
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0002"));
+    }
+
+    [TestMethod]
     public void MAP0003_ReportsInvalidMapperConfigType()
     {
         AssertDiagnostic(
@@ -517,6 +597,41 @@ public sealed class DescriptorsTests
                 "public int Value { get; set; }",
                 "Direction = MapDirections.To"
             )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0031_ReportsReadonlyFieldForBothDirections()
+    {
+        AssertDiagnostic(
+            "MAP0031",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "From", "written"],
+            """
+            [MapTarget(typeof(Target), MapFields = true)]
+            public sealed class Source
+            {
+                public readonly int Value;
+            }
+            public sealed class Target { public int Value; }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0031_ReportsReadonlyTargetFieldForMapTo()
+    {
+        AssertDiagnostic(
+            "MAP0031",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "To", "written"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To, MapFields = true)]
+            public sealed class Source { public int Value; }
+            public sealed class Target { public readonly int Value; }
+            """
         );
     }
 

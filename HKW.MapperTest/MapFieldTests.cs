@@ -1,0 +1,254 @@
+using HKW.Mapper;
+
+namespace HKW.MapperTest;
+
+[TestClass]
+public sealed class MapFieldTests
+{
+    [TestMethod]
+    public void ExplicitFieldMappingSupportsFieldsPropertiesIgnoresAndInheritance()
+    {
+        var source = new FieldSource
+        {
+            FieldToField = 1,
+            FieldToProperty = 2,
+            PropertyToField = 3,
+            InternalField = 4,
+            Ignored = 5,
+            ParentField = 6,
+        };
+        var target = new FieldTarget { Ignored = 50 };
+
+        source.MapTo(target);
+
+        Assert.AreEqual(1, target.FieldToField);
+        Assert.AreEqual(2, target.FieldToProperty);
+        Assert.AreEqual(3, target.PropertyToField);
+        Assert.AreEqual(4, target.InternalField);
+        Assert.AreEqual(50, target.Ignored);
+        Assert.AreEqual(6, target.ParentField);
+
+        target.FieldToField = 11;
+        target.FieldToProperty = 12;
+        target.PropertyToField = 13;
+        target.InternalField = 14;
+        target.ParentField = 16;
+        source.MapFrom(target);
+
+        Assert.AreEqual(11, source.FieldToField);
+        Assert.AreEqual(12, source.FieldToProperty);
+        Assert.AreEqual(13, source.PropertyToField);
+        Assert.AreEqual(14, source.InternalField);
+        Assert.AreEqual(5, source.Ignored);
+        Assert.AreEqual(16, source.ParentField);
+    }
+
+    [TestMethod]
+    public void FieldAttributesUseRegularAndCompositeConverters()
+    {
+        var source = new FieldConverterSource { Number = 7, Range = new(2, 5) };
+        var target = new FieldConverterTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual("7", target.Text);
+        Assert.AreEqual(2, target.Low);
+        Assert.AreEqual(5, target.High);
+
+        target.Text = "11";
+        target.Low = 13;
+        target.High = 17;
+        source.MapFrom(target);
+
+        Assert.AreEqual(11, source.Number);
+        Assert.AreEqual(new FieldRange(13, 17), source.Range);
+    }
+
+    [TestMethod]
+    public void ConfigFieldConvertersMapRegularAndCompositeFields()
+    {
+        var source = new ConfigFieldSource { Number = 3, Range = new(5, 7) };
+        var target = new ConfigFieldTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual("value:3", target.Text);
+        Assert.AreEqual(5, target.Low);
+        Assert.AreEqual(7, target.High);
+
+        target.Text = "value:19";
+        target.Low = 23;
+        target.High = 29;
+        source.MapFrom(target);
+
+        Assert.AreEqual(19, source.Number);
+        Assert.AreEqual(new FieldRange(23, 29), source.Range);
+    }
+
+    [TestMethod]
+    public void ReadonlyFieldsMapInTheirReadableDirections()
+    {
+        var toSource = new ReadonlyToSource(31);
+        var toTarget = new ReadonlyToTarget();
+        toSource.MapTo(toTarget);
+        Assert.AreEqual(31, toTarget.Value);
+
+        var fromSource = new ReadonlyFromSource();
+        var fromTarget = new ReadonlyFromTarget(37);
+        fromSource.MapFrom(fromTarget);
+        Assert.AreEqual(37, fromSource.Value);
+    }
+
+    [TestMethod]
+    public void FieldsRemainDisabledByDefault()
+    {
+        var source = new DisabledFieldSource { Value = 41 };
+        var target = new DisabledFieldTarget { Value = 43 };
+
+        source.MapTo(target);
+
+        Assert.AreEqual(43, target.Value);
+    }
+}
+
+public class FieldSourceBase
+{
+    public int ParentField;
+}
+
+[MapTarget(
+    typeof(FieldTarget),
+    MapFields = true,
+    MapParentFields = true,
+    IgnoreFields = new[] { nameof(FieldSource.Ignored) }
+)]
+public sealed class FieldSource : FieldSourceBase
+{
+    public int FieldToField;
+    public int FieldToProperty;
+    public int PropertyToField { get; set; }
+    internal int InternalField;
+    public int Ignored;
+}
+
+public sealed class FieldTarget
+{
+    public int FieldToField;
+    public int FieldToProperty { get; set; }
+    public int PropertyToField;
+    internal int InternalField;
+    public int Ignored;
+    public int ParentField;
+}
+
+public readonly record struct FieldRange(int Low, int High);
+
+[MapTarget(typeof(FieldConverterTarget), MapFields = true)]
+public sealed class FieldConverterSource
+{
+    [MapField(
+        typeof(FieldConverterTarget),
+        nameof(FieldConverterTarget.Text),
+        typeof(FieldNumberConverter)
+    )]
+    public int Number;
+
+    [MapCompositeField(
+        typeof(FieldConverterTarget),
+        typeof(FieldRangeConverter),
+        nameof(FieldConverterTarget.Low),
+        nameof(FieldConverterTarget.High)
+    )]
+    public FieldRange Range;
+}
+
+public sealed class FieldConverterTarget
+{
+    public string Text { get; set; } = string.Empty;
+    public int Low;
+    public int High { get; set; }
+}
+
+public sealed class FieldNumberConverter : IMapConverter<int, string>
+{
+    public string Convert(int value, MapConvertArgs args) => value.ToString();
+    public int ConvertBack(string value, MapConvertArgs args) => int.Parse(value);
+}
+
+public sealed class FieldRangeConverter : IMapCompositeConverter<FieldRange, (int Low, int High)>
+{
+    public (int Low, int High) Convert(FieldRange value, MapCompositeConvertArgs args) =>
+        (value.Low, value.High);
+
+    public FieldRange ConvertBack((int Low, int High) values, MapCompositeConvertArgs args) =>
+        new(values.Low, values.High);
+}
+
+[MapTarget(typeof(ConfigFieldTarget), typeof(ConfigFieldMap), MapFields = true)]
+public sealed class ConfigFieldSource
+{
+    public int Number;
+    public FieldRange Range;
+}
+
+public sealed class ConfigFieldTarget
+{
+    public string Text = string.Empty;
+    public int Low;
+    public int High;
+}
+
+public sealed class ConfigFieldMap : MapperConfig<ConfigFieldSource, ConfigFieldTarget>
+{
+    public ConfigFieldMap(ConfigFieldSource source, ConfigFieldTarget target)
+        : base(source, target) { }
+
+    public MapConfigFieldConverter<int, string> NumberConverter { get; } =
+        new(
+            nameof(ConfigFieldSource.Number),
+            nameof(ConfigFieldTarget.Text),
+            (value, _) => $"value:{value}",
+            (value, _) => int.Parse(value[6..])
+        );
+
+    public MapConfigFieldCompositeConverter<FieldRange, (int Low, int High)> RangeConverter { get; } =
+        new(
+            nameof(ConfigFieldSource.Range),
+            [nameof(ConfigFieldTarget.Low), nameof(ConfigFieldTarget.High)],
+            (value, _) => (value.Low, value.High),
+            (value, _) => new(value.Low, value.High)
+        );
+}
+
+[MapTarget(typeof(ReadonlyToTarget), Direction = MapDirections.To, MapFields = true)]
+public sealed class ReadonlyToSource(int value)
+{
+    public readonly int Value = value;
+}
+
+public sealed class ReadonlyToTarget
+{
+    public int Value;
+}
+
+[MapTarget(typeof(ReadonlyFromTarget), Direction = MapDirections.From, MapFields = true)]
+public sealed class ReadonlyFromSource
+{
+    public int Value;
+}
+
+public sealed class ReadonlyFromTarget(int value)
+{
+    public readonly int Value = value;
+}
+
+[MapTarget(typeof(DisabledFieldTarget))]
+public sealed class DisabledFieldSource
+{
+    public int Value;
+}
+
+public sealed class DisabledFieldTarget
+{
+    public int Value;
+}

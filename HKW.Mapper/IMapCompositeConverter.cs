@@ -75,3 +75,52 @@ public sealed class MapConfigPropertyCompositeConverter<TSourceValue, TTargetVal
     public TSourceValue ConvertBack(TTargetValues values, MapCompositeConvertArgs args) =>
         _convertBack(values, args);
 }
+
+/// <summary>
+/// 映射设置复合字段转换器。
+/// </summary>
+public sealed class MapConfigFieldCompositeConverter<TSourceValue, TTargetValues>
+    : IMapCompositeConverter<TSourceValue, TTargetValues>
+    where TTargetValues : struct
+{
+    /// <inheritdoc/>
+    public MapConfigFieldCompositeConverter(
+        string sourceField,
+        string[] targetFields,
+        Func<TSourceValue, MapCompositeConvertArgs, TTargetValues> convert,
+        Func<TTargetValues, MapCompositeConvertArgs, TSourceValue> convertBack
+    )
+    {
+        if (string.IsNullOrWhiteSpace(sourceField))
+            throw new ArgumentException("Source field is required.", nameof(sourceField));
+        if (targetFields is null)
+            throw new ArgumentNullException(nameof(targetFields));
+        if (
+            targetFields.Length < 2
+            || targetFields.Any(string.IsNullOrWhiteSpace)
+            || targetFields.Distinct(StringComparer.Ordinal).Count() != targetFields.Length
+        )
+            throw new ArgumentException(
+                "At least two unique, non-empty target fields are required.",
+                nameof(targetFields)
+            );
+        if (convert is null)
+            throw new ArgumentNullException(nameof(convert));
+        if (convertBack is null)
+            throw new ArgumentNullException(nameof(convertBack));
+
+        _convert = convert;
+        _convertBack = convertBack;
+    }
+
+    private readonly Func<TSourceValue, MapCompositeConvertArgs, TTargetValues> _convert;
+    private readonly Func<TTargetValues, MapCompositeConvertArgs, TSourceValue> _convertBack;
+
+    /// <inheritdoc/>
+    public TTargetValues Convert(TSourceValue value, MapCompositeConvertArgs args) =>
+        _convert(value, args);
+
+    /// <inheritdoc/>
+    public TSourceValue ConvertBack(TTargetValues values, MapCompositeConvertArgs args) =>
+        _convertBack(values, args);
+}

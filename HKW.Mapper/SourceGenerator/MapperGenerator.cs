@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Text;
@@ -30,13 +30,9 @@ internal class MapperGenerator
     }
 
     private readonly ClassInfo _classInfo;
-    private readonly Dictionary<
-        MapTargetInfo,
-        Dictionary<string, IPropertySymbol>
-    > _mappedTargets = [];
-    private readonly HashSet<IPropertySymbol> _reportedIgnoreAttributeConflicts = new(
-        SymbolEqualityComparer.Default
-    );
+    private readonly Dictionary<MapTargetInfo, Dictionary<string, MapMemberInfo>> _mappedTargets =
+    [];
+    private readonly HashSet<MapMemberInfo> _reportedIgnoreAttributeConflicts = [];
 
     public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
 
@@ -53,8 +49,16 @@ internal class MapperGenerator
             if (target.MapParentProperties)
             {
                 foreach (var property in _classInfo.ParentProperties)
-                {
                     ParseProperty(target, property);
+            }
+            if (target.MapFields)
+            {
+                foreach (var field in _classInfo.Fields)
+                    ParseProperty(target, field);
+                if (target.MapParentFields)
+                {
+                    foreach (var field in _classInfo.ParentFields)
+                        ParseProperty(target, field);
                 }
             }
             AddEndAction(target);
@@ -65,22 +69,32 @@ internal class MapperGenerator
         }
     }
 
-    private void ParseProperty(MapTargetInfo mapTarget, IPropertySymbol propertySymbol)
+    private void ParseProperty(MapTargetInfo mapTarget, MapMemberInfo propertySymbol)
     {
-        if (mapTarget.IgnoreProperties.Contains(propertySymbol.Name))
+        var isField = propertySymbol.IsField;
+        if (
+            (isField ? mapTarget.IgnoreFields : mapTarget.IgnoreProperties).Contains(
+                propertySymbol.Name
+            )
+        )
             return;
 
         var atts = propertySymbol.GetAttributes();
+        var ignoreAttributeName = isField
+            ? TypeFullNames.MapIgnoreFieldAttribute
+            : TypeFullNames.MapIgnorePropertyAttribute;
+        var compositeAttributeName = isField
+            ? TypeFullNames.MapCompositeFieldAttribute
+            : TypeFullNames.MapCompositePropertyAttribute;
+        var memberAttributeName = isField
+            ? TypeFullNames.MapFieldAttribute
+            : TypeFullNames.MapPropertyAttribute;
         var ignoreAttribute = atts.FirstOrDefault(a =>
-            a.AttributeClass!.IsName(TypeFullNames.MapIgnorePropertyAttribute)
+            a.AttributeClass!.IsName(ignoreAttributeName)
         );
-        var compositeAttributes = atts.Where(a =>
-                a.AttributeClass!.IsName(TypeFullNames.MapCompositePropertyAttribute)
-            )
+        var compositeAttributes = atts.Where(a => a.AttributeClass!.IsName(compositeAttributeName))
             .ToArray();
-        var propertyAttributes = atts.Where(a =>
-                a.AttributeClass!.IsName(TypeFullNames.MapPropertyAttribute)
-            )
+        var propertyAttributes = atts.Where(a => a.AttributeClass!.IsName(memberAttributeName))
             .ToArray();
         // 检查全局忽略属性
         if (ignoreAttribute is not null)
@@ -183,19 +197,40 @@ internal class MapperGenerator
         )
             return;
 
+        var targetMemberParameter = isField
+            ? nameof(MapFieldAttribute.FieldName)
+            : nameof(MapPropertyAttribute.PropertyName);
         if (
-            attributeInfo?.TryGetParam<string>(
-                nameof(MapPropertyAttribute.PropertyName),
-                out var targetPropertyName
-            )
+            attributeInfo?.TryGetParam<string>(targetMemberParameter, out var targetPropertyName)
             is not true
         )
             targetPropertyName = propertySymbol.Name;
+        var hasConfigConverter = false;
+        if (
+            mapTarget.ConfigInfo?.Converters.TryGetValue(propertySymbol.Name, out var configData)
+                is true
+            && configData.IsFieldConverter == isField
+        )
+        {
+            targetPropertyName = configData.TargetName;
+            hasConfigConverter = true;
+        }
+        var hasAttributeConverter =
+            attributeInfo?.TryGetParam<INamedTypeSymbol>(
+                nameof(MapPropertyAttribute.ConverterType),
+                out var attributeConverterType
+            )
+                is true
+            && attributeConverterType is not null;
 
         var targetProperty = GetTargetProperty(mapTarget, propertySymbol, targetPropertyName);
         if (targetProperty is null)
             return;
-        if (TryReserveTargetProperties(mapTarget, propertySymbol, [targetProperty]) is false)
+        if (
+            hasConfigConverter is false
+            && hasAttributeConverter is false
+            && TryReserveTargetProperties(mapTarget, propertySymbol, [targetProperty]) is false
+        )
             return;
         AddBeforePropertyAction(mapTarget, propertySymbol);
         if (TryUseConfigPropertyConverter(mapTarget, propertySymbol, targetProperty))
@@ -223,7 +258,7 @@ internal class MapperGenerator
 
     private List<AttributeData>? GetMatchingAttributes(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
+        MapMemberInfo propertySymbol,
         IEnumerable<AttributeData> attributes,
         Func<AttributeData, string> getTargetName
     )
@@ -304,7 +339,7 @@ internal class MapperGenerator
 
     private static void TryReplacePropertyAction(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol
+        MapMemberInfo propertySymbol
     )
     {
         if (mapTarget.ConfigInfo is null)
@@ -340,7 +375,7 @@ internal class MapperGenerator
 
     private static void AddBeforePropertyAction(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol
+        MapMemberInfo propertySymbol
     )
     {
         if (mapTarget.ConfigInfo is null)
@@ -372,7 +407,7 @@ internal class MapperGenerator
 
     private static void AddAfterPropertyAction(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol
+        MapMemberInfo propertySymbol
     )
     {
         if (mapTarget.ConfigInfo is null)
@@ -404,9 +439,9 @@ internal class MapperGenerator
 
     private void MapProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
+        MapMemberInfo propertySymbol,
         AttributeInfo? attributeInfo,
-        IPropertySymbol targetProperty
+        MapMemberInfo targetProperty
     )
     {
         if (
@@ -483,8 +518,8 @@ internal class MapperGenerator
 
     private static bool TryMapNullableProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol sourceProperty,
-        IPropertySymbol targetProperty
+        MapMemberInfo sourceProperty,
+        MapMemberInfo targetProperty
     )
     {
         var sourceType = UnwrapNullable(sourceProperty.Type);
@@ -514,8 +549,8 @@ internal class MapperGenerator
 
     private bool TryMapComplexProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol sourceProperty,
-        IPropertySymbol targetProperty
+        MapMemberInfo sourceProperty,
+        MapMemberInfo targetProperty
     )
     {
         var sourceType = UnwrapNullable(sourceProperty.Type);
@@ -592,8 +627,8 @@ internal class MapperGenerator
 
     private bool TryMapCollectionProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol sourceProperty,
-        IPropertySymbol targetProperty,
+        MapMemberInfo sourceProperty,
+        MapMemberInfo targetProperty,
         ITypeSymbol sourceType,
         ITypeSymbol targetType
     )
@@ -635,8 +670,8 @@ internal class MapperGenerator
 
     private bool TryMapDictionaryProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol sourceProperty,
-        IPropertySymbol targetProperty,
+        MapMemberInfo sourceProperty,
+        MapMemberInfo targetProperty,
         ITypeSymbol sourceType,
         ITypeSymbol targetType
     )
@@ -772,12 +807,13 @@ internal class MapperGenerator
 
     private bool TryUseConfigCompositePropertyConverter(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol
+        MapMemberInfo propertySymbol
     )
     {
         if (
             mapTarget.ConfigInfo?.CompositeConverters.TryGetValue(propertySymbol.Name, out var data)
-            is not true
+                is not true
+            || data.IsFieldConverter != propertySymbol.IsField
         )
             return false;
 
@@ -824,7 +860,7 @@ internal class MapperGenerator
 
     private void GenerateConfigCompositeMapping(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
+        MapMemberInfo propertySymbol,
         ITypeSymbol converterSourceType,
         string[] targetPropertyNames,
         INamedTypeSymbol tupleType,
@@ -845,7 +881,7 @@ internal class MapperGenerator
             return;
         }
 
-        var targetProperties = new List<IPropertySymbol>(targetPropertyNames.Length);
+        var targetProperties = new List<MapMemberInfo>(targetPropertyNames.Length);
         for (var i = 0; i < targetPropertyNames.Length; i++)
         {
             var targetProperty = GetTargetProperty(
@@ -932,7 +968,7 @@ internal class MapperGenerator
 
     private void MapCompositeProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
+        MapMemberInfo propertySymbol,
         AttributeData attribute
     )
     {
@@ -1014,7 +1050,7 @@ internal class MapperGenerator
 
     private static void TryReplaceCompositePropertyAction(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
+        MapMemberInfo propertySymbol,
         int mapToContentStart,
         int mapFromContentStart
     )
@@ -1057,8 +1093,8 @@ internal class MapperGenerator
 
     private bool TryReserveTargetProperties(
         MapTargetInfo mapTarget,
-        IPropertySymbol sourceProperty,
-        IEnumerable<IPropertySymbol> targetProperties
+        MapMemberInfo sourceProperty,
+        IEnumerable<MapMemberInfo> targetProperties
     )
     {
         if (_mappedTargets.TryGetValue(mapTarget, out var mappedProperties) is false)
@@ -1134,13 +1170,14 @@ internal class MapperGenerator
 
     private bool TryUseConfigPropertyConverter(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
-        IPropertySymbol targetProperty
+        MapMemberInfo propertySymbol,
+        MapMemberInfo targetProperty
     )
     {
         if (
             mapTarget.ConfigInfo?.Converters.TryGetValue(propertySymbol.Name, out var data)
-            is not true
+                is not true
+            || data.IsFieldConverter != propertySymbol.IsField
         )
             return false;
 
@@ -1191,9 +1228,9 @@ internal class MapperGenerator
 
     private bool TryUsePropertyConverter(
         MapTargetInfo mapTarget,
-        IPropertySymbol propertySymbol,
+        MapMemberInfo propertySymbol,
         AttributeInfo? attributeInfo,
-        IPropertySymbol targetProperty
+        MapMemberInfo targetProperty
     )
     {
         if (
@@ -1266,17 +1303,14 @@ internal class MapperGenerator
         return true;
     }
 
-    private IPropertySymbol? GetTargetProperty(
+    private MapMemberInfo? GetTargetProperty(
         MapTargetInfo mapTarget,
-        IPropertySymbol property,
+        MapMemberInfo property,
         string targetPropertyName
     )
     {
         // 目标属性不存在
-        if (
-            mapTarget.PropertyByName.TryGetValue(targetPropertyName, out var targetProperty)
-            is false
-        )
+        if (mapTarget.MemberByName.TryGetValue(targetPropertyName, out var targetProperty) is false)
         {
             var diagnostic = Diagnostic.Create(
                 Descriptors.TargetPropertyNotExists,
@@ -1297,78 +1331,124 @@ internal class MapperGenerator
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
-        // 源属性诊断
-        if (
-            mapTarget.Direction.HasFlag(MapDirections.To)
-            && (
-                property.GetMethod is null
-                || property.GetMethod.DeclaredAccessibility < Accessibility.Internal
-            )
-        )
+        if (property.IsField && IsMemberAccessible(property.Symbol) is false)
         {
-            var diagnostic = Diagnostic.Create(
-                Descriptors.SourcePropertyAccessibilityInsufficient,
-                GetPropertyDiagnosticLocation(mapTarget, property),
-                property.Name,
-                "getter"
-            );
-            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
+            ReportSourceAccessorDiagnostic(mapTarget, property, "field");
+            return null;
+        }
+        if (targetProperty.IsField && IsMemberAccessible(targetProperty.Symbol) is false)
+        {
+            ReportTargetAccessorDiagnostic(property, targetProperty, "field");
             return null;
         }
         if (
-            mapTarget.Direction.HasFlag(MapDirections.From)
-            && (
-                property.SetMethod is null
-                || property.SetMethod.DeclaredAccessibility < Accessibility.Internal
-            )
+            property.IsField
+            && mapTarget.Direction.HasFlag(MapDirections.From)
+            && property.IsReadOnly
         )
         {
-            var diagnostic = Diagnostic.Create(
-                Descriptors.SourcePropertyAccessibilityInsufficient,
-                GetPropertyDiagnosticLocation(mapTarget, property),
-                property.Name,
-                "setter"
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.FieldIsReadOnly,
+                    GetPropertyDiagnosticLocation(mapTarget, property),
+                    property.Name,
+                    nameof(MapDirections.From)
+                )
             );
-            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
-        // 目标属性诊断
         if (
-            mapTarget.Direction.HasFlag(MapDirections.To)
-            && (
-                targetProperty.SetMethod is null
-                || IsAccessorAccessible(targetProperty.SetMethod) is false
-            )
+            targetProperty.IsField
+            && mapTarget.Direction.HasFlag(MapDirections.To)
+            && targetProperty.IsReadOnly
         )
         {
-            var diagnostic = Diagnostic.Create(
-                Descriptors.TargetPropertyAccessibilityInsufficient,
-                property.Locations[0],
-                targetProperty.Name,
-                "setter"
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.FieldIsReadOnly,
+                    property.Locations[0],
+                    targetProperty.Name,
+                    nameof(MapDirections.To)
+                )
             );
-            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
         }
 
         if (
-            mapTarget.Direction.HasFlag(MapDirections.From)
+            property.IsField is false
+            && mapTarget.Direction.HasFlag(MapDirections.To)
+            && (property.GetMethod is null || IsMemberAccessible(property.GetMethod) is false)
+        )
+        {
+            ReportSourceAccessorDiagnostic(mapTarget, property, "getter");
+            return null;
+        }
+        if (
+            property.IsField is false
+            && mapTarget.Direction.HasFlag(MapDirections.From)
+            && (property.SetMethod is null || IsMemberAccessible(property.SetMethod) is false)
+        )
+        {
+            ReportSourceAccessorDiagnostic(mapTarget, property, "setter");
+            return null;
+        }
+        if (
+            targetProperty.IsField is false
+            && mapTarget.Direction.HasFlag(MapDirections.To)
             && (
-                targetProperty.GetMethod is null
-                || IsAccessorAccessible(targetProperty.GetMethod) is false
+                targetProperty.SetMethod is null
+                || IsMemberAccessible(targetProperty.SetMethod) is false
             )
         )
         {
-            var diagnostic = Diagnostic.Create(
-                Descriptors.TargetPropertyAccessibilityInsufficient,
-                property.Locations[0],
-                targetProperty.Name,
-                "setter"
-            );
-            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
+            ReportTargetAccessorDiagnostic(property, targetProperty, "setter");
+            return null;
+        }
+        if (
+            targetProperty.IsField is false
+            && mapTarget.Direction.HasFlag(MapDirections.From)
+            && (
+                targetProperty.GetMethod is null
+                || IsMemberAccessible(targetProperty.GetMethod) is false
+            )
+        )
+        {
+            ReportTargetAccessorDiagnostic(property, targetProperty, "getter");
             return null;
         }
         return targetProperty;
+    }
+
+    private void ReportSourceAccessorDiagnostic(
+        MapTargetInfo mapTarget,
+        MapMemberInfo property,
+        string accessor
+    )
+    {
+        _classInfo.ProductionContext.ReportDiagnostic(
+            Diagnostic.Create(
+                Descriptors.SourcePropertyAccessibilityInsufficient,
+                GetPropertyDiagnosticLocation(mapTarget, property),
+                property.Name,
+                accessor
+            )
+        );
+    }
+
+    private void ReportTargetAccessorDiagnostic(
+        MapMemberInfo source,
+        MapMemberInfo target,
+        string accessor
+    )
+    {
+        _classInfo.ProductionContext.ReportDiagnostic(
+            Diagnostic.Create(
+                Descriptors.TargetPropertyAccessibilityInsufficient,
+                source.Locations[0],
+                target.Name,
+                accessor
+            )
+        );
     }
 
     private static void AddStartAction(MapTargetInfo mapTarget)
@@ -1409,20 +1489,19 @@ internal class MapperGenerator
         }
     }
 
-    private bool IsAccessorAccessible(IMethodSymbol accessor)
+    private bool IsMemberAccessible(ISymbol member)
     {
-        if (accessor.DeclaredAccessibility == Accessibility.Public)
+        if (member.DeclaredAccessibility == Accessibility.Public)
             return true;
-        return accessor.DeclaredAccessibility >= Accessibility.Internal
-            && accessor.ContainingAssembly.SymbolEquals(_classInfo.Compilation.Assembly);
+        return member.DeclaredAccessibility >= Accessibility.Internal
+            && member.ContainingAssembly.SymbolEquals(_classInfo.Compilation.Assembly);
     }
 
-    private Location GetPropertyDiagnosticLocation(
-        MapTargetInfo mapTarget,
-        IPropertySymbol property
-    )
+    private Location GetPropertyDiagnosticLocation(MapTargetInfo mapTarget, MapMemberInfo property)
     {
-        return _classInfo.ParentProperties.Contains(property)
+        return
+            _classInfo.ParentProperties.Contains(property)
+            || _classInfo.ParentFields.Contains(property)
             ? mapTarget.MapTargetLocation
             : property.Locations[0];
     }

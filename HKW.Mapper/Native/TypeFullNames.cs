@@ -18,6 +18,11 @@ internal static class TypeFullNames
         typeof(MapPropertyAttribute).GetGlobalFullName();
     public static string MapCompositePropertyAttribute { get; } =
         typeof(MapCompositePropertyAttribute).GetGlobalFullName();
+    public static string MapIgnoreFieldAttribute { get; } =
+        typeof(MapIgnoreFieldAttribute).GetGlobalFullName();
+    public static string MapFieldAttribute { get; } = typeof(MapFieldAttribute).GetGlobalFullName();
+    public static string MapCompositeFieldAttribute { get; } =
+        typeof(MapCompositeFieldAttribute).GetGlobalFullName();
 
     public static string MapConfigClass { get; } = typeof(MapperConfig<,>).GetGlobalFullName();
     public static string MapConverterInterface { get; } =
@@ -28,6 +33,10 @@ internal static class TypeFullNames
         typeof(MapConfigPropertyConverter<,>).GetGlobalFullName();
     public static string MapConfigPropertyCompositeConverter { get; } =
         typeof(MapConfigPropertyCompositeConverter<,>).GetGlobalFullName();
+    public static string MapConfigFieldConverter { get; } =
+        typeof(MapConfigFieldConverter<,>).GetGlobalFullName();
+    public static string MapConfigFieldCompositeConverter { get; } =
+        typeof(MapConfigFieldCompositeConverter<,>).GetGlobalFullName();
 
     public static string MapToConfigActionAttribute { get; } =
         typeof(MapToConfigActionAttribute).GetGlobalFullName();

@@ -121,6 +121,57 @@ public sealed class User
 
 `MapProperty` 的目标类型或目标名称必须匹配当前源类型上的一个 `[MapTargetAttribute]`；未匹配或重复匹配会产生编译诊断。若不需要属性级设置，则同名属性会自动映射。
 
+## 字段配置
+
+字段映射默认关闭。设置 `MapFields = true` 后，会映射可访问的 `public`/`internal` 实例字段，并支持字段↔字段、字段↔属性和属性↔字段；`static` 与 `const` 字段始终排除。同名目标成员同时存在时属性优先。
+
+```csharp
+[MapTarget(
+    typeof(UserDto),
+    MapFields = true,
+    MapParentFields = true,
+    IgnoreFields = new[] { nameof(User.InternalToken) }
+)]
+public sealed class User : UserBase
+{
+    [MapField(typeof(UserDto), nameof(UserDto.Name))]
+    public string DisplayName = string.Empty;
+
+    [MapIgnoreField]
+    internal string InternalToken = string.Empty;
+}
+
+public sealed class UserDto
+{
+    public string Name { get; set; } = string.Empty;
+    public int Revision;
+}
+```
+
+`MapParentFields` 独立控制父类字段；配置类也可通过可静态解析的 `string[] IgnoreFields` 合并忽略项。readonly 字段可以读取：源 readonly 字段支持 `MapTo`，目标 readonly 字段支持 `MapFrom`。如果当前 `Direction` 需要写入 readonly 字段（包括默认的 `Both`），生成器会报告 `MAP0031` 并跳过该成员。
+
+`MapFieldAttribute` 支持与 `MapPropertyAttribute` 相同的重命名、`IMapConverter<TSourceValue, TTargetValue>`、`MapType` 和忽略设置。一个源字段映射到多个目标成员时，使用 `MapCompositeFieldAttribute` 和 `IMapCompositeConverter<TSourceValue, TTargetValues>`。
+
+配置类可使用字段专用转换器：
+
+```csharp
+public MapConfigFieldConverter<int, string> NumberConverter { get; } =
+    new(
+        nameof(Source.Number),
+        nameof(Target.Text),
+        (value, _) => value.ToString(),
+        (value, _) => int.Parse(value)
+    );
+
+public MapConfigFieldCompositeConverter<Range, (int Low, int High)> RangeConverter { get; } =
+    new(
+        nameof(Source.Range),
+        [nameof(Target.Low), nameof(Target.High)],
+        (value, _) => (value.Low, value.High),
+        (value, _) => new(value.Low, value.High)
+    );
+```
+
 ## 自定义转换器
 
 ### 属性级转换器

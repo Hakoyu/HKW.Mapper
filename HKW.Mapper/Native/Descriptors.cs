@@ -256,4 +256,12 @@ internal static class Descriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor FieldIsReadOnly = new(
+        id: "MAP0031",
+        title: "Field is readonly",
+        messageFormat: "Field '{0}' cannot be written when mapping {1}.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

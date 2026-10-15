@@ -60,15 +60,32 @@ public sealed class MapTargetAttribute : Attribute
     public MapDirections Direction { get; set; } = MapDirections.Both;
 
     /// <summary>
+    /// 是否映射源类型的字段
+    /// </summary>
+    [DefaultValue(false)]
+    public bool MapFields { get; set; }
+
+    /// <summary>
     /// 是否映射源类型的父类属性
     /// </summary>
     [DefaultValue(false)]
     public bool MapParentProperties { get; set; }
 
     /// <summary>
+    /// 是否映射源类型的父类字段
+    /// </summary>
+    [DefaultValue(false)]
+    public bool MapParentFields { get; set; }
+
+    /// <summary>
     /// 要忽略的源属性名称
     /// </summary>
     public string[] IgnoreProperties { get; set; } = [];
+
+    /// <summary>
+    /// 要忽略的源字段名称
+    /// </summary>
+    public string[] IgnoreFields { get; set; } = [];
 }
 
 #pragma warning disable S2346

@@ -50,25 +50,52 @@ internal class ClassInfo
         {
             if (propertySymbol.IsStatic)
                 continue;
-            Properties.Add(propertySymbol);
+            Properties.Add(new(propertySymbol));
         }
-        if (MapTargets.Any(x => x.MapParentProperties))
+        foreach (
+            var fieldSymbol in classSymbol
+                .GetMembers()
+                .OfType<IFieldSymbol>()
+                .Where(IsMappableField)
+        )
+            Fields.Add(new(fieldSymbol));
+
+        if (MapTargets.Any(x => x.MapParentProperties || x.MapParentFields))
         {
-            var propertyNames = new HashSet<string>(
-                Properties.Select(x => x.Name),
+            var memberNames = new HashSet<string>(
+                Properties.Concat(Fields).Select(x => x.Name),
                 StringComparer.Ordinal
             );
             for (var type = classSymbol.BaseType; type is not null; type = type.BaseType)
             {
-                foreach (
-                    var propertySymbol in type.GetMembers()
-                        .OfType<IPropertySymbol>()
-                        .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
-                )
+                if (MapTargets.Any(x => x.MapParentProperties))
                 {
-                    if (propertySymbol.IsStatic || propertyNames.Add(propertySymbol.Name) is false)
-                        continue;
-                    ParentProperties.Add(propertySymbol);
+                    foreach (
+                        var propertySymbol in type.GetMembers()
+                            .OfType<IPropertySymbol>()
+                            .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+                    )
+                    {
+                        if (
+                            propertySymbol.IsStatic
+                            || memberNames.Add(propertySymbol.Name) is false
+                        )
+                            continue;
+                        ParentProperties.Add(new(propertySymbol));
+                    }
+                }
+                if (MapTargets.Any(x => x.MapParentFields))
+                {
+                    foreach (
+                        var fieldSymbol in type.GetMembers()
+                            .OfType<IFieldSymbol>()
+                            .Where(IsMappableField)
+                    )
+                    {
+                        if (memberNames.Add(fieldSymbol.Name) is false)
+                            continue;
+                        ParentFields.Add(new(fieldSymbol));
+                    }
                 }
             }
         }
@@ -86,11 +113,19 @@ internal class ClassInfo
 
     public HashSet<MapTargetInfo> MapTargets { get; } = [];
 
-    public HashSet<IPropertySymbol> Properties { get; } = [];
-    public HashSet<IPropertySymbol> ParentProperties { get; } = [];
+    public HashSet<MapMemberInfo> Properties { get; } = [];
+    public HashSet<MapMemberInfo> ParentProperties { get; } = [];
+    public HashSet<MapMemberInfo> Fields { get; } = [];
+    public HashSet<MapMemberInfo> ParentFields { get; } = [];
 
     public List<FieldGenerateInfo> MapConverters { get; } = [];
     public List<FieldGenerateInfo> MapConfigs { get; } = [];
+
+    private static bool IsMappableField(IFieldSymbol field) =>
+        field.IsStatic is false
+        && field.IsConst is false
+        && field.IsImplicitlyDeclared is false
+        && field.DeclaredAccessibility >= Accessibility.Internal;
 
     public void AddConverters(INamedTypeSymbol typeSymbol, out string fieldName)
     {
@@ -210,12 +245,23 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             Direction = direction;
 
         if (
+            attributeInfo.TryGetParam<bool>(nameof(MapTargetAttribute.MapFields), out var mapFields)
+        )
+            MapFields = mapFields;
+        if (
             attributeInfo.TryGetParam<bool>(
                 nameof(MapTargetAttribute.MapParentProperties),
                 out var mapParentProperties
             )
         )
             MapParentProperties = mapParentProperties;
+        if (
+            attributeInfo.TryGetParam<bool>(
+                nameof(MapTargetAttribute.MapParentFields),
+                out var mapParentFields
+            )
+        )
+            MapParentFields = mapParentFields;
 
         if (
             attributeInfo.TryGetParams<string>(
@@ -223,17 +269,23 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                 out var ignoreProperties
             )
         )
-        {
-            foreach (var p in ignoreProperties)
-                IgnoreProperties.Add(p);
-        }
-        MapParentProperties = mapParentProperties;
+            IgnoreProperties.UnionWith(ignoreProperties);
+        if (
+            attributeInfo.TryGetParams<string>(
+                nameof(MapTargetAttribute.IgnoreFields),
+                out var ignoreFields
+            )
+        )
+            IgnoreFields.UnionWith(ignoreFields);
 
         if (ConfigInfo is not null)
+        {
             IgnoreProperties.UnionWith(ConfigInfo.IgnoreProperties);
+            IgnoreFields.UnionWith(ConfigInfo.IgnoreFields);
+        }
 
         var resolvedTargetType = TargetType;
-        // 分析所有成员，派生类型中隐藏的属性优先于基类属性
+        // 属性优先于同名字段，派生类型成员优先于基类成员。
         for (var type = resolvedTargetType; type is not null; type = type.BaseType)
         {
             foreach (
@@ -241,8 +293,23 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                     .OfType<IPropertySymbol>()
                     .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
             )
+                MemberByName.TryAdd(property.Name, new(property));
+        }
+        if (MapFields)
+        {
+            for (var type = resolvedTargetType; type is not null; type = type.BaseType)
             {
-                PropertyByName.TryAdd(property.Name, property);
+                foreach (
+                    var field in type.GetMembers()
+                        .OfType<IFieldSymbol>()
+                        .Where(x =>
+                            x.IsStatic is false
+                            && x.IsConst is false
+                            && x.IsImplicitlyDeclared is false
+                            && x.DeclaredAccessibility >= Accessibility.Internal
+                        )
+                )
+                    MemberByName.TryAdd(field.Name, new(field));
             }
         }
         var lowestAccessibility = sourceType.GetLowestAccessibility(resolvedTargetType);
@@ -294,15 +361,18 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         + $"{(TargetName == TargetType.Name ? "" : TargetName)}"
         + $"{(ConfigInfo?.MapFrom.IsAsync is true ? "Async" : "")}";
 
-    public Dictionary<string, IPropertySymbol> PropertyByName { get; } = [];
+    public Dictionary<string, MapMemberInfo> MemberByName { get; } = [];
     public HashSet<string> IgnoreProperties { get; } = new();
+    public HashSet<string> IgnoreFields { get; } = new();
     public Location MapTargetLocation { get; }
 
     public bool IsInvalid { get; }
 
     public INamedTypeSymbol TargetType { get; }
     public MapDirections Direction { get; } = MapDirections.Both;
+    public bool MapFields { get; }
     public bool MapParentProperties { get; }
+    public bool MapParentFields { get; }
 
     public MethodGenerateInfo MapToMethod { get; }
     public MethodGenerateInfo MapFromMethod { get; }
@@ -341,17 +411,28 @@ internal sealed class MapConfigInfo
         {
             if (member is IPropertySymbol propertySymbol)
             {
-                if (CheckIgnoreProperties(propertySymbol))
+                if (CheckIgnoredMembers(propertySymbol))
                     continue;
                 if (CheckProperty(propertySymbol, out var sourceName, out var targetName))
                 {
-                    Converters.Add(sourceName, (targetName, propertySymbol));
+                    var isFieldConverter =
+                        propertySymbol.Type.Name == nameof(MapConfigFieldConverter<object, object>);
+                    Converters.Add(
+                        sourceName,
+                        (targetName, propertySymbol, isFieldConverter)
+                    );
                 }
                 else if (
                     CheckCompositeProperty(propertySymbol, out sourceName, out var targetNames)
                 )
                 {
-                    CompositeConverters.Add(sourceName, (targetNames, propertySymbol));
+                    var isFieldConverter =
+                        propertySymbol.Type.Name
+                        == nameof(MapConfigFieldCompositeConverter<object, ValueTuple>);
+                    CompositeConverters.Add(
+                        sourceName,
+                        (targetNames, propertySymbol, isFieldConverter)
+                    );
                 }
             }
             else if (member is IMethodSymbol methodSymbol)
@@ -364,20 +445,31 @@ internal sealed class MapConfigInfo
     private readonly ClassInfo _classInfo;
 
     public INamedTypeSymbol Type { get; }
-    public Dictionary<string, (string TargetName, IPropertySymbol Property)> Converters { get; } =
-    [];
     public Dictionary<
         string,
-        (string[] TargetNames, IPropertySymbol Property)
-    > CompositeConverters { get; } = [];
+        (string TargetName, IPropertySymbol Property, bool IsFieldConverter)
+    > Converters
+    { get; } = [];
+    public Dictionary<
+        string,
+        (string[] TargetNames, IPropertySymbol Property, bool IsFieldConverter)
+    > CompositeConverters
+    { get; } = [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
     public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> IgnoreFields { get; } = new(StringComparer.Ordinal);
 
-    private bool CheckIgnoreProperties(IPropertySymbol propertySymbol)
+    private bool CheckIgnoredMembers(IPropertySymbol propertySymbol)
     {
+        var destination = propertySymbol.Name switch
+        {
+            nameof(MapTargetAttribute.IgnoreProperties) => IgnoreProperties,
+            nameof(MapTargetAttribute.IgnoreFields) => IgnoreFields,
+            _ => null,
+        };
         if (
-            propertySymbol.Name != nameof(MapTargetAttribute.IgnoreProperties)
+            destination is null
             || propertySymbol.Type
                 is not IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_String }
             || propertySymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
@@ -402,7 +494,7 @@ internal sealed class MapConfigInfo
         {
             var propertyName = expression.GetConstantString(semanticModel);
             if (string.IsNullOrWhiteSpace(propertyName) is false)
-                IgnoreProperties.Add(propertyName!);
+                destination.Add(propertyName!);
         }
         return true;
     }
@@ -415,7 +507,10 @@ internal sealed class MapConfigInfo
     {
         // 获取转换器属性并检查
         sourceName = targetName = string.Empty;
-        if (propertySymbol.Type.InheritedFrom(TypeFullNames.MapConfigPropertyConverter) is false)
+        if (
+            propertySymbol.Type.Name != nameof(MapConfigPropertyConverter<object, object>)
+            && propertySymbol.Type.Name != nameof(MapConfigFieldConverter<object, object>)
+        )
             return false;
         if (propertySymbol.DeclaringSyntaxReferences.Length < 1)
             return false;
@@ -425,18 +520,19 @@ internal sealed class MapConfigInfo
 
         var semanticModel = _classInfo.Compilation.GetSemanticModel(propertySyntax.SyntaxTree);
         // 获取属性初始化器来解析参数
-        if (
-            propertySyntax.Initializer?.Value is not ImplicitObjectCreationExpressionSyntax creation
-        )
-            return false;
-
-        var arguments = creation.ArgumentList?.Arguments;
+        var argumentList = propertySyntax.Initializer?.Value switch
+        {
+            ImplicitObjectCreationExpressionSyntax creation => creation.ArgumentList,
+            ObjectCreationExpressionSyntax creation => creation.ArgumentList,
+            _ => null,
+        };
+        var arguments = argumentList?.Arguments;
 
         if (arguments is null)
             return false;
         if (arguments.Value.Count == 3)
         {
-            // 只有3个参数, 则源属性和目标属性同名
+            // 只有3个参数, 则源成员和目标成员同名
             sourceName = arguments.Value[0].Expression.GetConstantString(semanticModel)!;
             targetName = sourceName;
         }
@@ -467,8 +563,10 @@ internal sealed class MapConfigInfo
         sourceName = string.Empty;
         targetNames = [];
         if (
-            propertySymbol.Type.InheritedFrom(TypeFullNames.MapConfigPropertyCompositeConverter)
-            is false
+            propertySymbol.Type.Name
+                != nameof(MapConfigPropertyCompositeConverter<object, ValueTuple>)
+            && propertySymbol.Type.Name
+                != nameof(MapConfigFieldCompositeConverter<object, ValueTuple>)
         )
             return false;
         if (

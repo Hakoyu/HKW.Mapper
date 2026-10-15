@@ -87,3 +87,48 @@ public sealed class MapConfigPropertyConverter<TSourceValue, TTargetValue>
         return _convertBack(value, args);
     }
 }
+
+/// <summary>
+/// 映射设置字段转换器。
+/// </summary>
+public sealed class MapConfigFieldConverter<TSourceValue, TTargetValue>
+    : IMapConverter<TSourceValue, TTargetValue>
+{
+    /// <inheritdoc/>
+    public MapConfigFieldConverter(
+        string fieldName,
+        Func<TSourceValue, MapConvertArgs, TTargetValue> convert,
+        Func<TTargetValue, MapConvertArgs, TSourceValue> convertBack
+    )
+        : this(fieldName, fieldName, convert, convertBack) { }
+
+    /// <inheritdoc/>
+    public MapConfigFieldConverter(
+        string sourceField,
+        string targetField,
+        Func<TSourceValue, MapConvertArgs, TTargetValue> convert,
+        Func<TTargetValue, MapConvertArgs, TSourceValue> convertBack
+    )
+    {
+        if (string.IsNullOrWhiteSpace(sourceField))
+            throw new ArgumentException("Source field is required.", nameof(sourceField));
+        if (string.IsNullOrWhiteSpace(targetField))
+            throw new ArgumentException("Target field is required.", nameof(targetField));
+        if (convert is null)
+            throw new ArgumentNullException(nameof(convert));
+        if (convertBack is null)
+            throw new ArgumentNullException(nameof(convertBack));
+        _convert = convert;
+        _convertBack = convertBack;
+    }
+
+    private readonly Func<TSourceValue, MapConvertArgs, TTargetValue> _convert;
+    private readonly Func<TTargetValue, MapConvertArgs, TSourceValue> _convertBack;
+
+    /// <inheritdoc/>
+    public TTargetValue Convert(TSourceValue value, MapConvertArgs args) => _convert(value, args);
+
+    /// <inheritdoc/>
+    public TSourceValue ConvertBack(TTargetValue value, MapConvertArgs args) =>
+        _convertBack(value, args);
+}
