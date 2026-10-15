@@ -654,6 +654,96 @@ public sealed class DescriptorsTests
     }
 
     [TestMethod]
+    public void MAP0033_ReportsMissingNestedSourcePathSegment()
+    {
+        AssertDiagnostic(
+            "MAP0033",
+            DiagnosticSeverity.Warning,
+            "Node",
+            ["Source.Node.Missing.Value", "not exists"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), nameof(Target.Value), SourcePath = "Node.Missing.Value")]
+                public Node Node { get; set; } = new();
+            }
+            public sealed class Node { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0030_ReportsUnreadableIntermediateSourcePathSegment()
+    {
+        AssertDiagnostic(
+            "MAP0030",
+            DiagnosticSeverity.Error,
+            "Anchor",
+            ["Anchor", "getter", "accessibility"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), nameof(Target.Value), SourcePath = "Node.Value")]
+                public int Anchor { get; set; }
+
+                [MapIgnoreProperty]
+                public Node Node { private get; set; } = new();
+            }
+            public sealed class Node { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0035_ReportsValueTypePropertyInWritableSourcePath()
+    {
+        AssertDiagnostic(
+            "MAP0035",
+            DiagnosticSeverity.Error,
+            "Anchor",
+            ["Point", "value type", "writable"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.From)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), nameof(Target.Value), SourcePath = "Point.Value")]
+                public int Anchor { get; set; }
+
+                [MapIgnoreProperty]
+                public Point Point { get; set; }
+            }
+            public struct Point { public int Value; }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0031_ReportsReadonlySourcePathFieldForMapFrom()
+    {
+        AssertDiagnostic(
+            "MAP0031",
+            DiagnosticSeverity.Error,
+            "Node",
+            ["Node.Value", "From", "written"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.From, MapFields = true)]
+            public sealed class Source
+            {
+                [MapField(typeof(Target), nameof(Target.Value), SourcePath = "Node.Value")]
+                public Node Node = new();
+            }
+            public sealed class Node { public readonly int Value; }
+            public sealed class Target { public int Value; }
+            """
+        );
+    }
+
+    [TestMethod]
     public void MAP0004_ReportsMissingNestedTargetPathSegment()
     {
         AssertDiagnostic(

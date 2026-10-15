@@ -49,6 +49,9 @@ public sealed class MapFieldAttribute : Attribute
     /// <summary>实现 <see cref="IMapConverter{TSourceValue, TTargetValue}"/> 的转换器类型。</summary>
     public Type? ConverterType { get; }
 
+    /// <summary>从源对象根开始的源成员路径。</summary>
+    public string? SourcePath { get; set; }
+
     /// <summary>是否忽略当前字段。</summary>
     public bool Ignore { get; set; }
 

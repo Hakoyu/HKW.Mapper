@@ -272,4 +272,28 @@ internal static class Descriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor SourcePropertyNotExists = new(
+        id: "MAP0033",
+        title: "Source property not exists",
+        messageFormat: "Source property '{0}' not exists, please check SourcePath.",
+        category: _category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor SourcePropertyIsStatic = new(
+        id: "MAP0034",
+        title: "Source property is static",
+        messageFormat: "Source property '{0}' is static, please check SourcePath.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor SourcePathValueTypeNotWritable = new(
+        id: "MAP0035",
+        title: "Source path value type is not writable",
+        messageFormat: "Source path member '{0}' is a value type property and does not provide a writable variable for nested member '{1}'.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

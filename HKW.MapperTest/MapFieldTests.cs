@@ -67,6 +67,39 @@ public sealed class MapFieldTests
     }
 
     [TestMethod]
+    public void FieldAttributesSupportFullSourcePathsBothDirections()
+    {
+        var source = new FieldSourcePathSource
+        {
+            DirectNode = new() { Value = 39 },
+            NumberNode = new() { Value = 41 },
+            RangeNode = new() { Value = new(43, 47) },
+        };
+        var target = new FieldSourcePathTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual(39, target.Direct);
+        Assert.AreEqual("41", target.Text);
+        Assert.AreEqual(43, target.Low);
+        Assert.AreEqual(47, target.High);
+        Assert.AreEqual("NumberNode.Value", FieldSourcePathNumberConverter.LastSourcePath);
+        Assert.AreEqual("RangeNode.Value", FieldSourcePathRangeConverter.LastSourcePath);
+
+        target.Direct = 51;
+        target.Text = "53";
+        target.Low = 59;
+        target.High = 61;
+        source.MapFrom(target);
+
+        Assert.AreEqual(51, source.DirectNode.Value);
+        Assert.AreEqual(53, source.NumberNode.Value);
+        Assert.AreEqual(new FieldRange(59, 61), source.RangeNode.Value);
+        Assert.AreEqual("NumberNode.Value", FieldSourcePathNumberConverter.LastSourcePath);
+        Assert.AreEqual("RangeNode.Value", FieldSourcePathRangeConverter.LastSourcePath);
+    }
+
+    [TestMethod]
     public void FieldAttributesUseRegularAndCompositeConverters()
     {
         var source = new FieldConverterSource { Number = 7, Range = new(2, 5) };
@@ -191,6 +224,90 @@ public sealed class FieldTarget
 }
 
 public readonly record struct FieldRange(int Low, int High);
+
+[MapTarget(typeof(FieldSourcePathTarget), MapFields = true)]
+public sealed class FieldSourcePathSource
+{
+    [MapField(
+        typeof(FieldSourcePathTarget),
+        nameof(FieldSourcePathTarget.Direct),
+        SourcePath = "DirectNode.Value"
+    )]
+    public FieldSourcePathNumberNode DirectNode = new();
+
+    [MapField(
+        typeof(FieldSourcePathTarget),
+        nameof(FieldSourcePathTarget.Text),
+        typeof(FieldSourcePathNumberConverter),
+        SourcePath = "NumberNode.Value"
+    )]
+    public FieldSourcePathNumberNode NumberNode = new();
+
+    [MapCompositeField(
+        typeof(FieldSourcePathTarget),
+        typeof(FieldSourcePathRangeConverter),
+        nameof(FieldSourcePathTarget.Low),
+        nameof(FieldSourcePathTarget.High),
+        SourcePath = "RangeNode.Value"
+    )]
+    public FieldSourcePathRangeNode RangeNode = new();
+}
+
+public sealed class FieldSourcePathNumberNode
+{
+    public int Value;
+}
+
+public sealed class FieldSourcePathRangeNode
+{
+    public FieldRange Value;
+}
+
+public sealed class FieldSourcePathTarget
+{
+    public int Direct;
+    public string Text { get; set; } = string.Empty;
+    public int Low;
+    public int High { get; set; }
+}
+
+public sealed class FieldSourcePathNumberConverter : IMapConverter<int, string>
+{
+    public static string LastSourcePath { get; private set; } = string.Empty;
+
+    public string Convert(int value, MapConvertArgs args)
+    {
+        LastSourcePath = args.SourcePropertyName;
+        return value.ToString();
+    }
+
+    public int ConvertBack(string value, MapConvertArgs args)
+    {
+        LastSourcePath = args.SourcePropertyName;
+        return int.Parse(value);
+    }
+}
+
+public sealed class FieldSourcePathRangeConverter
+    : IMapCompositeConverter<FieldRange, (int Low, int High)>
+{
+    public static string LastSourcePath { get; private set; } = string.Empty;
+
+    public (int Low, int High) Convert(FieldRange value, MapCompositeConvertArgs args)
+    {
+        LastSourcePath = args.SourcePropertyName;
+        return (value.Low, value.High);
+    }
+
+    public FieldRange ConvertBack(
+        (int Low, int High) values,
+        MapCompositeConvertArgs args
+    )
+    {
+        LastSourcePath = args.SourcePropertyName;
+        return new(values.Low, values.High);
+    }
+}
 
 [MapTarget(typeof(FieldConverterTarget), MapFields = true)]
 public sealed class FieldConverterSource

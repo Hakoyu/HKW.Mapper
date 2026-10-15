@@ -98,6 +98,11 @@ public sealed class MapPropertyAttribute : Attribute
     public Type? ConverterType { get; }
 
     /// <summary>
+    /// 从源对象根开始的源成员路径。
+    /// </summary>
+    public string? SourcePath { get; set; }
+
+    /// <summary>
     /// 忽视属性
     /// </summary>
     public bool Ignore { get; set; }

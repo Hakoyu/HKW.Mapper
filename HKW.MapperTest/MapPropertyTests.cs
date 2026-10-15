@@ -83,6 +83,71 @@ public sealed class MapPropertyTests
     }
 
     [TestMethod]
+    public void SourcePathsMapBothDirectionsAndUseFullConverterPath()
+    {
+        var source = new MptFixtureSourcePathSource
+        {
+            Profile = new() { Name = "Primary" },
+            Number = new() { Value = 31 },
+        };
+        var target = new MptFixtureSourcePathTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual("Primary", target.Name);
+        Assert.AreEqual("31", target.Text);
+        Assert.AreEqual(
+            "Profile.Name",
+            MptFixtureSourcePathNameConverter.LastSourcePropertyName
+        );
+        Assert.AreEqual(
+            "Number.Value",
+            MptFixtureSourcePathNumberConverter.LastSourcePropertyName
+        );
+
+        target.Name = "Returned";
+        target.Text = "37";
+        source.MapFrom(target);
+
+        Assert.AreEqual("Returned", source.Profile.Name);
+        Assert.AreEqual(37, source.Number.Value);
+        Assert.AreEqual(
+            "Profile.Name",
+            MptFixtureSourcePathNameConverter.LastSourcePropertyName
+        );
+        Assert.AreEqual(
+            "Number.Value",
+            MptFixtureSourcePathNumberConverter.LastSourcePropertyName
+        );
+    }
+
+    [TestMethod]
+    public void SourcePathKeepsAnnotatedMemberAsDefaultTargetName()
+    {
+        var source = new MptFixtureSourcePathDefaultSource
+        {
+            Node = new() { Value = "Mapped" },
+        };
+        var target = new MptFixtureSourcePathDefaultTarget();
+
+        source.MapTo(target);
+        Assert.AreEqual("Mapped", target.Anchor);
+
+        target.Anchor = "Returned";
+        source.MapFrom(target);
+        Assert.AreEqual("Returned", source.Node.Value);
+    }
+
+    [TestMethod]
+    public void SourcePathDoesNotCreateNullIntermediateObjects()
+    {
+        var source = new MptFixtureSourcePathSource { Profile = null! };
+        var target = new MptFixtureSourcePathTarget();
+
+        Assert.Throws<NullReferenceException>(() => source.MapTo(target));
+    }
+
+    [TestMethod]
     public void ConfigConverterUsesFullNestedTargetPath()
     {
         var source = new MptFixtureConfigPathSource { Value = 31 };
@@ -223,6 +288,96 @@ public sealed class MptFixtureNamePropertyNameSource
 public sealed class MptFixtureNamePropertyNameTarget
 {
     public int Renamed { get; set; }
+}
+
+[MapTarget(typeof(MptFixtureSourcePathTarget))]
+public sealed class MptFixtureSourcePathSource
+{
+    [MapProperty(
+        typeof(MptFixtureSourcePathTarget),
+        nameof(MptFixtureSourcePathTarget.Name),
+        typeof(MptFixtureSourcePathNameConverter),
+        SourcePath = "Profile.Name"
+    )]
+    public MptFixtureSourcePathNameNode Profile { get; set; } = new();
+
+    [MapProperty(
+        typeof(MptFixtureSourcePathTarget),
+        nameof(MptFixtureSourcePathTarget.Text),
+        typeof(MptFixtureSourcePathNumberConverter),
+        SourcePath = "Number.Value"
+    )]
+    public MptFixtureSourcePathNumberNode Number { get; set; } = new();
+}
+
+public sealed class MptFixtureSourcePathTarget
+{
+    public string Name { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+}
+
+public sealed class MptFixtureSourcePathNameNode
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class MptFixtureSourcePathNumberNode
+{
+    public int Value { get; set; }
+}
+
+public sealed class MptFixtureSourcePathNameConverter : IMapConverter<string, string>
+{
+    public static string LastSourcePropertyName { get; private set; } = string.Empty;
+
+    public string Convert(string value, MapConvertArgs args)
+    {
+        LastSourcePropertyName = args.SourcePropertyName;
+        return value;
+    }
+
+    public string ConvertBack(string value, MapConvertArgs args)
+    {
+        LastSourcePropertyName = args.SourcePropertyName;
+        return value;
+    }
+}
+
+public sealed class MptFixtureSourcePathNumberConverter : IMapConverter<int, string>
+{
+    public static string LastSourcePropertyName { get; private set; } = string.Empty;
+
+    public string Convert(int value, MapConvertArgs args)
+    {
+        LastSourcePropertyName = args.SourcePropertyName;
+        return value.ToString();
+    }
+
+    public int ConvertBack(string value, MapConvertArgs args)
+    {
+        LastSourcePropertyName = args.SourcePropertyName;
+        return int.Parse(value);
+    }
+}
+
+[MapTarget(typeof(MptFixtureSourcePathDefaultTarget))]
+public sealed class MptFixtureSourcePathDefaultSource
+{
+    [MapProperty(typeof(MptFixtureSourcePathDefaultTarget), SourcePath = "Node.Value")]
+    public string Anchor { get; set; } = string.Empty;
+
+    [MapIgnoreProperty]
+    public MptFixtureSourcePathDefaultNode Node { get; set; } = new();
+}
+
+public sealed class MptFixtureSourcePathDefaultTarget
+{
+    public string Anchor { get; set; } = string.Empty;
+}
+
+public sealed class MptFixtureSourcePathDefaultNode
+{
+    public string Value { get; set; } = string.Empty;
 }
 
 [MapTarget(typeof(MptFixtureIgnoreTarget))]

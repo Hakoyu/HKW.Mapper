@@ -51,6 +51,11 @@ public sealed class MapCompositePropertyAttribute : Attribute
     public Type ConverterType { get; }
 
     /// <summary>
+    /// 从源对象根开始的源成员路径。
+    /// </summary>
+    public string? SourcePath { get; set; }
+
+    /// <summary>
     /// 按转换器值元组元素顺序排列的目标属性名
     /// </summary>
     public string[] TargetProperties { get; }

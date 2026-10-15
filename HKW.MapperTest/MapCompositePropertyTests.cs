@@ -35,6 +35,35 @@ public sealed class MapCompositePropertyTests
     }
 
     [TestMethod]
+    public void CompositePropertySupportsFullSourcePathBothDirections()
+    {
+        var source = new CompositePropertySourcePathSource
+        {
+            Node = new() { Value = new(23, 29) },
+        };
+        var target = new CompositePropertySourcePathTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual(23, target.Low);
+        Assert.AreEqual(29, target.High);
+        Assert.AreEqual(
+            "Node.Value",
+            CompositePropertySourcePathConverter.LastSourcePropertyName
+        );
+
+        target.Low = 31;
+        target.High = 37;
+        source.MapFrom(target);
+
+        Assert.AreEqual(new CompositePropertySourcePathValue(31, 37), source.Node.Value);
+        Assert.AreEqual(
+            "Node.Value",
+            CompositePropertySourcePathConverter.LastSourcePropertyName
+        );
+    }
+
+    [TestMethod]
     public void PreservesTargetPropertyNamesOrderAndWiresGeneratedParameters()
     {
         var source = new CompositePropertyWiringSource
@@ -106,6 +135,56 @@ public sealed class CompositePropertySelectionConverter
         (int First, int Second) values,
         MapCompositeConvertArgs args
     ) => new(values.First, values.Second);
+}
+
+public readonly record struct CompositePropertySourcePathValue(int Low, int High);
+
+[MapTarget(typeof(CompositePropertySourcePathTarget))]
+public sealed class CompositePropertySourcePathSource
+{
+    [MapCompositeProperty(
+        typeof(CompositePropertySourcePathTarget),
+        typeof(CompositePropertySourcePathConverter),
+        nameof(CompositePropertySourcePathTarget.Low),
+        nameof(CompositePropertySourcePathTarget.High),
+        SourcePath = "Node.Value"
+    )]
+    public CompositePropertySourcePathNode Node { get; set; } = new();
+}
+
+public sealed class CompositePropertySourcePathNode
+{
+    public CompositePropertySourcePathValue Value { get; set; }
+}
+
+public sealed class CompositePropertySourcePathTarget
+{
+    public int Low { get; set; }
+    public int High { get; set; }
+}
+
+public sealed class CompositePropertySourcePathConverter
+    : IMapCompositeConverter<CompositePropertySourcePathValue, (int Low, int High)>
+{
+    public static string LastSourcePropertyName { get; private set; } = string.Empty;
+
+    public (int Low, int High) Convert(
+        CompositePropertySourcePathValue value,
+        MapCompositeConvertArgs args
+    )
+    {
+        LastSourcePropertyName = args.SourcePropertyName;
+        return (value.Low, value.High);
+    }
+
+    public CompositePropertySourcePathValue ConvertBack(
+        (int Low, int High) values,
+        MapCompositeConvertArgs args
+    )
+    {
+        LastSourcePropertyName = args.SourcePropertyName;
+        return new(values.Low, values.High);
+    }
 }
 
 public readonly record struct CompositePropertyWiringValue(
