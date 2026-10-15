@@ -654,6 +654,116 @@ public sealed class DescriptorsTests
     }
 
     [TestMethod]
+    public void MAP0004_ReportsMissingNestedTargetPathSegment()
+    {
+        AssertDiagnostic(
+            "MAP0004",
+            DiagnosticSeverity.Warning,
+            "Value",
+            ["Target.Node.Missing.Value", "not exists"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), "Node.Missing.Value")]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public Node Node { get; set; } = new(); }
+            public sealed class Node;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0004_ReportsNestedTargetFieldWhenMapFieldsIsDisabled()
+    {
+        AssertDiagnostic(
+            "MAP0004",
+            DiagnosticSeverity.Warning,
+            "Value",
+            ["Target.Node.Value", "not exists"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), "Node.Value")]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public Node Node = new(); }
+            public sealed class Node { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0007_ReportsUnreadableIntermediateTargetPathSegment()
+    {
+        AssertDiagnostic(
+            "MAP0007",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Node", "getter", "accessibility"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), "Node.Value")]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public Node Node { private get; set; } = new(); }
+            public sealed class Node { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0032_ReportsValueTypePropertyInWritableTargetPath()
+    {
+        AssertDiagnostic(
+            "MAP0032",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Point", "value type", "writable"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), "Point.Value")]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public Point Point { get; set; } }
+            public struct Point { public int Value; }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void DifferentTargetPathsWithSameLeafNameDoNotConflict()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), "First.Value")]
+                public int First { get; set; }
+
+                [MapProperty(typeof(Target), "Second.Value")]
+                public int Second { get; set; }
+            }
+            public sealed class Target
+            {
+                public Node First { get; set; } = new();
+                public Node Second { get; set; } = new();
+            }
+            public sealed class Node { public int Value { get; set; } }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0002"));
+    }
+
+    [TestMethod]
     public void DoesNotReportSourceAccessorDiagnosticForUnusedDirectionalAccessors()
     {
         const string source = """

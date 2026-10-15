@@ -223,7 +223,12 @@ internal class MapperGenerator
                 is true
             && attributeConverterType is not null;
 
-        var targetProperty = GetTargetProperty(mapTarget, propertySymbol, targetPropertyName);
+        var targetProperty = GetTargetProperty(
+            mapTarget,
+            propertySymbol,
+            targetPropertyName,
+            allowPath: true
+        );
         if (targetProperty is null)
             return;
         if (
@@ -456,10 +461,10 @@ internal class MapperGenerator
         if (mapType is MapPropertyType.ConstructFromSelf)
         {
             mapTarget.MapToMethod.Contents.Add(
-                $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = new({MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
+                $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = new({MapTargetInfo.SourceParamName}.{propertySymbol.Name});"
             );
             mapTarget.MapFromMethod.Contents.Add(
-                $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = new({MapTargetInfo.TargetParamName}.{targetProperty.Name});"
+                $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = new({MapTargetInfo.TargetParamName}.{targetProperty.AccessPath});"
             );
             return;
         }
@@ -487,10 +492,10 @@ internal class MapperGenerator
             {
                 // 如果实现了 ICloneable, 则克隆
                 mapTarget.MapToMethod.Contents.Add(
-                    $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = ({propertySymbol.Type.GetGlobalFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}?.{nameof(ICloneable.Clone)}()!;"
+                    $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = ({propertySymbol.Type.GetGlobalFullName()}){MapTargetInfo.SourceParamName}.{propertySymbol.Name}?.{nameof(ICloneable.Clone)}()!;"
                 );
                 mapTarget.MapFromMethod.Contents.Add(
-                    $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetGlobalFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.Name}?.{nameof(ICloneable.Clone)}()!;"
+                    $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = ({targetProperty.Type.GetGlobalFullName()}){MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}?.{nameof(ICloneable.Clone)}()!;"
                 );
                 return;
             }
@@ -509,10 +514,10 @@ internal class MapperGenerator
 
         // 正常赋值
         mapTarget.MapToMethod.Contents.Add(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {MapTargetInfo.SourceParamName}.{propertySymbol.Name};"
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = {MapTargetInfo.SourceParamName}.{propertySymbol.Name};"
         );
         mapTarget.MapFromMethod.Contents.Add(
-            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {MapTargetInfo.TargetParamName}.{targetProperty.Name};"
+            $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {MapTargetInfo.TargetParamName}.{targetProperty.AccessPath};"
         );
     }
 
@@ -528,7 +533,7 @@ internal class MapperGenerator
             return false;
 
         var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
-        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}";
         var sourceNullable = IsNullable(sourceProperty.Type);
         var targetNullable = IsNullable(targetProperty.Type);
         var toExpression =
@@ -571,7 +576,7 @@ internal class MapperGenerator
             )
                 return false;
             var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
-            var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+            var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}";
             if (map.CanMapTo)
             {
                 mapTarget.MapToMethod.Contents.Add("{");
@@ -640,7 +645,7 @@ internal class MapperGenerator
         )
             return false;
         var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
-        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}";
         if (map.CanMapTo)
         {
             mapTarget.MapToMethod.Contents.Add("{");
@@ -684,7 +689,7 @@ internal class MapperGenerator
         )
             return false;
         var source = $"{MapTargetInfo.SourceParamName}.{sourceProperty.Name}";
-        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}";
+        var target = $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}";
         mapTarget.MapToMethod.Contents.Add("{");
         if (keyMap.CanMapTo && valueMap.CanMapTo)
         {
@@ -1104,21 +1109,26 @@ internal class MapperGenerator
         }
         foreach (var targetProperty in targetProperties)
         {
-            if (mappedProperties.TryGetValue(targetProperty.Name, out var firstSourceProperty))
+            if (
+                mappedProperties.TryGetValue(
+                    targetProperty.AccessPath,
+                    out var firstSourceProperty
+                )
+            )
             {
                 var diagnostic = Diagnostic.Create(
                     Descriptors.SameMapTargetProperty,
                     sourceProperty.Locations[0],
                     firstSourceProperty.Name,
                     sourceProperty.Name,
-                    targetProperty.Name
+                    targetProperty.AccessPath
                 );
                 _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
                 return false;
             }
         }
         foreach (var targetProperty in targetProperties)
-            mappedProperties.Add(targetProperty.Name, sourceProperty);
+            mappedProperties.Add(targetProperty.AccessPath, sourceProperty);
         return true;
     }
 
@@ -1207,18 +1217,18 @@ internal class MapperGenerator
             converterSourceType
         );
         var convertArgs =
-            $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", \"{targetProperty.Name}\")";
+            $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", \"{targetProperty.AccessPath}\")";
         var convertedTargetValue =
             $"{convertName}.{nameof(IMapConverter<,>.Convert)}({sourceValue}, {convertArgs})";
         var targetValue = ConvertExpression(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}",
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}",
             targetProperty.Type,
             converterTargetType
         );
         var convertedSourceValue =
             $"{convertName}.{nameof(IMapConverter<,>.ConvertBack)}({targetValue}, {convertArgs})";
         mapTarget.MapToMethod.Contents.Add(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
@@ -1284,18 +1294,18 @@ internal class MapperGenerator
             converterSourceType
         );
         var convertArgs =
-            $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", \"{targetProperty.Name}\")";
+            $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.Name}\", \"{targetProperty.AccessPath}\")";
         var convertedTargetValue =
             $"{fieldName}.{nameof(IMapConverter<,>.Convert)}({sourceValue}, {convertArgs})";
         var targetValue = ConvertExpression(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name}",
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}",
             targetProperty.Type,
             converterTargetType
         );
         var convertedSourceValue =
             $"{fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({targetValue}, {convertArgs})";
         mapTarget.MapToMethod.Contents.Add(
-            $"{MapTargetInfo.TargetParamName}.{targetProperty.Name} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
+            $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.Name} = {ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
@@ -1306,27 +1316,32 @@ internal class MapperGenerator
     private MapMemberInfo? GetTargetProperty(
         MapTargetInfo mapTarget,
         MapMemberInfo property,
-        string targetPropertyName
+        string targetPropertyName,
+        bool allowPath = false
     )
     {
-        // 目标属性不存在
-        if (mapTarget.MemberByName.TryGetValue(targetPropertyName, out var targetProperty) is false)
+        MapMemberInfo? targetProperty;
+        if (allowPath && targetPropertyName.IndexOf('.') >= 0)
         {
-            var diagnostic = Diagnostic.Create(
-                Descriptors.TargetPropertyNotExists,
-                GetPropertyDiagnosticLocation(mapTarget, property),
-                mapTarget.TargetType.GetName() + "." + property.Name
-            );
-            _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
+            targetProperty = ResolveTargetPath(mapTarget, property, targetPropertyName);
+            if (targetProperty is null)
+                return null;
+        }
+        else if (
+            mapTarget.MemberByName.TryGetValue(targetPropertyName, out targetProperty) is false
+        )
+        {
+            ReportTargetPathNotFound(mapTarget, property, targetPropertyName);
             return null;
         }
+
         // 静态属性
         if (targetProperty.IsStatic)
         {
             var diagnostic = Diagnostic.Create(
                 Descriptors.TargetPropertyIsStatic,
                 property.Locations[0],
-                targetProperty.Name
+                targetProperty.AccessPath
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
             return null;
@@ -1367,7 +1382,7 @@ internal class MapperGenerator
                 Diagnostic.Create(
                     Descriptors.FieldIsReadOnly,
                     property.Locations[0],
-                    targetProperty.Name,
+                    targetProperty.AccessPath,
                     nameof(MapDirections.To)
                 )
             );
@@ -1419,6 +1434,165 @@ internal class MapperGenerator
         return targetProperty;
     }
 
+    private MapMemberInfo? ResolveTargetPath(
+        MapTargetInfo mapTarget,
+        MapMemberInfo sourceProperty,
+        string targetPath
+    )
+    {
+        var segments = targetPath.Split('.');
+        if (segments.Any(string.IsNullOrWhiteSpace))
+        {
+            ReportTargetPathNotFound(mapTarget, sourceProperty, targetPath);
+            return null;
+        }
+
+        ITypeSymbol currentType = mapTarget.TargetType;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var symbol = FindTargetPathMember(currentType, segments[i], mapTarget.MapFields);
+            if (symbol is null)
+            {
+                ReportTargetPathNotFound(mapTarget, sourceProperty, targetPath);
+                return null;
+            }
+
+            var member = symbol switch
+            {
+                IPropertySymbol property => new MapMemberInfo(property, targetPath),
+                IFieldSymbol field => new MapMemberInfo(field, targetPath),
+                _ => null,
+            };
+            if (member is null)
+            {
+                ReportTargetPathNotFound(mapTarget, sourceProperty, targetPath);
+                return null;
+            }
+
+            var isLeaf = i == segments.Length - 1;
+            if (isLeaf)
+                return member;
+
+            var segmentPath = string.Join(".", segments, 0, i + 1);
+            if (member.IsStatic)
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.TargetPropertyIsStatic,
+                        sourceProperty.Locations[0],
+                        segmentPath
+                    )
+                );
+                return null;
+            }
+
+            if (member.IsField)
+            {
+                if (IsMemberAccessible(member.Symbol) is false)
+                {
+                    ReportTargetAccessorDiagnostic(sourceProperty, member, "field");
+                    return null;
+                }
+
+                if (
+                    mapTarget.Direction.HasFlag(MapDirections.To)
+                    && member.Type.IsValueType
+                    && member.IsReadOnly
+                )
+                {
+                    _classInfo.ProductionContext.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Descriptors.FieldIsReadOnly,
+                            sourceProperty.Locations[0],
+                            segmentPath,
+                            nameof(MapDirections.To)
+                        )
+                    );
+                    return null;
+                }
+            }
+            else
+            {
+                if (
+                    member.GetMethod is null
+                    || IsMemberAccessible(member.GetMethod) is false
+                )
+                {
+                    ReportTargetAccessorDiagnostic(sourceProperty, member, "getter");
+                    return null;
+                }
+
+                if (
+                    mapTarget.Direction.HasFlag(MapDirections.To)
+                    && member.Type.IsValueType
+                    && member.Symbol is IPropertySymbol property
+                    && (property.ReturnsByRef is false || property.ReturnsByRefReadonly)
+                )
+                {
+                    _classInfo.ProductionContext.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Descriptors.TargetPathValueTypeNotWritable,
+                            sourceProperty.Locations[0],
+                            segmentPath,
+                            targetPath
+                        )
+                    );
+                    return null;
+                }
+            }
+
+            currentType = UnwrapNullable(member.Type);
+        }
+
+        return null;
+    }
+
+    private static ISymbol? FindTargetPathMember(
+        ITypeSymbol containingType,
+        string name,
+        bool mapFields
+    )
+    {
+        if (containingType is not INamedTypeSymbol namedType)
+            return null;
+
+        for (var type = namedType; type is not null; type = type.BaseType)
+        {
+            var property = type.GetMembers(name).OfType<IPropertySymbol>().FirstOrDefault();
+            if (property is not null)
+                return property;
+        }
+
+        if (mapFields is false)
+            return null;
+
+        for (var type = namedType; type is not null; type = type.BaseType)
+        {
+            var field = type.GetMembers(name)
+                .OfType<IFieldSymbol>()
+                .FirstOrDefault(x => x.IsImplicitlyDeclared is false);
+            if (field is not null)
+                return field;
+        }
+
+        return null;
+    }
+
+    private void ReportTargetPathNotFound(
+        MapTargetInfo mapTarget,
+        MapMemberInfo property,
+        string targetPath
+    )
+    {
+        _classInfo.ProductionContext.ReportDiagnostic(
+            Diagnostic.Create(
+                Descriptors.TargetPropertyNotExists,
+                GetPropertyDiagnosticLocation(mapTarget, property),
+                mapTarget.TargetType.GetName() + "." + targetPath
+            )
+        );
+    }
+
     private void ReportSourceAccessorDiagnostic(
         MapTargetInfo mapTarget,
         MapMemberInfo property,
@@ -1445,7 +1619,7 @@ internal class MapperGenerator
             Diagnostic.Create(
                 Descriptors.TargetPropertyAccessibilityInsufficient,
                 source.Locations[0],
-                target.Name,
+                target.AccessPath,
                 accessor
             )
         );

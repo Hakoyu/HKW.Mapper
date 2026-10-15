@@ -44,6 +44,29 @@ public sealed class MapFieldTests
     }
 
     [TestMethod]
+    public void NestedPathsMixTargetPropertiesAndFieldsBothDirections()
+    {
+        var source = new NestedFieldPathSource
+        {
+            ThroughProperty = 17,
+            ThroughField = 19,
+        };
+        var target = new NestedFieldPathTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual(17, target.PropertyNode.ValueField);
+        Assert.AreEqual(19, target.FieldNode.ValueProperty);
+
+        target.PropertyNode.ValueField = 23;
+        target.FieldNode.ValueProperty = 29;
+        source.MapFrom(target);
+
+        Assert.AreEqual(23, source.ThroughProperty);
+        Assert.AreEqual(29, source.ThroughField);
+    }
+
+    [TestMethod]
     public void FieldAttributesUseRegularAndCompositeConverters()
     {
         var source = new FieldConverterSource { Number = 7, Range = new(2, 5) };
@@ -109,6 +132,32 @@ public sealed class MapFieldTests
 
         Assert.AreEqual(43, target.Value);
     }
+}
+
+[MapTarget(typeof(NestedFieldPathTarget), MapFields = true)]
+public sealed class NestedFieldPathSource
+{
+    [MapField(typeof(NestedFieldPathTarget), "PropertyNode.ValueField")]
+    public int ThroughProperty;
+
+    [MapField(typeof(NestedFieldPathTarget), "FieldNode.ValueProperty")]
+    public int ThroughField;
+}
+
+public sealed class NestedFieldPathTarget
+{
+    public NestedPropertyNode PropertyNode { get; set; } = new();
+    public NestedFieldNode FieldNode = new();
+}
+
+public sealed class NestedPropertyNode
+{
+    public int ValueField;
+}
+
+public sealed class NestedFieldNode
+{
+    public int ValueProperty { get; set; }
 }
 
 public class FieldSourceBase

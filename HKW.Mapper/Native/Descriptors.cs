@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -260,6 +260,14 @@ internal static class Descriptors
         id: "MAP0031",
         title: "Field is readonly",
         messageFormat: "Field '{0}' cannot be written when mapping {1}.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor TargetPathValueTypeNotWritable = new(
+        id: "MAP0032",
+        title: "Target path value type is not writable",
+        messageFormat: "Target path member '{0}' is a value type property and does not provide a writable variable for nested member '{1}'.",
         category: _category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true

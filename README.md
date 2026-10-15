@@ -121,6 +121,19 @@ public sealed class User
 
 `MapProperty` 的目标类型或目标名称必须匹配当前源类型上的一个 `[MapTargetAttribute]`；未匹配或重复匹配会产生编译诊断。若不需要属性级设置，则同名属性会自动映射。
 
+`PropertyName` 也可以是任意深度的点分目标成员路径。生成器从目标类型开始逐段解析属性或字段，并直接生成成员访问表达式：
+
+```csharp
+[MapTarget(typeof(UserDto))]
+public sealed class User
+{
+    [MapProperty(typeof(UserDto), "Address.City.Name")]
+    public string CityName { get; set; } = string.Empty;
+}
+```
+
+路径不会自动创建中间对象，也不会生成 null 条件访问；若 `Address` 或 `City` 为 `null`，映射运行时会抛出 `NullReferenceException`。转换器收到的 `MapConvertArgs.TargetPropertyName` 是完整路径（例如 `Address.City.Name`），重复目标检测也以完整路径为准。
+
 ## 字段配置
 
 字段映射默认关闭。设置 `MapFields = true` 后，会映射可访问的 `public`/`internal` 实例字段，并支持字段↔字段、字段↔属性和属性↔字段；`static` 与 `const` 字段始终排除。同名目标成员同时存在时属性优先。
@@ -150,7 +163,7 @@ public sealed class UserDto
 
 `MapParentFields` 独立控制父类字段；配置类也可通过可静态解析的 `string[] IgnoreFields` 合并忽略项。readonly 字段可以读取：源 readonly 字段支持 `MapTo`，目标 readonly 字段支持 `MapFrom`。如果当前 `Direction` 需要写入 readonly 字段（包括默认的 `Both`），生成器会报告 `MAP0031` 并跳过该成员。
 
-`MapFieldAttribute` 支持与 `MapPropertyAttribute` 相同的重命名、`IMapConverter<TSourceValue, TTargetValue>`、`MapType` 和忽略设置。一个源字段映射到多个目标成员时，使用 `MapCompositeFieldAttribute` 和 `IMapCompositeConverter<TSourceValue, TTargetValues>`。
+`MapFieldAttribute` 支持与 `MapPropertyAttribute` 相同的重命名、点分目标成员路径、`IMapConverter<TSourceValue, TTargetValue>`、`MapType` 和忽略设置。路径可以混合属性与字段，例如 `Address.City.Name` 的任一段都可以是字段；只要路径包含目标字段，就必须在 `MapTargetAttribute` 上启用 `MapFields = true`。路径遵循与属性路径相同的直接访问和 null 行为。一个源字段映射到多个目标成员时，使用 `MapCompositeFieldAttribute` 和 `IMapCompositeConverter<TSourceValue, TTargetValues>`；组合映射的目标名称不支持点分路径。
 
 配置类可使用字段专用转换器：
 
@@ -171,6 +184,20 @@ public MapConfigFieldCompositeConverter<Range, (int Low, int High)> RangeConvert
         (value, _) => new(value.Low, value.High)
     );
 ```
+
+`FieldName` 也可以是任意深度的点分目标成员路径。生成器从目标类型开始逐段解析属性或字段，并直接生成成员访问表达式：
+
+```csharp
+[MapTarget(typeof(UserDto))]
+public sealed class User
+{
+    [MapField(typeof(UserDto), "Address.City.Name")]
+    public string CityName = string.Empty;
+}
+```
+
+路径不会自动创建中间对象，也不会生成 null 条件访问；若 `Address` 或 `City` 为 `null`，映射运行时会抛出 `NullReferenceException`。转换器收到的 `MapConvertArgs.TargetPropertyName` 是完整路径（例如 `Address.City.Name`），重复目标检测也以完整路径为准。
+
 
 ## 自定义转换器
 
