@@ -198,20 +198,20 @@ public sealed class User
 ```csharp
 [MapProperty(
     typeof(UserDto),
-    MapToCondition = MapMemberCondition.SourceIsNotNullOrDefault,
-    MapFromCondition = MapMemberCondition.SourceIsNullOrDefault)]
+    MapToCondition = MapMemberCondition.SourceIsNotDefault,
+    MapFromCondition = MapMemberCondition.SourceIsDefault)]
 public string? DisplayName { get; set; }
 ```
 
 可用的 `MapMemberCondition` 值：
 
 - `None`：默认值，无条件执行映射。
-- `SourceIsNullOrDefault` / `SourceIsNotNullOrDefault`：判断原始源对象的成员。
-- `TargetIsNullOrDefault` / `TargetIsNotNullOrDefault`：判断原始目标对象的成员。
+- `SourceIsDefault` / `SourceIsNotDefault`：判断原始源对象的成员。
+- `TargetIsDefault` / `TargetIsNotDefault`：判断原始目标对象的成员。
 
 `Source` 和 `Target` 始终表示 `[MapTarget]` 声明中的原始源、目标角色，不会因 `MapTo` 或 `MapFrom` 方向而交换。因此，上例的 `MapFromCondition` 仅在 `source.DisplayName` 为 null 时把目标值写回。引用类型检查 null；值类型（包括 `Nullable<T>`）与 `default(T)` 比较。
 
-复合映射的 Target 条件会同时检查全部目标成员：`TargetIsNullOrDefault` 仅在所有目标成员都为空/default 时成立，`TargetIsNotNullOrDefault` 是该整体条件的逻辑取反。条件不成立时不会调用转换器，也不会执行该成员的赋值或集合更新。条件式 `MapTo` 无法表示为对象初始化器中的 `init`/`required` 赋值，此时生成器报告 `MAP0046` 并跳过该方向。
+复合映射的 Target 条件会同时检查全部目标成员：`TargetIsDefault` 仅在所有目标成员都为空/default 时成立，`TargetIsNotDefault` 是该整体条件的逻辑取反。条件不成立时不会调用转换器，也不会执行该成员的赋值或集合更新。条件式 `MapTo` 无法表示为对象初始化器中的 `init`/`required` 赋值，此时生成器报告 `MAP0046` 并跳过该方向。
 
 ## 字段配置
 
@@ -255,7 +255,7 @@ public MapConfigFieldConverter<int, string> NumberConverter { get; } =
         (value, _) => int.Parse(value)
     );
 
-public MapConfigFieldCompositeConverter<Range, (int Low, int High)> RangeConverter { get; } =
+public MapConfigCompositeFieldConverter<Range, (int Low, int High)> RangeConverter { get; } =
     new(
         nameof(Source.Range),
         [nameof(Target.Low), nameof(Target.High)],
@@ -390,7 +390,7 @@ public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
     public RangeMapperConfig(RangeModel source, RangeDto target)
         : base(source, target) { }
 
-    public MapConfigPropertyCompositeConverter<Range, (int Min, int Max)> RangeConverter { get; } =
+    public MapConfigCompositePropertyConverter<Range, (int Min, int Max)> RangeConverter { get; } =
         new(
             nameof(RangeModel.Range),
             [nameof(RangeDto.Min), nameof(RangeDto.Max)],
@@ -399,7 +399,7 @@ public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
 }
 ```
 
-若同一个源属性同时配置了 `MapConfigPropertyCompositeConverter` 和
+若同一个源属性同时配置了 `MapConfigCompositePropertyConverter` 和
 `[MapCompositeProperty]`，配置类中的目标属性列表及转换逻辑具有更高优先级。
 目标属性数组必须直接写在配置属性初始化器中，以便源生成器在编译期分析。
 

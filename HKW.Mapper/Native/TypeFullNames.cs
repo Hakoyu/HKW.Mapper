@@ -34,11 +34,11 @@ internal static class TypeFullNames
     public static string MapConfigPropertyConverter { get; } =
         typeof(MapConfigPropertyConverter<,>).GetGlobalFullName();
     public static string MapConfigPropertyCompositeConverter { get; } =
-        typeof(MapConfigPropertyCompositeConverter<,>).GetGlobalFullName();
+        typeof(MapConfigCompositePropertyConverter<,>).GetGlobalFullName();
     public static string MapConfigFieldConverter { get; } =
         typeof(MapConfigFieldConverter<,>).GetGlobalFullName();
     public static string MapConfigFieldCompositeConverter { get; } =
-        typeof(MapConfigFieldCompositeConverter<,>).GetGlobalFullName();
+        typeof(MapConfigCompositeFieldConverter<,>).GetGlobalFullName();
 
     public static string MapToConfigActionAttribute { get; } =
         typeof(MapToConfigActionAttribute).GetGlobalFullName();

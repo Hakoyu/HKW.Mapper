@@ -121,11 +121,7 @@ public sealed class MapConfigTests
     [TestMethod]
     public void ConfigCompositeConvertersMapEndpointsAndOverrideCompositeAttributes()
     {
-        var source = new MapConfigCompositeSource
-        {
-            Plain = new(2, 5),
-            Priority = new(7, 11),
-        };
+        var source = new MapConfigCompositeSource { Plain = new(2, 5), Priority = new(7, 11) };
         var target = new MapConfigCompositeTarget();
 
         source.MapTo(target);
@@ -356,7 +352,11 @@ public sealed class MapConfigPriorityConfiguration
         : base(source, target) { }
 
     public MapConfigPropertyConverter<int, int> ValueConverter { get; } =
-        new(nameof(MapConfigPrioritySource.Value), (value, _) => value + 10, (value, _) => value - 10);
+        new(
+            nameof(MapConfigPrioritySource.Value),
+            (value, _) => value + 10,
+            (value, _) => value - 10
+        );
 }
 
 public class MapConfigInheritedBase
@@ -392,8 +392,7 @@ public sealed class MapConfigInheritedConfiguration
     )
         : base(source, target) { }
 
-    public string[] IgnoreProperties { get; } =
-        [nameof(MapConfigInheritedSource.IgnoredByConfig)];
+    public string[] IgnoreProperties { get; } = [nameof(MapConfigInheritedSource.IgnoredByConfig)];
 
     public MapConfigPropertyConverter<int, string> NumberConverter { get; } =
         new(
@@ -435,10 +434,8 @@ public sealed class MapConfigAttributeCompositeConverter
     public (int Low, int High) Convert(MapConfigRange value, MapCompositeConvertArgs args) =>
         (value.Low + 1000, value.High + 1000);
 
-    public MapConfigRange ConvertBack(
-        (int Low, int High) values,
-        MapCompositeConvertArgs args
-    ) => new(values.Low - 1000, values.High - 1000);
+    public MapConfigRange ConvertBack((int Low, int High) values, MapCompositeConvertArgs args) =>
+        new(values.Low - 1000, values.High - 1000);
 }
 
 public sealed class MapConfigCompositeConfiguration
@@ -450,21 +447,18 @@ public sealed class MapConfigCompositeConfiguration
     )
         : base(source, target) { }
 
-    public MapConfigPropertyCompositeConverter<
+    public MapConfigCompositePropertyConverter<
         MapConfigRange,
         (int Low, int High)
     > PlainConverter { get; } =
         new(
             nameof(MapConfigCompositeSource.Plain),
-            [
-                nameof(MapConfigCompositeTarget.PlainLow),
-                nameof(MapConfigCompositeTarget.PlainHigh),
-            ],
+            [nameof(MapConfigCompositeTarget.PlainLow), nameof(MapConfigCompositeTarget.PlainHigh)],
             (value, _) => (value.Low, value.High),
             (values, _) => new(values.Low, values.High)
         );
 
-    public MapConfigPropertyCompositeConverter<
+    public MapConfigCompositePropertyConverter<
         MapConfigRange,
         (int Low, int High)
     > PriorityConverter { get; } =

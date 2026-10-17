@@ -78,8 +78,7 @@ internal class ClassInfo
                     )
                     {
                         if (
-                            propertySymbol.IsStatic
-                            || memberNames.Add(propertySymbol.Name) is false
+                            propertySymbol.IsStatic || memberNames.Add(propertySymbol.Name) is false
                         )
                             continue;
                         ParentProperties.Add(new(propertySymbol));
@@ -131,13 +130,15 @@ internal class ClassInfo
     private void ResolveMapConstructors()
     {
         foreach (
-            var attribute in ClassSymbol.GetAttributes()
+            var attribute in ClassSymbol
+                .GetAttributes()
                 .Where(x => x.AttributeClass?.IsName(TypeFullNames.MapConstructorAttribute) is true)
         )
         {
-            var location = attribute.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
-                attribute.ApplicationSyntaxReference.Span
-            ) ?? Location.None;
+            var location =
+                attribute.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                    attribute.ApplicationSyntaxReference.Span
+                ) ?? Location.None;
             var selector = attribute.ConstructorArguments[0];
             var target = selector.Value is INamedTypeSymbol targetType
                 ? MapTargets.FirstOrDefault(x => x.TargetType.SymbolEquals(targetType))
@@ -154,15 +155,17 @@ internal class ClassInfo
                 continue;
             }
 
-            var parameterTypes = attribute.ConstructorArguments.Length > 1
-                ? attribute.ConstructorArguments[1].Values
-                    .Select(x => x.Value as ITypeSymbol)
-                    .Where(x => x is not null)
-                    .Cast<ITypeSymbol>()
-                    .ToArray()
-                : [];
-            var constructors = target.TargetType.InstanceConstructors
-                .Where(x =>
+            var parameterTypes =
+                attribute.ConstructorArguments.Length > 1
+                    ? attribute
+                        .ConstructorArguments[1]
+                        .Values.Select(x => x.Value as ITypeSymbol)
+                        .Where(x => x is not null)
+                        .Cast<ITypeSymbol>()
+                        .ToArray()
+                    : [];
+            var constructors = target
+                .TargetType.InstanceConstructors.Where(x =>
                     x.Parameters.Length == parameterTypes.Length
                     && x.Parameters.Select(p => p.Type)
                         .Zip(parameterTypes, (left, right) => left.SymbolEquals(right))
@@ -341,7 +344,11 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         )
             Direction = direction;
 
-        if (SourceType.IsValueType && SourceType.IsReadOnly && Direction.HasFlag(MapDirections.From))
+        if (
+            SourceType.IsValueType
+            && SourceType.IsReadOnly
+            && Direction.HasFlag(MapDirections.From)
+        )
         {
             classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
@@ -504,7 +511,8 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         if (
             Constructors.Any(existing =>
                 existing.Constructor.Parameters.Length == constructor.Parameters.Length
-                && existing.Constructor.Parameters.Select(x => x.Type)
+                && existing
+                    .Constructor.Parameters.Select(x => x.Type)
                     .Zip(
                         constructor.Parameters.Select(x => x.Type),
                         (left, right) => left.SymbolEquals(right)
@@ -566,10 +574,7 @@ internal sealed class MapConfigInfo
                 {
                     var isFieldConverter =
                         propertySymbol.Type.Name == nameof(MapConfigFieldConverter<object, object>);
-                    Converters.Add(
-                        sourceName,
-                        (targetName, propertySymbol, isFieldConverter)
-                    );
+                    Converters.Add(sourceName, (targetName, propertySymbol, isFieldConverter));
                 }
                 else if (
                     CheckCompositeProperty(propertySymbol, out sourceName, out var targetNames)
@@ -577,7 +582,7 @@ internal sealed class MapConfigInfo
                 {
                     var isFieldConverter =
                         propertySymbol.Type.Name
-                        == nameof(MapConfigFieldCompositeConverter<object, ValueTuple>);
+                        == nameof(MapConfigCompositeFieldConverter<object, ValueTuple>);
                     CompositeConverters.Add(
                         sourceName,
                         (targetNames, propertySymbol, isFieldConverter)
@@ -597,13 +602,11 @@ internal sealed class MapConfigInfo
     public Dictionary<
         string,
         (string TargetName, IPropertySymbol Property, bool IsFieldConverter)
-    > Converters
-    { get; } = [];
+    > Converters { get; } = [];
     public Dictionary<
         string,
         (string[] TargetNames, IPropertySymbol Property, bool IsFieldConverter)
-    > CompositeConverters
-    { get; } = [];
+    > CompositeConverters { get; } = [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
     public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
@@ -713,9 +716,9 @@ internal sealed class MapConfigInfo
         targetNames = [];
         if (
             propertySymbol.Type.Name
-                != nameof(MapConfigPropertyCompositeConverter<object, ValueTuple>)
+                != nameof(MapConfigCompositePropertyConverter<object, ValueTuple>)
             && propertySymbol.Type.Name
-                != nameof(MapConfigFieldCompositeConverter<object, ValueTuple>)
+                != nameof(MapConfigCompositeFieldConverter<object, ValueTuple>)
         )
             return false;
         if (

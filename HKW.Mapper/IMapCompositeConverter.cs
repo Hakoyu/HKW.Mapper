@@ -4,8 +4,8 @@
 /// 将一个源属性双向转换为多个目标属性
 /// </summary>
 /// <remarks>
-/// 源值和目标元组元素类型可以与映射属性类型相同，或与其具有基类、子类、接口引用或装箱转换关系。
-/// 需要显式引用转换时，实际值的运行时类型必须兼容。
+/// 源值和目标元组元素类型可以与映射属性类型相同，或与其具有基类、子类、接口引用或装箱转换关系
+/// 需要显式引用转换时，实际值的运行时类型必须兼容
 /// </remarks>
 /// <typeparam name="TSourceValue">源属性类型</typeparam>
 /// <typeparam name="TTargetValues">由多个目标属性值组成的值元组类型</typeparam>
@@ -28,14 +28,14 @@ public interface IMapCompositeConverter<TSourceValue, TTargetValues>
 /// </summary>
 /// <typeparam name="TSourceValue">源值类型</typeparam>
 /// <typeparam name="TTargetValues">由多个目标属性值组成的值元组类型</typeparam>
-public sealed class MapConfigPropertyCompositeConverter<TSourceValue, TTargetValues>
+public sealed class MapConfigCompositePropertyConverter<TSourceValue, TTargetValues>
     : IMapCompositeConverter<TSourceValue, TTargetValues>
     where TTargetValues : struct
 {
     /// <summary>
     /// 初始化映射设置复合属性转换器
     /// </summary>
-    public MapConfigPropertyCompositeConverter(
+    public MapConfigCompositePropertyConverter(
         string sourceProperty,
         string[] targetProperties,
         Func<TSourceValue, MapCompositeConvertArgs, TTargetValues> convert,
@@ -77,14 +77,14 @@ public sealed class MapConfigPropertyCompositeConverter<TSourceValue, TTargetVal
 }
 
 /// <summary>
-/// 映射设置复合字段转换器。
+/// 映射设置复合字段转换器
 /// </summary>
-public sealed class MapConfigFieldCompositeConverter<TSourceValue, TTargetValues>
+public sealed class MapConfigCompositeFieldConverter<TSourceValue, TTargetValues>
     : IMapCompositeConverter<TSourceValue, TTargetValues>
     where TTargetValues : struct
 {
     /// <inheritdoc/>
-    public MapConfigFieldCompositeConverter(
+    public MapConfigCompositeFieldConverter(
         string sourceField,
         string[] targetFields,
         Func<TSourceValue, MapCompositeConvertArgs, TTargetValues> convert,

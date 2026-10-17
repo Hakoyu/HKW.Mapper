@@ -164,7 +164,10 @@ public sealed class DescriptorsTests
             DiagnosticSeverity.Error,
             "Value",
             ["Target.Value", "incompatible type"],
-            Basic("public int Value { get; set; }", "public string Value { get; set; } = string.Empty;")
+            Basic(
+                "public int Value { get; set; }",
+                "public string Value { get; set; } = string.Empty;"
+            )
         );
     }
 
@@ -204,8 +207,10 @@ public sealed class DescriptorsTests
             DiagnosticSeverity.Error,
             "Value",
             ["Source.Value", "reference type"],
-            Basic("public Item Value { get; set; } = new();", "public Item Value { get; set; } = new();")
-                + "\npublic sealed class Item;"
+            Basic(
+                "public Item Value { get; set; } = new();",
+                "public Item Value { get; set; } = new();"
+            ) + "\npublic sealed class Item;"
         );
     }
 
@@ -391,7 +396,11 @@ public sealed class DescriptorsTests
             DiagnosticSeverity.Error,
             "MapCompositeProperty",
             ["BadConverter", "IMapCompositeConverter"],
-            Composite("BadConverter", "nameof(Target.First), nameof(Target.Second)", "public sealed class BadConverter;")
+            Composite(
+                "BadConverter",
+                "nameof(Target.First), nameof(Target.Second)",
+                "public sealed class BadConverter;"
+            )
         );
     }
 
@@ -497,7 +506,7 @@ public sealed class DescriptorsTests
             "ValueConverter",
             ["source member", "two unique target members"],
             Config(
-                "public MapConfigPropertyCompositeConverter<int, (int, int)> ValueConverter { get; } = "
+                "public MapConfigCompositePropertyConverter<int, (int, int)> ValueConverter { get; } = "
                     + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.First)], (value, _) => (value, value), (values, _) => values.Item1);",
                 "public int First { get; set; } public int Second { get; set; }"
             )
@@ -513,7 +522,7 @@ public sealed class DescriptorsTests
             "ValueConverter",
             ["inline object initializer", "inline target member array"],
             Config(
-                "public MapConfigPropertyCompositeConverter<int, (int, int)> ValueConverter => "
+                "public MapConfigCompositePropertyConverter<int, (int, int)> ValueConverter => "
                     + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.Second)], (value, _) => (value, value), (values, _) => values.Item1);",
                 "public int First { get; set; } public int Second { get; set; }"
             )
@@ -1314,12 +1323,16 @@ public sealed class DescriptorsTests
         );
     }
 
-    private static string Basic(string sourceProperty, string targetProperty, string? options = null) =>
+    private static string Basic(
+        string sourceProperty,
+        string targetProperty,
+        string? options = null
+    ) =>
         $$"""
-        [MapTarget(typeof(Target){{(options is null ? string.Empty : ", " + options)}})]
-        public sealed class Source { {{sourceProperty}} }
-        public sealed class Target { {{targetProperty}} }
-        """;
+            [MapTarget(typeof(Target){{(options is null ? string.Empty : ", " + options)}})]
+            public sealed class Source { {{sourceProperty}} }
+            public sealed class Target { {{targetProperty}} }
+            """;
 
     private static string Config(
         string member,
@@ -1328,16 +1341,16 @@ public sealed class DescriptorsTests
         string additionalType = ""
     ) =>
         $$"""
-        [MapTarget(typeof(Target), typeof(Config))]
-        public sealed class Source { {{sourceMember}} }
-        public sealed class Target { {{targetMembers}} }
-        public sealed class Config : MapperConfig<Source, Target>
-        {
-            public Config(Source source, Target target) : base(source, target) { }
-            {{member}}
-        }
-        {{additionalType}}
-        """;
+            [MapTarget(typeof(Target), typeof(Config))]
+            public sealed class Source { {{sourceMember}} }
+            public sealed class Target { {{targetMembers}} }
+            public sealed class Config : MapperConfig<Source, Target>
+            {
+                public Config(Source source, Target target) : base(source, target) { }
+                {{member}}
+            }
+            {{additionalType}}
+            """;
 
     private static string Composite(
         string converterName,
@@ -1346,20 +1359,20 @@ public sealed class DescriptorsTests
         string additionalTargetMember = ""
     ) =>
         $$"""
-        [MapTarget(typeof(Target))]
-        public sealed class Source
-        {
-            [MapCompositeProperty(typeof(Target), typeof({{converterName}}), {{targetNames}})]
-            public int Value { get; set; }
-        }
-        public sealed class Target
-        {
-            public int First { get; set; }
-            public int Second { get; set; }
-            {{additionalTargetMember}}
-        }
-        {{converter}}
-        """;
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                [MapCompositeProperty(typeof(Target), typeof({{converterName}}), {{targetNames}})]
+                public int Value { get; set; }
+            }
+            public sealed class Target
+            {
+                public int First { get; set; }
+                public int Second { get; set; }
+                {{additionalTargetMember}}
+            }
+            {{converter}}
+            """;
 
     private static string TupleConverter(
         string firstType,
@@ -1367,15 +1380,14 @@ public sealed class DescriptorsTests
         string name = "TupleConverter"
     ) =>
         $$"""
-        public sealed class {{name}} : IMapCompositeConverter<int, ({{firstType}}, {{secondType}})>
-        {
-            public ({{firstType}}, {{secondType}}) Convert(int value, MapCompositeConvertArgs args) => default;
-            public int ConvertBack(({{firstType}}, {{secondType}}) values, MapCompositeConvertArgs args) => default;
-        }
-        """;
+            public sealed class {{name}} : IMapCompositeConverter<int, ({{firstType}}, {{secondType}})>
+            {
+                public ({{firstType}}, {{secondType}}) Convert(int value, MapCompositeConvertArgs args) => default;
+                public int ConvertBack(({{firstType}}, {{secondType}}) values, MapCompositeConvertArgs args) => default;
+            }
+            """;
 
-    private static string WithUsings(string source) =>
-        "using HKW.Mapper;\n" + source;
+    private static string WithUsings(string source) => "using HKW.Mapper;\n" + source;
 
     private static string GetLocationText(Diagnostic diagnostic) =>
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
@@ -1394,14 +1406,22 @@ public sealed class DescriptorsTests
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
-        var inputErrors = compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
-        Assert.AreEqual(0, inputErrors.Length, string.Join(Environment.NewLine, inputErrors.Select(d => d.ToString())));
+        var inputErrors = compilation
+            .GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        Assert.AreEqual(
+            0,
+            inputErrors.Length,
+            string.Join(Environment.NewLine, inputErrors.Select(d => d.ToString()))
+        );
 
         var generatorType = typeof(MapTargetAttribute).Assembly.GetType(
             "HKW.Mapper.SourceGenerator.Generator",
             throwOnError: true
         )!;
-        var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType, nonPublic: true)!;
+        var generator = (IIncrementalGenerator)
+            Activator.CreateInstance(generatorType, nonPublic: true)!;
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [generator.AsSourceGenerator()],
             parseOptions: parseOptions

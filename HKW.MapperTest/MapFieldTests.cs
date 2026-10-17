@@ -46,11 +46,7 @@ public sealed class MapFieldTests
     [TestMethod]
     public void NestedPathsMixTargetPropertiesAndFieldsBothDirections()
     {
-        var source = new NestedFieldPathSource
-        {
-            ThroughProperty = 17,
-            ThroughField = 19,
-        };
+        var source = new NestedFieldPathSource { ThroughProperty = 17, ThroughField = 19 };
         var target = new NestedFieldPathTarget();
 
         source.MapTo(target);
@@ -342,10 +338,7 @@ public sealed class FieldSourcePathRangeConverter
         return (value.Low, value.High);
     }
 
-    public FieldRange ConvertBack(
-        (int Low, int High) values,
-        MapCompositeConvertArgs args
-    )
+    public FieldRange ConvertBack((int Low, int High) values, MapCompositeConvertArgs args)
     {
         LastSourcePath = args.SourcePropertyName;
         return new(values.Low, values.High);
@@ -381,6 +374,7 @@ public sealed class FieldConverterTarget
 public sealed class FieldNumberConverter : IMapConverter<int, string>
 {
     public string Convert(int value, MapConvertArgs args) => value.ToString();
+
     public int ConvertBack(string value, MapConvertArgs args) => int.Parse(value);
 }
 
@@ -420,7 +414,10 @@ public sealed class ConfigFieldMap : MapperConfig<ConfigFieldSource, ConfigField
             (value, _) => int.Parse(value[6..])
         );
 
-    public MapConfigFieldCompositeConverter<FieldRange, (int Low, int High)> RangeConverter { get; } =
+    public MapConfigCompositeFieldConverter<
+        FieldRange,
+        (int Low, int High)
+    > RangeConverter { get; } =
         new(
             nameof(ConfigFieldSource.Range),
             [nameof(ConfigFieldTarget.Low), nameof(ConfigFieldTarget.High)],

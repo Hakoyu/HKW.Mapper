@@ -76,7 +76,7 @@ public sealed class IMapCompositeConverterTests
     {
         MapCompositeConvertArgs? convertArgs = null;
         MapCompositeConvertArgs? convertBackArgs = null;
-        var converter = new MapConfigPropertyCompositeConverter<
+        var converter = new MapConfigCompositePropertyConverter<
             IMapCompositeRangeValue,
             (int Min, int Max)
         >(
@@ -96,12 +96,7 @@ public sealed class IMapCompositeConverterTests
         var source = new object();
         var target = new object();
         var targetPropertyNames = new[] { "UniqueMin", "UniqueMax" };
-        var args = new MapCompositeConvertArgs(
-            source,
-            target,
-            "UniqueRange",
-            targetPropertyNames
-        );
+        var args = new MapCompositeConvertArgs(source, target, "UniqueRange", targetPropertyNames);
 
         Assert.AreEqual((2, 8), converter.Convert(new(2, 8), args));
         Assert.AreEqual(new IMapCompositeRangeValue(3, 9), converter.ConvertBack((3, 9), args));
@@ -117,7 +112,9 @@ public sealed class IMapCompositeConverterTests
     {
         foreach (var sourceProperty in new string?[] { null, string.Empty, "   " })
         {
-            Assert.Throws<ArgumentException>(() => CreateConfigConverter(sourceProperty!, ["A", "B"]));
+            Assert.Throws<ArgumentException>(() =>
+                CreateConfigConverter(sourceProperty!, ["A", "B"])
+            );
         }
     }
 
@@ -148,7 +145,7 @@ public sealed class IMapCompositeConverterTests
     public void MapConfigCompositeConverterRejectsNullDelegates()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyCompositeConverter<IMapCompositeRangeValue, (int, int)>(
+            new MapConfigCompositePropertyConverter<IMapCompositeRangeValue, (int, int)>(
                 "Value",
                 ["A", "B"],
                 null!,
@@ -156,7 +153,7 @@ public sealed class IMapCompositeConverterTests
             )
         );
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyCompositeConverter<IMapCompositeRangeValue, (int, int)>(
+            new MapConfigCompositePropertyConverter<IMapCompositeRangeValue, (int, int)>(
                 "Value",
                 ["A", "B"],
                 (value, _) => (value.Min, value.Max),
@@ -165,7 +162,7 @@ public sealed class IMapCompositeConverterTests
         );
     }
 
-    private static MapConfigPropertyCompositeConverter<
+    private static MapConfigCompositePropertyConverter<
         IMapCompositeRangeValue,
         (int, int)
     > CreateConfigConverter(string sourceProperty, string[] targetProperties) =>
@@ -340,7 +337,7 @@ public sealed class IMapCompositeCompatibleConfig
     )
         : base(source, target) { }
 
-    public MapConfigPropertyCompositeConverter<
+    public MapConfigCompositePropertyConverter<
         IList<int>,
         (IList<string> TextValues, IReadOnlyList<int> DoubledValues)
     > ValuesConverter { get; } =
