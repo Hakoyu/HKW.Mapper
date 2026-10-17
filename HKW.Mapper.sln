@@ -12,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HKW.MapperTest", "HKW.MapperTest\HKW.MapperTest.csproj", "{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HKW.Mapper.Benchmark", "HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj", "{5FA4B8F8-F1DE-44D4-B4BA-29740CC2E652}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,6 +28,10 @@ Global
 		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F364F68A-AED4-4DED-B52A-76F84FF7AE0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5FA4B8F8-F1DE-44D4-B4BA-29740CC2E652}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5FA4B8F8-F1DE-44D4-B4BA-29740CC2E652}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5FA4B8F8-F1DE-44D4-B4BA-29740CC2E652}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5FA4B8F8-F1DE-44D4-B4BA-29740CC2E652}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
