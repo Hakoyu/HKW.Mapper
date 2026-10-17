@@ -376,4 +376,12 @@ internal static class Descriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor ConditionalTargetMemberCannotBeInitialized = new(
+        id: "MAP0046",
+        title: "Conditional target member cannot be initialized",
+        messageFormat: "Target member '{0}' is init-only or required and cannot use a MapTo condition in a generated object initializer; its MapTo mapping is skipped.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

@@ -1274,6 +1274,46 @@ public sealed class DescriptorsTests
         Assert.AreEqual(DiagnosticSeverity.Warning, diagnostic.Severity);
     }
 
+    [TestMethod]
+    public void MAP0046_ReportsConditionalInitOnlyTargetMember()
+    {
+        AssertDiagnostic(
+            "MAP0046",
+            DiagnosticSeverity.Error,
+            "MapProperty",
+            ["Value", "init-only or required", "MapTo condition"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), MapToCondition = MapMemberCondition.SourceIsNotNullOrDefault)]
+                public int Value { get; set; }
+            }
+            public sealed class Target { public int Value { get; init; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0046_ReportsConditionalRequiredTargetMember()
+    {
+        AssertDiagnostic(
+            "MAP0046",
+            DiagnosticSeverity.Error,
+            "MapProperty",
+            ["Value", "init-only or required", "MapTo condition"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), MapToCondition = MapMemberCondition.SourceIsNullOrDefault)]
+                public string Value { get; set; } = string.Empty;
+            }
+            public sealed class Target { public required string Value { get; set; } }
+            """
+        );
+    }
+
     private static string Basic(string sourceProperty, string targetProperty, string? options = null) =>
         $$"""
         [MapTarget(typeof(Target){{(options is null ? string.Empty : ", " + options)}})]

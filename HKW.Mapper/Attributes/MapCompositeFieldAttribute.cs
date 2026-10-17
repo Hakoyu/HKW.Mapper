@@ -28,22 +28,46 @@ public sealed class MapCompositeFieldAttribute : Attribute
         this.TargetFields = TargetFields;
     }
 
-    /// <summary>目标名称</summary>
+    /// <summary>
+    /// 目标名称
+    /// </summary>
     public string? TargetName { get; }
 
-    /// <summary>目标类型</summary>
+    /// <summary>
+    /// 目标类型
+    /// </summary>
     public Type? TargetType { get; }
 
-    /// <summary>实现 <see cref="IMapCompositeConverter{TSourceValue, TTargetValues}"/> 的转换器类型</summary>
+    /// <summary>
+    /// 实现 <see cref="IMapCompositeConverter{TSourceValue, TTargetValues}"/> 的转换器类型
+    /// </summary>
     public Type ConverterType { get; }
 
-    /// <summary>从源对象根开始的源成员路径</summary>
+    /// <summary>
+    /// 从源对象根开始的源成员路径
+    /// </summary>
     public string? SourcePath { get; set; }
 
-    /// <summary>按转换器值元组顺序排列的目标字段或属性名称</summary>
+    /// <summary>
+    /// 按转换器值元组顺序排列的目标字段或属性名称
+    /// </summary>
     public string[] TargetFields { get; }
 
-    /// <summary>此成员要参与的映射方向</summary>
+    /// <summary>
+    /// 此成员要参与的映射方向
+    /// </summary>
     [DefaultValue(MapDirections.Both)]
     public MapDirections Direction { get; set; } = MapDirections.Both;
+
+    /// <summary>
+    /// 映射至目标成员前的执行条件
+    /// </summary>
+    [DefaultValue(MapMemberCondition.None)]
+    public MapMemberCondition MapToCondition { get; set; }
+
+    /// <summary>
+    /// 从目标成员映射回源成员前的执行条件
+    /// </summary>
+    [DefaultValue(MapMemberCondition.None)]
+    public MapMemberCondition MapFromCondition { get; set; }
 }

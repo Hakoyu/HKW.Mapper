@@ -27,7 +27,8 @@ internal sealed class CompositeMappingProcessor
 
     internal bool TryUseConfigCompositePropertyConverter(
         MapTargetInfo mapTarget,
-        MapMemberInfo propertySymbol
+        MapMemberInfo propertySymbol,
+        AttributeInfo? attributeInfo
     )
     {
         if (
@@ -75,7 +76,8 @@ internal sealed class CompositeMappingProcessor
             tupleType,
             $"{MapConfigInfo.ConfigName}.{data.Property.Name}",
             location,
-            mapTarget.Direction
+            mapTarget.Direction,
+            attributeInfo
         );
         return true;
     }
@@ -89,7 +91,8 @@ internal sealed class CompositeMappingProcessor
         INamedTypeSymbol tupleType,
         string converterExpression,
         Location location,
-        MapDirections direction
+        MapDirections direction,
+        AttributeInfo? attributeInfo
     )
     {
         var tupleElements = tupleType.TupleElements;
@@ -131,6 +134,40 @@ internal sealed class CompositeMappingProcessor
             }
             targetProperties.Add(targetProperty);
         }
+
+        var mapToCondition = MemberConditionBuilder.GetCondition(
+            attributeInfo,
+            nameof(MapCompositePropertyAttribute.MapToCondition)
+        );
+        var mapFromCondition = MemberConditionBuilder.GetCondition(
+            attributeInfo,
+            nameof(MapCompositePropertyAttribute.MapFromCondition)
+        );
+        if (
+            mapToCondition is not MapMemberCondition.None
+            && direction.HasFlag(MapDirections.To)
+        )
+        {
+            var unsupportedTargets = targetProperties
+                .Where(x => x.IsInitOnly || x.IsRequired)
+                .ToArray();
+            if (unsupportedTargets.Length > 0)
+            {
+                foreach (var targetProperty in unsupportedTargets)
+                {
+                    _context.ClassInfo.ProductionContext.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Descriptors.ConditionalTargetMemberCannotBeInitialized,
+                            location,
+                            targetProperty.AccessPath
+                        )
+                    );
+                }
+                direction &= ~MapDirections.To;
+            }
+        }
+        if (direction == 0)
+            return;
         if (
             _actions.TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties, direction)
             is false
@@ -191,8 +228,25 @@ internal sealed class CompositeMappingProcessor
             mapToContentStart,
             mapFromContentStart
         );
+        MemberConditionBuilder.WrapMapping(
+            mapTarget.MapToMethod.Contents,
+            mapToContentStart,
+            mapToCondition,
+            propertySymbol,
+            targetProperties
+        );
+        MemberConditionBuilder.WrapMapping(
+            mapTarget.MapFromMethod.Contents,
+            mapFromContentStart,
+            mapFromCondition,
+            propertySymbol,
+            targetProperties
+        );
         _actions.AddAfterPropertyAction(mapTarget, actionProperty);
-        if (targetProperties.Any(x => x.IsInitOnly))
+        if (
+            direction.HasFlag(MapDirections.To)
+            && targetProperties.Any(x => x.IsInitOnly)
+        )
         {
             mapTarget.MapToMethod.Contents.RemoveRange(
                 mapToContentStart,
@@ -326,7 +380,8 @@ internal sealed class CompositeMappingProcessor
             tupleType,
             fieldName,
             location,
-            direction
+            direction,
+            attributeInfo
         );
     }
 }

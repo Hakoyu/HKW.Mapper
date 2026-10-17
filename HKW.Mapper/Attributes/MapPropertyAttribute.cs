@@ -119,4 +119,16 @@ public sealed class MapPropertyAttribute : Attribute
     /// </summary>
     [DefaultValue(MapDirections.Both)]
     public MapDirections Direction { get; set; } = MapDirections.Both;
+
+    /// <summary>
+    /// 映射至目标成员前的执行条件
+    /// </summary>
+    [DefaultValue(MapMemberCondition.None)]
+    public MapMemberCondition MapToCondition { get; set; }
+
+    /// <summary>
+    /// 从目标成员映射回源成员前的执行条件
+    /// </summary>
+    [DefaultValue(MapMemberCondition.None)]
+    public MapMemberCondition MapFromCondition { get; set; }
 }

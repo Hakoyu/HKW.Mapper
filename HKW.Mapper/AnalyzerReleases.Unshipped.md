@@ -50,3 +50,4 @@ MAP0042 | HKWMapper | Error | Descriptors
 MAP0043 | HKWMapper | Error | Descriptors
 MAP0044 | HKWMapper | Error | Descriptors
 MAP0045 | HKWMapper | Warning | Descriptors
+MAP0046 | HKWMapper | Error | Descriptors

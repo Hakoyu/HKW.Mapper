@@ -94,7 +94,15 @@ internal sealed class MemberMappingProcessor
                 )
             );
         }
-        if (_composites.TryUseConfigCompositePropertyConverter(mapTarget, propertySymbol))
+        if (
+            _composites.TryUseConfigCompositePropertyConverter(
+                mapTarget,
+                propertySymbol,
+                targetCompositeAttributes.Length == 1
+                    ? new AttributeInfo(targetCompositeAttributes[0])
+                    : null
+            )
+        )
         {
             foreach (var attribute in compositeAttributes)
             {
@@ -220,6 +228,35 @@ internal sealed class MemberMappingProcessor
         );
         if (targetProperty is null)
             return;
+
+        var mapToCondition = MemberConditionBuilder.GetCondition(
+            attributeInfo,
+            nameof(MapPropertyAttribute.MapToCondition)
+        );
+        var mapFromCondition = MemberConditionBuilder.GetCondition(
+            attributeInfo,
+            nameof(MapPropertyAttribute.MapFromCondition)
+        );
+        if (
+            mapToCondition is not MapMemberCondition.None
+            && direction.HasFlag(MapDirections.To)
+            && (targetProperty.IsInitOnly || targetProperty.IsRequired)
+        )
+        {
+            var location = attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                attributeData.ApplicationSyntaxReference.Span
+            ) ?? propertySymbol.Locations[0];
+            _context.ClassInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.ConditionalTargetMemberCannotBeInitialized,
+                    location,
+                    targetProperty.AccessPath
+                )
+            );
+            direction &= ~MapDirections.To;
+        }
+        if (direction == 0)
+            return;
         if (
             hasConfigConverter is false
             && hasAttributeConverter is false
@@ -250,13 +287,30 @@ internal sealed class MemberMappingProcessor
             MapProperty(mapTarget, sourceProperty, attributeInfo, targetProperty);
         }
         _actions.TryReplacePropertyAction(mapTarget, propertySymbol);
-        _actions.AddAfterPropertyAction(mapTarget, propertySymbol);
-        _actions.MoveInitOnlyTargetAssignmentToCreation(
-            mapTarget,
-            targetProperty,
-            propertySymbol,
-            mapToContentStart
+        MemberConditionBuilder.WrapMapping(
+            mapTarget.MapToMethod.Contents,
+            mapToContentStart,
+            mapToCondition,
+            sourceProperty,
+            [targetProperty]
         );
+        MemberConditionBuilder.WrapMapping(
+            mapTarget.MapFromMethod.Contents,
+            mapFromContentStart,
+            mapFromCondition,
+            sourceProperty,
+            [targetProperty]
+        );
+        _actions.AddAfterPropertyAction(mapTarget, propertySymbol);
+        if (direction.HasFlag(MapDirections.To))
+        {
+            _actions.MoveInitOnlyTargetAssignmentToCreation(
+                mapTarget,
+                targetProperty,
+                propertySymbol,
+                mapToContentStart
+            );
+        }
         _actions.RemoveInitOnlySourceMapFrom(
             mapTarget,
             sourceProperty,

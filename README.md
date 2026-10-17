@@ -191,6 +191,28 @@ public sealed class User
 
 `MapCompositePropertyAttribute` 同样支持 `SourcePath`，并通过 `MapCompositeConvertArgs.SourcePropertyName` 传递完整路径。反向映射要求路径叶成员可写；值类型中间属性必须按引用返回，否则生成器会报告诊断。
 
+### 条件映射
+
+`MapProperty`、`MapField`、`MapCompositeProperty` 和 `MapCompositeField` 均可通过 `MapToCondition` 与 `MapFromCondition` 在各方向的成员映射执行前判断：
+
+```csharp
+[MapProperty(
+    typeof(UserDto),
+    MapToCondition = MapMemberCondition.SourceIsNotNullOrDefault,
+    MapFromCondition = MapMemberCondition.SourceIsNullOrDefault)]
+public string? DisplayName { get; set; }
+```
+
+可用的 `MapMemberCondition` 值：
+
+- `None`：默认值，无条件执行映射。
+- `SourceIsNullOrDefault` / `SourceIsNotNullOrDefault`：判断原始源对象的成员。
+- `TargetIsNullOrDefault` / `TargetIsNotNullOrDefault`：判断原始目标对象的成员。
+
+`Source` 和 `Target` 始终表示 `[MapTarget]` 声明中的原始源、目标角色，不会因 `MapTo` 或 `MapFrom` 方向而交换。因此，上例的 `MapFromCondition` 仅在 `source.DisplayName` 为 null 时把目标值写回。引用类型检查 null；值类型（包括 `Nullable<T>`）与 `default(T)` 比较。
+
+复合映射的 Target 条件会同时检查全部目标成员：`TargetIsNullOrDefault` 仅在所有目标成员都为空/default 时成立，`TargetIsNotNullOrDefault` 是该整体条件的逻辑取反。条件不成立时不会调用转换器，也不会执行该成员的赋值或集合更新。条件式 `MapTo` 无法表示为对象初始化器中的 `init`/`required` 赋值，此时生成器报告 `MAP0046` 并跳过该方向。
+
 ## 字段配置
 
 字段映射默认关闭。设置 `MapFields = true` 后，会映射可访问的 `public`/`internal` 实例字段，并支持字段↔字段、字段↔属性和属性↔字段；`static` 与 `const` 字段始终排除。同名目标成员同时存在时属性优先。
