@@ -30,8 +30,10 @@ internal class MapperGenerator
     }
 
     private readonly ClassInfo _classInfo;
-    private readonly Dictionary<MapTargetInfo, Dictionary<string, MapMemberInfo>> _mappedTargets =
-    [];
+    private readonly Dictionary<
+        MapTargetInfo,
+        Dictionary<string, List<(MapMemberInfo Source, MapDirections Direction)>>
+    > _mappedTargets = [];
     private readonly HashSet<MapMemberInfo> _reportedIgnoreAttributeConflicts = [];
 
     public IReadOnlyDictionary<INamedTypeSymbol, HashSet<MapTargetInfo>> MapTargetDic { get; }
@@ -107,7 +109,7 @@ internal class MapperGenerator
                 var syntaxReference = ignoreAttribute.ApplicationSyntaxReference!;
                 _classInfo.ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
-                        Descriptors.MapIgnorePropertyOverridesMappingAttributes,
+                        Descriptors.MapIgnoreOverridesMappingAttributes,
                         syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span)
                     )
                 );
@@ -127,7 +129,7 @@ internal class MapperGenerator
             var syntaxReference = targetCompositeAttributes[0].ApplicationSyntaxReference!;
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
-                    Descriptors.MapCompositePropertyOverridesMapProperty,
+                    Descriptors.CompositeMappingOverridesRegularMapping,
                     syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span)
                 )
             );
@@ -167,7 +169,7 @@ internal class MapperGenerator
             else if (_classInfo.MapTargets.All(x => x.TargetName != targetName))
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.MapPropertyTargetNotFound,
+                    Descriptors.MemberMappingTargetNotFound,
                     att.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                         att.ApplicationSyntaxReference.Span
                     ),
@@ -179,7 +181,7 @@ internal class MapperGenerator
         if (matchingAttributes.Count > 1)
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.MapPropertyTargetAmbiguous,
+                Descriptors.MemberMappingTargetAmbiguous,
                 propertySymbol.Locations[0],
                 propertySymbol.Name
             );
@@ -216,6 +218,17 @@ internal class MapperGenerator
             hasConfigConverter = true;
         }
 
+        var direction = hasConfigConverter
+            ? mapTarget.Direction
+            : GetEffectiveDirection(
+                mapTarget,
+                attributeInfo,
+                attributeData,
+                nameof(MapPropertyAttribute.Direction)
+            );
+        if (direction == 0)
+            return;
+
         var sourceProperty = propertySymbol;
         if (
             hasConfigConverter is false
@@ -226,7 +239,7 @@ internal class MapperGenerator
                 is true
         )
         {
-            sourceProperty = ResolveSourcePath(mapTarget, propertySymbol, sourcePath);
+            sourceProperty = ResolveSourcePath(mapTarget, propertySymbol, sourcePath, direction);
             if (sourceProperty is null)
                 return;
         }
@@ -242,6 +255,7 @@ internal class MapperGenerator
             mapTarget,
             sourceProperty,
             targetPropertyName,
+            direction,
             allowPath: true
         );
         if (targetProperty is null)
@@ -249,9 +263,12 @@ internal class MapperGenerator
         if (
             hasConfigConverter is false
             && hasAttributeConverter is false
-            && TryReserveTargetProperties(mapTarget, sourceProperty, [targetProperty]) is false
+            && TryReserveTargetProperties(mapTarget, sourceProperty, [targetProperty], direction)
+                is false
         )
             return;
+        var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
+        var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
         AddBeforePropertyAction(mapTarget, propertySymbol);
         if (TryUseConfigPropertyConverter(mapTarget, sourceProperty, targetProperty))
         {
@@ -274,6 +291,58 @@ internal class MapperGenerator
         }
         TryReplacePropertyAction(mapTarget, propertySymbol);
         AddAfterPropertyAction(mapTarget, propertySymbol);
+        RemoveDisabledDirectionContents(
+            mapTarget,
+            direction,
+            mapToContentStart,
+            mapFromContentStart
+        );
+    }
+
+    private MapDirections GetEffectiveDirection(
+        MapTargetInfo mapTarget,
+        AttributeInfo? attributeInfo,
+        AttributeData? attributeData,
+        string parameterName
+    )
+    {
+        var memberDirection = MapDirections.Both;
+        if (attributeInfo?.TryGetParam<MapDirections>(parameterName, out var direction) is true)
+            memberDirection = direction;
+
+        var effectiveDirection = mapTarget.Direction & memberDirection;
+        if (effectiveDirection == 0 && attributeData is not null)
+        {
+            var syntaxReference = attributeData.ApplicationSyntaxReference!;
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MemberDirectionConflictsWithMapTarget,
+                    syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span),
+                    memberDirection,
+                    mapTarget.Direction
+                )
+            );
+        }
+        return effectiveDirection;
+    }
+
+    private static void RemoveDisabledDirectionContents(
+        MapTargetInfo mapTarget,
+        MapDirections direction,
+        int mapToContentStart,
+        int mapFromContentStart
+    )
+    {
+        if (direction.HasFlag(MapDirections.To) is false)
+            mapTarget.MapToMethod.Contents.RemoveRange(
+                mapToContentStart,
+                mapTarget.MapToMethod.Contents.Count - mapToContentStart
+            );
+        if (direction.HasFlag(MapDirections.From) is false)
+            mapTarget.MapFromMethod.Contents.RemoveRange(
+                mapFromContentStart,
+                mapTarget.MapFromMethod.Contents.Count - mapFromContentStart
+            );
     }
 
     private List<AttributeData>? GetMatchingAttributes(
@@ -294,7 +363,7 @@ internal class MapperGenerator
             else if (_classInfo.MapTargets.All(x => x.TargetName != targetName))
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.MapPropertyTargetNotFound,
+                    Descriptors.MemberMappingTargetNotFound,
                     attribute.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                         attribute.ApplicationSyntaxReference.Span
                     ),
@@ -307,7 +376,7 @@ internal class MapperGenerator
             return matchingAttributes;
 
         var ambiguousDiagnostic = Diagnostic.Create(
-            Descriptors.MapPropertyTargetAmbiguous,
+            Descriptors.MemberMappingTargetAmbiguous,
             propertySymbol.Locations[0],
             propertySymbol.Name
         );
@@ -494,7 +563,7 @@ internal class MapperGenerator
                 return;
             // 如果当前属性类型与目标属性类型不一样, 则异常
             var diagnostic = Diagnostic.Create(
-                Descriptors.TargetPropertyTypeError,
+                Descriptors.TargetMemberTypeIncompatible,
                 propertySymbol.Locations[0],
                 targetProperty.ToString()
             );
@@ -518,7 +587,7 @@ internal class MapperGenerator
             {
                 // 如果是引用类型, 则错误
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.PropertyIsReferenceType,
+                    Descriptors.SourceMemberIsReferenceType,
                     propertySymbol.Locations[0],
                     $"{mapTarget.SourceType.Name}.{propertySymbol.Name}"
                 );
@@ -874,7 +943,8 @@ internal class MapperGenerator
             data.TargetNames,
             tupleType,
             $"{MapConfigInfo.ConfigName}.{data.Property.Name}",
-            location
+            location,
+            mapTarget.Direction
         );
         return true;
     }
@@ -887,14 +957,15 @@ internal class MapperGenerator
         string[] targetPropertyNames,
         INamedTypeSymbol tupleType,
         string converterExpression,
-        Location location
+        Location location,
+        MapDirections direction
     )
     {
         var tupleElements = tupleType.TupleElements;
         if (tupleElements.Length != targetPropertyNames.Length)
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.CompositePropertyCountMismatch,
+                Descriptors.CompositeTargetMemberCountMismatch,
                 location,
                 targetPropertyNames.Length,
                 tupleElements.Length
@@ -909,14 +980,15 @@ internal class MapperGenerator
             var targetProperty = GetTargetProperty(
                 mapTarget,
                 propertySymbol,
-                targetPropertyNames[i]
+                targetPropertyNames[i],
+                direction
             );
             if (targetProperty is null)
                 return;
             if (AreConverterTypesCompatible(tupleElements[i].Type, targetProperty.Type) is false)
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.CompositePropertyTypeMismatch,
+                    Descriptors.CompositeTargetMemberTypeMismatch,
                     location,
                     targetProperty.Name,
                     targetProperty.Type.GetName(),
@@ -928,12 +1000,15 @@ internal class MapperGenerator
             }
             targetProperties.Add(targetProperty);
         }
-        if (TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties) is false)
+        if (
+            TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties, direction)
+            is false
+        )
             return;
 
-        AddBeforePropertyAction(mapTarget, actionProperty);
         var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
         var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
+        AddBeforePropertyAction(mapTarget, actionProperty);
         var sourceValue = ConvertExpression(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.AccessPath}",
             propertySymbol.Type,
@@ -986,6 +1061,12 @@ internal class MapperGenerator
             mapFromContentStart
         );
         AddAfterPropertyAction(mapTarget, actionProperty);
+        RemoveDisabledDirectionContents(
+            mapTarget,
+            direction,
+            mapToContentStart,
+            mapFromContentStart
+        );
     }
 
     private void MapCompositeProperty(
@@ -1000,8 +1081,17 @@ internal class MapperGenerator
         if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol converterType)
             return;
 
-        var sourceProperty = propertySymbol;
         var attributeInfo = new AttributeInfo(attribute);
+        var direction = GetEffectiveDirection(
+            mapTarget,
+            attributeInfo,
+            attribute,
+            nameof(MapCompositePropertyAttribute.Direction)
+        );
+        if (direction == 0)
+            return;
+
+        var sourceProperty = propertySymbol;
         if (
             attributeInfo.TryGetParam<string>(
                 nameof(MapCompositePropertyAttribute.SourcePath),
@@ -1009,7 +1099,7 @@ internal class MapperGenerator
             )
         )
         {
-            sourceProperty = ResolveSourcePath(mapTarget, propertySymbol, sourcePath);
+            sourceProperty = ResolveSourcePath(mapTarget, propertySymbol, sourcePath, direction);
             if (sourceProperty is null)
                 return;
         }
@@ -1026,7 +1116,7 @@ internal class MapperGenerator
         )
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.CompositeTargetPropertiesInvalid,
+                Descriptors.InvalidCompositeTargetMemberNames,
                 location
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
@@ -1039,7 +1129,7 @@ internal class MapperGenerator
         if (converterInterface is null)
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.CompositeConverterNotImplemented,
+                Descriptors.ConverterDoesNotImplementIMapCompositeConverter,
                 location,
                 converterType.GetName()
             );
@@ -1081,7 +1171,8 @@ internal class MapperGenerator
             targetPropertyNames,
             tupleType,
             fieldName,
-            location
+            location,
+            direction
         );
     }
 
@@ -1131,7 +1222,8 @@ internal class MapperGenerator
     private bool TryReserveTargetProperties(
         MapTargetInfo mapTarget,
         MapMemberInfo sourceProperty,
-        IEnumerable<MapMemberInfo> targetProperties
+        IEnumerable<MapMemberInfo> targetProperties,
+        MapDirections direction
     )
     {
         if (_mappedTargets.TryGetValue(mapTarget, out var mappedProperties) is false)
@@ -1142,13 +1234,16 @@ internal class MapperGenerator
         foreach (var targetProperty in targetProperties)
         {
             if (
-                mappedProperties.TryGetValue(targetProperty.AccessPath, out var firstSourceProperty)
+                mappedProperties.TryGetValue(targetProperty.AccessPath, out var mappings)
+                && mappings.FirstOrDefault(mapping => (mapping.Direction & direction) != 0)
+                    is var conflictingMapping
+                && conflictingMapping.Source is not null
             )
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.SameMapTargetProperty,
+                    Descriptors.DuplicateMapTargetMember,
                     sourceProperty.Locations[0],
-                    firstSourceProperty.Name,
+                    conflictingMapping.Source.Name,
                     sourceProperty.Name,
                     targetProperty.AccessPath
                 );
@@ -1157,7 +1252,14 @@ internal class MapperGenerator
             }
         }
         foreach (var targetProperty in targetProperties)
-            mappedProperties.Add(targetProperty.AccessPath, sourceProperty);
+        {
+            if (mappedProperties.TryGetValue(targetProperty.AccessPath, out var mappings) is false)
+            {
+                mappings = [];
+                mappedProperties.Add(targetProperty.AccessPath, mappings);
+            }
+            mappings.Add((sourceProperty, direction));
+        }
         return true;
     }
 
@@ -1229,7 +1331,7 @@ internal class MapperGenerator
         )
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.ConverterGenericTypeError,
+                Descriptors.ConverterGenericTypeMismatch,
                 data.Property.Locations[0],
                 converterType.TypeArguments[0].GetName(),
                 converterType.TypeArguments[1].GetName(),
@@ -1287,7 +1389,7 @@ internal class MapperGenerator
         if (converterInterface is null)
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.ConverterNotImplementIMapConverter,
+                Descriptors.ConverterDoesNotImplementIMapConverter,
                 attributeInfo.Data.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                     attributeInfo.Data.ApplicationSyntaxReference.Span
                 ),
@@ -1304,7 +1406,7 @@ internal class MapperGenerator
         )
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.ConverterGenericTypeError,
+                Descriptors.ConverterGenericTypeMismatch,
                 attributeInfo.Data.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
                     attributeInfo.Data.ApplicationSyntaxReference.Span
                 ),
@@ -1346,13 +1448,14 @@ internal class MapperGenerator
         MapTargetInfo mapTarget,
         MapMemberInfo property,
         string targetPropertyName,
+        MapDirections direction,
         bool allowPath = false
     )
     {
         MapMemberInfo? targetProperty;
         if (allowPath && targetPropertyName.IndexOf('.') >= 0)
         {
-            targetProperty = ResolveTargetPath(mapTarget, property, targetPropertyName);
+            targetProperty = ResolveTargetPath(mapTarget, property, targetPropertyName, direction);
             if (targetProperty is null)
                 return null;
         }
@@ -1368,7 +1471,7 @@ internal class MapperGenerator
         if (targetProperty.IsStatic)
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.TargetPropertyIsStatic,
+                Descriptors.TargetMemberIsStatic,
                 property.Locations[0],
                 targetProperty.AccessPath
             );
@@ -1387,7 +1490,7 @@ internal class MapperGenerator
         }
         if (
             property.IsField
-            && mapTarget.Direction.HasFlag(MapDirections.From)
+            && direction.HasFlag(MapDirections.From)
             && property.IsReadOnly
         )
         {
@@ -1403,7 +1506,7 @@ internal class MapperGenerator
         }
         if (
             targetProperty.IsField
-            && mapTarget.Direction.HasFlag(MapDirections.To)
+            && direction.HasFlag(MapDirections.To)
             && targetProperty.IsReadOnly
         )
         {
@@ -1420,7 +1523,7 @@ internal class MapperGenerator
 
         if (
             property.IsField is false
-            && mapTarget.Direction.HasFlag(MapDirections.To)
+            && direction.HasFlag(MapDirections.To)
             && (property.GetMethod is null || IsMemberAccessible(property.GetMethod) is false)
         )
         {
@@ -1429,7 +1532,7 @@ internal class MapperGenerator
         }
         if (
             property.IsField is false
-            && mapTarget.Direction.HasFlag(MapDirections.From)
+            && direction.HasFlag(MapDirections.From)
             && (property.SetMethod is null || IsMemberAccessible(property.SetMethod) is false)
         )
         {
@@ -1438,7 +1541,7 @@ internal class MapperGenerator
         }
         if (
             targetProperty.IsField is false
-            && mapTarget.Direction.HasFlag(MapDirections.To)
+            && direction.HasFlag(MapDirections.To)
             && (
                 targetProperty.SetMethod is null
                 || IsMemberAccessible(targetProperty.SetMethod) is false
@@ -1450,7 +1553,7 @@ internal class MapperGenerator
         }
         if (
             targetProperty.IsField is false
-            && mapTarget.Direction.HasFlag(MapDirections.From)
+            && direction.HasFlag(MapDirections.From)
             && (
                 targetProperty.GetMethod is null
                 || IsMemberAccessible(targetProperty.GetMethod) is false
@@ -1466,7 +1569,8 @@ internal class MapperGenerator
     private MapMemberInfo? ResolveSourcePath(
         MapTargetInfo mapTarget,
         MapMemberInfo annotatedMember,
-        string sourcePath
+        string sourcePath,
+        MapDirections direction
     )
     {
         var segments = sourcePath.Split('.');
@@ -1503,7 +1607,7 @@ internal class MapperGenerator
             {
                 _classInfo.ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
-                        Descriptors.SourcePropertyIsStatic,
+                        Descriptors.SourcePathMemberIsStatic,
                         annotatedMember.Locations[0],
                         segmentPath
                     )
@@ -1521,7 +1625,7 @@ internal class MapperGenerator
                 }
 
                 if (
-                    mapTarget.Direction.HasFlag(MapDirections.From)
+                    direction.HasFlag(MapDirections.From)
                     && member.IsReadOnly
                     && (isLeaf || member.Type.IsValueType)
                 )
@@ -1540,7 +1644,7 @@ internal class MapperGenerator
             else if (isLeaf)
             {
                 if (
-                    mapTarget.Direction.HasFlag(MapDirections.To)
+                    direction.HasFlag(MapDirections.To)
                     && (member.GetMethod is null || IsMemberAccessible(member.GetMethod) is false)
                 )
                 {
@@ -1548,7 +1652,7 @@ internal class MapperGenerator
                     return null;
                 }
                 if (
-                    mapTarget.Direction.HasFlag(MapDirections.From)
+                    direction.HasFlag(MapDirections.From)
                     && (member.SetMethod is null || IsMemberAccessible(member.SetMethod) is false)
                 )
                 {
@@ -1564,7 +1668,7 @@ internal class MapperGenerator
                     return null;
                 }
                 if (
-                    mapTarget.Direction.HasFlag(MapDirections.From)
+                    direction.HasFlag(MapDirections.From)
                     && member.Type.IsValueType
                     && member.Symbol is IPropertySymbol property
                     && (property.ReturnsByRef is false || property.ReturnsByRefReadonly)
@@ -1594,7 +1698,8 @@ internal class MapperGenerator
     private MapMemberInfo? ResolveTargetPath(
         MapTargetInfo mapTarget,
         MapMemberInfo sourceProperty,
-        string targetPath
+        string targetPath,
+        MapDirections direction
     )
     {
         var segments = targetPath.Split('.');
@@ -1635,7 +1740,7 @@ internal class MapperGenerator
             {
                 _classInfo.ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
-                        Descriptors.TargetPropertyIsStatic,
+                        Descriptors.TargetMemberIsStatic,
                         sourceProperty.Locations[0],
                         segmentPath
                     )
@@ -1652,7 +1757,7 @@ internal class MapperGenerator
                 }
 
                 if (
-                    mapTarget.Direction.HasFlag(MapDirections.To)
+                    direction.HasFlag(MapDirections.To)
                     && member.Type.IsValueType
                     && member.IsReadOnly
                 )
@@ -1677,7 +1782,7 @@ internal class MapperGenerator
                 }
 
                 if (
-                    mapTarget.Direction.HasFlag(MapDirections.To)
+                    direction.HasFlag(MapDirections.To)
                     && member.Type.IsValueType
                     && member.Symbol is IPropertySymbol property
                     && (property.ReturnsByRef is false || property.ReturnsByRefReadonly)
@@ -1740,7 +1845,7 @@ internal class MapperGenerator
     {
         _classInfo.ProductionContext.ReportDiagnostic(
             Diagnostic.Create(
-                Descriptors.SourcePropertyNotExists,
+                Descriptors.SourcePathMemberDoesNotExist,
                 GetPropertyDiagnosticLocation(mapTarget, property),
                 mapTarget.SourceType.GetName() + "." + sourcePath
             )
@@ -1755,7 +1860,7 @@ internal class MapperGenerator
     {
         _classInfo.ProductionContext.ReportDiagnostic(
             Diagnostic.Create(
-                Descriptors.TargetPropertyNotExists,
+                Descriptors.TargetMemberDoesNotExist,
                 GetPropertyDiagnosticLocation(mapTarget, property),
                 mapTarget.TargetType.GetName() + "." + targetPath
             )
@@ -1770,7 +1875,7 @@ internal class MapperGenerator
     {
         _classInfo.ProductionContext.ReportDiagnostic(
             Diagnostic.Create(
-                Descriptors.SourcePropertyAccessibilityInsufficient,
+                Descriptors.SourceMemberAccessorInaccessible,
                 GetPropertyDiagnosticLocation(mapTarget, property),
                 property.Name,
                 accessor
@@ -1786,7 +1891,7 @@ internal class MapperGenerator
     {
         _classInfo.ProductionContext.ReportDiagnostic(
             Diagnostic.Create(
-                Descriptors.TargetPropertyAccessibilityInsufficient,
+                Descriptors.TargetMemberAccessorInaccessible,
                 source.Locations[0],
                 target.AccessPath,
                 accessor

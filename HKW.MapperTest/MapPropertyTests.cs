@@ -240,6 +240,45 @@ public sealed class MapPropertyTests
         Assert.AreEqual(13, source.Constructed.Value);
         Assert.AreNotSame(targetConstructed, source.Constructed);
     }
+
+    [TestMethod]
+    public void MemberDirectionsLimitPropertyMappings()
+    {
+        var source = new MptFixtureDirectionSource
+        {
+            ToOnly = 3,
+            FromOnly = 5,
+            Both = 7,
+            SharedTo = 11,
+            SharedFrom = 13,
+        };
+        var target = new MptFixtureDirectionTarget
+        {
+            ToOnly = 17,
+            FromOnly = 19,
+            Both = 23,
+            Shared = 29,
+        };
+
+        source.MapTo(target);
+
+        Assert.AreEqual(3, target.ToOnly);
+        Assert.AreEqual(19, target.FromOnly);
+        Assert.AreEqual(7, target.Both);
+        Assert.AreEqual(11, target.Shared);
+
+        target.ToOnly = 31;
+        target.FromOnly = 37;
+        target.Both = 41;
+        target.Shared = 43;
+        source.MapFrom(target);
+
+        Assert.AreEqual(3, source.ToOnly);
+        Assert.AreEqual(37, source.FromOnly);
+        Assert.AreEqual(41, source.Both);
+        Assert.AreEqual(11, source.SharedTo);
+        Assert.AreEqual(43, source.SharedFrom);
+    }
 }
 
 [MapTarget(typeof(MptFixtureTargetTypeTarget))]
@@ -550,4 +589,39 @@ public sealed class MptFixtureConstructValue
     public MptFixtureConstructValue(MptFixtureConstructValue value) => Value = value.Value;
 
     public int Value { get; }
+}
+
+[MapTarget(typeof(MptFixtureDirectionTarget))]
+public sealed class MptFixtureDirectionSource
+{
+    [MapProperty(typeof(MptFixtureDirectionTarget), Direction = MapDirections.To)]
+    public int ToOnly { get; set; }
+
+    [MapProperty(typeof(MptFixtureDirectionTarget), Direction = MapDirections.From)]
+    public int FromOnly { get; set; }
+
+    [MapProperty(typeof(MptFixtureDirectionTarget))]
+    public int Both { get; set; }
+
+    [MapProperty(
+        typeof(MptFixtureDirectionTarget),
+        nameof(MptFixtureDirectionTarget.Shared),
+        Direction = MapDirections.To
+    )]
+    public int SharedTo { get; set; }
+
+    [MapProperty(
+        typeof(MptFixtureDirectionTarget),
+        nameof(MptFixtureDirectionTarget.Shared),
+        Direction = MapDirections.From
+    )]
+    public int SharedFrom { get; set; }
+}
+
+public sealed class MptFixtureDirectionTarget
+{
+    public int ToOnly { get; set; }
+    public int FromOnly { get; set; }
+    public int Both { get; set; }
+    public int Shared { get; set; }
 }

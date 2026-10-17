@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace HKW.Mapper;
 
 /// <summary>
@@ -51,7 +53,7 @@ public sealed class MapCompositePropertyAttribute : Attribute
     public Type ConverterType { get; }
 
     /// <summary>
-    /// 从源对象根开始的源成员路径。
+    /// 从源对象根开始的源成员路径
     /// </summary>
     public string? SourcePath { get; set; }
 
@@ -59,4 +61,10 @@ public sealed class MapCompositePropertyAttribute : Attribute
     /// 按转换器值元组元素顺序排列的目标属性名
     /// </summary>
     public string[] TargetProperties { get; }
+
+    /// <summary>
+    /// 此成员要参与的映射方向
+    /// </summary>
+    [DefaultValue(MapDirections.Both)]
+    public MapDirections Direction { get; set; } = MapDirections.Both;
 }

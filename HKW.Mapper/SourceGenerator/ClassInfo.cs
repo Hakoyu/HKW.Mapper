@@ -31,7 +31,7 @@ internal class ClassInfo
             if (MapTargets.Add(mapTarget) is false)
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.SameMapMethodName,
+                    Descriptors.DuplicateMapMethodName,
                     attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
                         attributeData.ApplicationSyntaxReference.Span
                     ),
@@ -196,7 +196,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             if (configType.InheritedFrom(TypeFullNames.MapConfigClass) is false)
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.MapConfigTypeError,
+                    Descriptors.InvalidMapConfigType,
                     attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
                         attributeData.ApplicationSyntaxReference.Span
                     ),
@@ -212,7 +212,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             )
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.MapConfigGenericTypeError,
+                    Descriptors.MapConfigGenericTypeMismatch,
                     attributeData?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
                         attributeData.ApplicationSyntaxReference.Span
                     ),
@@ -544,7 +544,7 @@ internal sealed class MapConfigInfo
         if (string.IsNullOrWhiteSpace(sourceName) || string.IsNullOrWhiteSpace(targetName))
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.MapConfigPropertyConverterPropertyNameError,
+                Descriptors.InvalidMapConfigConverterMemberName,
                 propertySymbol.Locations[0]
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
@@ -585,7 +585,7 @@ internal sealed class MapConfigInfo
         {
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
-                    Descriptors.MapConfigCompositeInitializerError,
+                    Descriptors.MapConfigCompositeInitializerCannotBeAnalyzed,
                     propertySymbol.Locations[0]
                 )
             );
@@ -608,7 +608,7 @@ internal sealed class MapConfigInfo
         {
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
-                    Descriptors.MapConfigCompositeInitializerError,
+                    Descriptors.MapConfigCompositeInitializerCannotBeAnalyzed,
                     propertySymbol.Locations[0]
                 )
             );
@@ -627,7 +627,7 @@ internal sealed class MapConfigInfo
         {
             _classInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
-                    Descriptors.MapConfigCompositePropertyNameError,
+                    Descriptors.InvalidMapConfigCompositeMemberNames,
                     propertySymbol.Locations[0]
                 )
             );
@@ -666,7 +666,7 @@ internal sealed class MapConfigInfo
         if (methodSymbol.DeclaredAccessibility < Accessibility.Internal)
         {
             var diagnostic = Diagnostic.Create(
-                Descriptors.MapConfigActionInsufficientAccessibility,
+                Descriptors.MapConfigActionMethodInaccessible,
                 methodSymbol.Locations[0]
             );
             _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
@@ -696,7 +696,7 @@ internal sealed class MapConfigInfo
             if (string.IsNullOrEmpty(name))
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.MapConfigActionModePropertyNameError,
+                    Descriptors.InvalidMapConfigActionMemberName,
                     methodSymbol.Locations[0]
                 );
                 _classInfo.ProductionContext.ReportDiagnostic(diagnostic);
@@ -721,7 +721,7 @@ internal sealed class MapConfigInfo
             if (result is false)
             {
                 var diagnostic = Diagnostic.Create(
-                    Descriptors.MapConfigActionHasSameProperty,
+                    Descriptors.DuplicateMapConfigActionForMember,
                     methodSymbol.Locations[0]
                 );
                 _classInfo.ProductionContext.ReportDiagnostic(diagnostic);

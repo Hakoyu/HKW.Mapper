@@ -165,6 +165,49 @@ public sealed class MapFieldTests
 
         Assert.AreEqual(43, target.Value);
     }
+
+    [TestMethod]
+    public void MemberDirectionsLimitRegularAndCompositeFieldMappings()
+    {
+        var source = new DirectionFieldSource
+        {
+            ToOnly = 3,
+            FromOnly = 5,
+            CompositeTo = new(7, 11),
+            CompositeFrom = new(13, 17),
+        };
+        var target = new DirectionFieldTarget
+        {
+            ToOnly = 19,
+            FromOnly = 23,
+            ToLow = 29,
+            ToHigh = 31,
+            FromLow = 37,
+            FromHigh = 41,
+        };
+
+        source.MapTo(target);
+
+        Assert.AreEqual(3, target.ToOnly);
+        Assert.AreEqual(23, target.FromOnly);
+        Assert.AreEqual(7, target.ToLow);
+        Assert.AreEqual(11, target.ToHigh);
+        Assert.AreEqual(37, target.FromLow);
+        Assert.AreEqual(41, target.FromHigh);
+
+        target.ToOnly = 43;
+        target.FromOnly = 47;
+        target.ToLow = 53;
+        target.ToHigh = 59;
+        target.FromLow = 61;
+        target.FromHigh = 67;
+        source.MapFrom(target);
+
+        Assert.AreEqual(3, source.ToOnly);
+        Assert.AreEqual(47, source.FromOnly);
+        Assert.AreEqual(new FieldRange(7, 11), source.CompositeTo);
+        Assert.AreEqual(new FieldRange(61, 67), source.CompositeFrom);
+    }
 }
 
 [MapTarget(typeof(NestedFieldPathTarget), MapFields = true)]
@@ -417,4 +460,42 @@ public sealed class DisabledFieldSource
 public sealed class DisabledFieldTarget
 {
     public int Value;
+}
+
+[MapTarget(typeof(DirectionFieldTarget), MapFields = true)]
+public sealed class DirectionFieldSource
+{
+    [MapField(typeof(DirectionFieldTarget), Direction = MapDirections.To)]
+    public int ToOnly;
+
+    [MapField(typeof(DirectionFieldTarget), Direction = MapDirections.From)]
+    public int FromOnly;
+
+    [MapCompositeField(
+        typeof(DirectionFieldTarget),
+        typeof(FieldRangeConverter),
+        nameof(DirectionFieldTarget.ToLow),
+        nameof(DirectionFieldTarget.ToHigh),
+        Direction = MapDirections.To
+    )]
+    public FieldRange CompositeTo;
+
+    [MapCompositeField(
+        typeof(DirectionFieldTarget),
+        typeof(FieldRangeConverter),
+        nameof(DirectionFieldTarget.FromLow),
+        nameof(DirectionFieldTarget.FromHigh),
+        Direction = MapDirections.From
+    )]
+    public FieldRange CompositeFrom;
+}
+
+public sealed class DirectionFieldTarget
+{
+    public int ToOnly;
+    public int FromOnly;
+    public int ToLow;
+    public int ToHigh;
+    public int FromLow;
+    public int FromHigh;
 }

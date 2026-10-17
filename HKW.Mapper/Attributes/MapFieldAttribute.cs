@@ -1,7 +1,9 @@
+using System.ComponentModel;
+
 namespace HKW.Mapper;
 
 /// <summary>
-/// 配置当前字段在某个目标映射中的名称、转换器或引用类型策略。
+/// 配置当前字段在某个目标映射中的名称、转换器或引用类型策略
 /// </summary>
 [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
 public sealed class MapFieldAttribute : Attribute
@@ -37,24 +39,28 @@ public sealed class MapFieldAttribute : Attribute
     public MapFieldAttribute(string TargetName, string FieldName, Type ConverterType)
         : this(TargetName, FieldName) => this.ConverterType = ConverterType;
 
-    /// <summary>目标名称。</summary>
+    /// <summary>目标名称</summary>
     public string? TargetName { get; }
 
-    /// <summary>目标类型。</summary>
+    /// <summary>目标类型</summary>
     public Type? TargetType { get; }
 
-    /// <summary>目标字段或属性名称。</summary>
+    /// <summary>目标字段或属性名称</summary>
     public string? FieldName { get; }
 
-    /// <summary>实现 <see cref="IMapConverter{TSourceValue, TTargetValue}"/> 的转换器类型。</summary>
+    /// <summary>实现 <see cref="IMapConverter{TSourceValue, TTargetValue}"/> 的转换器类型</summary>
     public Type? ConverterType { get; }
 
-    /// <summary>从源对象根开始的源成员路径。</summary>
+    /// <summary>从源对象根开始的源成员路径</summary>
     public string? SourcePath { get; set; }
 
-    /// <summary>是否忽略当前字段。</summary>
+    /// <summary>是否忽略当前字段</summary>
     public bool Ignore { get; set; }
 
-    /// <summary>字段映射类型。</summary>
+    /// <summary>字段映射类型</summary>
     public MapPropertyType MapType { get; set; }
+
+    /// <summary>此成员要参与的映射方向</summary>
+    [DefaultValue(MapDirections.Both)]
+    public MapDirections Direction { get; set; } = MapDirections.Both;
 }

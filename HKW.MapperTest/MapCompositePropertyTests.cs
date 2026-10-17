@@ -85,6 +85,39 @@ public sealed class MapCompositePropertyTests
 
         Assert.AreEqual(new CompositePropertyWiringValue(29, "returned", false), source.Value);
     }
+
+    [TestMethod]
+    public void MemberDirectionsLimitCompositePropertyMappings()
+    {
+        var source = new CompositePropertyDirectionSource
+        {
+            ToOnly = new(3, 5),
+            FromOnly = new(7, 11),
+        };
+        var target = new CompositePropertyDirectionTarget
+        {
+            ToLow = 13,
+            ToHigh = 17,
+            FromLow = 19,
+            FromHigh = 23,
+        };
+
+        source.MapTo(target);
+
+        Assert.AreEqual(3, target.ToLow);
+        Assert.AreEqual(5, target.ToHigh);
+        Assert.AreEqual(19, target.FromLow);
+        Assert.AreEqual(23, target.FromHigh);
+
+        target.ToLow = 29;
+        target.ToHigh = 31;
+        target.FromLow = 37;
+        target.FromHigh = 41;
+        source.MapFrom(target);
+
+        Assert.AreEqual(new CompositePropertySelectionValue(3, 5), source.ToOnly);
+        Assert.AreEqual(new CompositePropertySelectionValue(37, 41), source.FromOnly);
+    }
 }
 
 public readonly record struct CompositePropertySelectionValue(int First, int Second);
@@ -249,4 +282,34 @@ public sealed class CompositePropertyWiringConverter
             args.TargetPropertyNames
         );
     }
+}
+
+[MapTarget(typeof(CompositePropertyDirectionTarget))]
+public sealed class CompositePropertyDirectionSource
+{
+    [MapCompositeProperty(
+        typeof(CompositePropertyDirectionTarget),
+        typeof(CompositePropertySelectionConverter),
+        nameof(CompositePropertyDirectionTarget.ToLow),
+        nameof(CompositePropertyDirectionTarget.ToHigh),
+        Direction = MapDirections.To
+    )]
+    public CompositePropertySelectionValue ToOnly { get; set; }
+
+    [MapCompositeProperty(
+        typeof(CompositePropertyDirectionTarget),
+        typeof(CompositePropertySelectionConverter),
+        nameof(CompositePropertyDirectionTarget.FromLow),
+        nameof(CompositePropertyDirectionTarget.FromHigh),
+        Direction = MapDirections.From
+    )]
+    public CompositePropertySelectionValue FromOnly { get; set; }
+}
+
+public sealed class CompositePropertyDirectionTarget
+{
+    public int ToLow { get; set; }
+    public int ToHigh { get; set; }
+    public int FromLow { get; set; }
+    public int FromHigh { get; set; }
 }

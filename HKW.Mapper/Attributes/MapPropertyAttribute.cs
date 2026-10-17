@@ -1,7 +1,9 @@
+using System.ComponentModel;
+
 namespace HKW.Mapper;
 
 /// <summary>
-/// 配置当前属性在某个目标映射中的名称、转换器或引用类型策略。
+/// 配置当前属性在某个目标映射中的名称、转换器或引用类型策略
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public sealed class MapPropertyAttribute : Attribute
@@ -98,7 +100,7 @@ public sealed class MapPropertyAttribute : Attribute
     public Type? ConverterType { get; }
 
     /// <summary>
-    /// 从源对象根开始的源成员路径。
+    /// 从源对象根开始的源成员路径
     /// </summary>
     public string? SourcePath { get; set; }
 
@@ -111,26 +113,10 @@ public sealed class MapPropertyAttribute : Attribute
     /// 映射类型
     /// </summary>
     public MapPropertyType MapType { get; set; }
-}
-
-/// <summary>
-/// 属性映射类型。
-/// </summary>
-public enum MapPropertyType
-{
-    /// <summary>
-    /// 默认操作, 会自动使用 ICloneable ,会警告映射引用类型
-    /// </summary>
-    None,
 
     /// <summary>
-    /// 强制映射引用类型
+    /// 此成员要参与的映射方向
     /// </summary>
-    Reference,
-
-    /// <summary>
-    /// 使用自身构造
-    /// <para>例如: <c>source.List = new (target.List)</c></para>
-    /// </summary>
-    ConstructFromSelf,
+    [DefaultValue(MapDirections.Both)]
+    public MapDirections Direction { get; set; } = MapDirections.Both;
 }

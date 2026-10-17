@@ -14,7 +14,7 @@ public sealed class DescriptorsTests
             "MAP0001",
             DiagnosticSeverity.Error,
             "MapTarget(typeof(TargetB)",
-            ["Same", "map method name"],
+            ["Same", "already in use", "different target name"],
             """
             [MapTarget(typeof(TargetA), TargetName = "Same")]
             [MapTarget(typeof(TargetB), TargetName = "Same")]
@@ -151,7 +151,7 @@ public sealed class DescriptorsTests
             "MAP0004",
             DiagnosticSeverity.Warning,
             "Value",
-            ["Target.Value", "not exists"],
+            ["Target.Value", "does not exist"],
             Basic("public int Value { get; set; }", string.Empty)
         );
     }
@@ -163,7 +163,7 @@ public sealed class DescriptorsTests
             "MAP0005",
             DiagnosticSeverity.Error,
             "Value",
-            ["Target.Value", "type error"],
+            ["Target.Value", "incompatible type"],
             Basic("public int Value { get; set; }", "public string Value { get; set; } = string.Empty;")
         );
     }
@@ -237,7 +237,7 @@ public sealed class DescriptorsTests
             "MAP0010",
             DiagnosticSeverity.Error,
             "MapProperty",
-            ["string", "int", "cannot be applied"],
+            ["string", "int", "incompatible"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -262,7 +262,7 @@ public sealed class DescriptorsTests
             "MAP0011",
             DiagnosticSeverity.Error,
             "ValueConverter",
-            ["property name", "valid string"],
+            ["source member name", "non-empty string"],
             Config(
                 "public MapConfigPropertyConverter<int, int> ValueConverter { get; } = new(\"\", (value, _) => value, (value, _) => value);"
             )
@@ -276,7 +276,7 @@ public sealed class DescriptorsTests
             "MAP0012",
             DiagnosticSeverity.Error,
             "Run",
-            ["action mode", "valid string"],
+            ["action member name", "non-empty string", "action mode"],
             Config("[MapToConfigAction(MapConfigActionMode.BeforeProperty)] public void Run() { }")
         );
     }
@@ -288,7 +288,7 @@ public sealed class DescriptorsTests
             "MAP0013",
             DiagnosticSeverity.Error,
             "Second",
-            ["same target property", "one action"],
+            ["one map config action", "member", "action mode"],
             Config(
                 "[MapToConfigAction(MapConfigActionMode.BeforeProperty, nameof(Source.Value))] public void First() { }\n"
                     + "[MapToConfigAction(MapConfigActionMode.BeforeProperty, nameof(Source.Value))] public void Second() { }"
@@ -303,7 +303,7 @@ public sealed class DescriptorsTests
             "MAP0014",
             DiagnosticSeverity.Error,
             "Run",
-            ["cannot have parameters"],
+            ["cannot declare parameters"],
             Config("[MapToConfigAction(MapConfigActionMode.Start)] public void Run(int value) { }")
         );
     }
@@ -315,7 +315,7 @@ public sealed class DescriptorsTests
             "MAP0015",
             DiagnosticSeverity.Error,
             "Run",
-            ["accessibility", "insufficient"],
+            ["internal or public"],
             Config("[MapToConfigAction(MapConfigActionMode.Start)] private void Run() { }")
         );
     }
@@ -327,7 +327,7 @@ public sealed class DescriptorsTests
             "MAP0016",
             DiagnosticSeverity.Warning,
             "MapProperty",
-            ["Other", "not any MapTarget"],
+            ["Other", "does not match any MapTarget"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -424,7 +424,7 @@ public sealed class DescriptorsTests
             "MAP0021",
             DiagnosticSeverity.Error,
             "MapCompositeProperty",
-            ["3 target properties", "2 elements"],
+            ["3 target members", "2 elements"],
             Composite(
                 "TupleConverter",
                 "nameof(Target.First), nameof(Target.Second), nameof(Target.Third)",
@@ -495,7 +495,7 @@ public sealed class DescriptorsTests
             "MAP0025",
             DiagnosticSeverity.Error,
             "ValueConverter",
-            ["source property", "two unique target properties"],
+            ["source member", "two unique target members"],
             Config(
                 "public MapConfigPropertyCompositeConverter<int, (int, int)> ValueConverter { get; } = "
                     + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.First)], (value, _) => (value, value), (values, _) => values.Item1);",
@@ -511,7 +511,7 @@ public sealed class DescriptorsTests
             "MAP0026",
             DiagnosticSeverity.Error,
             "ValueConverter",
-            ["inline object initializer", "inline target property array"],
+            ["inline object initializer", "inline target member array"],
             Config(
                 "public MapConfigPropertyCompositeConverter<int, (int, int)> ValueConverter => "
                     + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.Second)], (value, _) => (value, value), (values, _) => values.Item1);",
@@ -527,7 +527,7 @@ public sealed class DescriptorsTests
             "MAP0027",
             DiagnosticSeverity.Warning,
             "MapProperty",
-            ["config converter", "remove the converter"],
+            ["config converter", "redundant mapping attribute"],
             Config(
                 "public MapConfigPropertyConverter<int, int> ValueConverter { get; } = new(nameof(Source.Value), (value, _) => value, (value, _) => value);",
                 "public int Value { get; set; }",
@@ -550,7 +550,7 @@ public sealed class DescriptorsTests
             "MAP0028",
             DiagnosticSeverity.Warning,
             "MapIgnoreProperty",
-            ["Only MapIgnoreProperty", "remove other mapping attributes"],
+            ["ignore attribute", "remove other mapping attributes", "member"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -570,7 +570,7 @@ public sealed class DescriptorsTests
             "MAP0029",
             DiagnosticSeverity.Warning,
             "MapCompositeProperty",
-            ["Only MapCompositeProperty", "remove MapProperty"],
+            ["composite mapping attribute", "regular mapping attribute"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -596,6 +596,21 @@ public sealed class DescriptorsTests
                 "public int Value { private get; set; }",
                 "public int Value { get; set; }",
                 "Direction = MapDirections.To"
+            )
+        );
+    }
+
+    [TestMethod]
+    public void MAP0030_UsesMemberDirectionForAccessorDiagnostics()
+    {
+        AssertDiagnostic(
+            "MAP0030",
+            DiagnosticSeverity.Error,
+            "Value",
+            ["Value", "getter", "accessibility"],
+            Basic(
+                "[MapProperty(typeof(Target), Direction = MapDirections.To)] public int Value { private get; set; }",
+                "public int Value { get; set; }"
             )
         );
     }
@@ -635,6 +650,44 @@ public sealed class DescriptorsTests
         );
     }
 
+    [TestMethod]
+    public void CorrectedDescriptorsUseAccurateMemberTerminology()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed class Source
+            {
+                public int Value { get; set; }
+                public ReferenceValue Reference { get; set; } = new();
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; private set; }
+                public ReferenceValue Reference { get; set; } = new();
+            }
+
+            public sealed class ReferenceValue;
+            """;
+
+        var diagnostics = RunGenerator(source);
+        var targetAccessor = diagnostics.Single(d => d.Id == "MAP0007");
+        var referenceType = diagnostics.Single(d => d.Id == "MAP0008");
+
+        Assert.AreEqual(
+            "Target member accessor is inaccessible",
+            targetAccessor.Descriptor.Title.ToString()
+        );
+        StringAssert.Contains(targetAccessor.GetMessage(), "Target member 'Value'");
+        Assert.AreEqual(
+            "Source member is a reference type",
+            referenceType.Descriptor.Title.ToString()
+        );
+        StringAssert.Contains(referenceType.GetMessage(), "MapPropertyType.Reference");
+    }
+
     private static void AssertDiagnostic(
         string id,
         DiagnosticSeverity severity,
@@ -660,7 +713,7 @@ public sealed class DescriptorsTests
             "MAP0033",
             DiagnosticSeverity.Warning,
             "Node",
-            ["Source.Node.Missing.Value", "not exists"],
+            ["Source.Node.Missing.Value", "does not exist"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -750,7 +803,7 @@ public sealed class DescriptorsTests
             "MAP0004",
             DiagnosticSeverity.Warning,
             "Value",
-            ["Target.Node.Missing.Value", "not exists"],
+            ["Target.Node.Missing.Value", "does not exist"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -771,7 +824,7 @@ public sealed class DescriptorsTests
             "MAP0004",
             DiagnosticSeverity.Warning,
             "Value",
-            ["Target.Node.Value", "not exists"],
+            ["Target.Node.Value", "does not exist"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -875,6 +928,145 @@ public sealed class DescriptorsTests
             """;
 
         Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0030"));
+    }
+
+    [TestMethod]
+    public void MemberDirectionsOnlyDiagnoseAccessorsUsedByTheEffectiveDirection()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), MapFields = true)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), Direction = MapDirections.To)]
+                public int ToProperty { get; private set; }
+
+                [MapProperty(typeof(Target), Direction = MapDirections.From)]
+                public int FromProperty { private get; set; }
+
+                [MapField(typeof(Target), Direction = MapDirections.To)]
+                public readonly int ToField;
+
+                [MapField(typeof(Target), Direction = MapDirections.From)]
+                public int FromField;
+            }
+
+            public sealed class Target
+            {
+                public int ToProperty { private get; set; }
+                public int FromProperty { get; private set; }
+                public int ToField;
+                public readonly int FromField;
+            }
+            """;
+
+        var diagnostics = RunGenerator(source);
+
+        Assert.IsFalse(diagnostics.Any(d => d.Id == "MAP0030"));
+        Assert.IsFalse(diagnostics.Any(d => d.Id == "MAP0031"));
+    }
+
+    [TestMethod]
+    public void MemberDirectionIntersectionReportsConflictAndSkipsAccessorDiagnostics()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), Direction = MapDirections.From)]
+                public int Value { private get; set; }
+            }
+
+            public sealed class Target
+            {
+                public int Value { get; private set; }
+            }
+            """;
+
+        var diagnostics = RunGenerator(source);
+        var diagnostic = diagnostics.Single();
+
+        Assert.AreEqual("MAP0036", diagnostic.Id);
+        Assert.AreEqual(DiagnosticSeverity.Warning, diagnostic.Severity);
+        StringAssert.Contains(GetLocationText(diagnostic), "MapProperty");
+        StringAssert.Contains(diagnostic.GetMessage(), "From");
+        StringAssert.Contains(diagnostic.GetMessage(), "To");
+        StringAssert.Contains(diagnostic.GetMessage(), "skipped");
+    }
+
+    [TestMethod]
+    public void MAP0036_ReportsAllMemberAttributeDirectionConflicts()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(PropertyTarget), Direction = MapDirections.To)]
+            [MapTarget(typeof(CompositePropertyTarget), Direction = MapDirections.To)]
+            [MapTarget(typeof(FieldTarget), Direction = MapDirections.To, MapFields = true)]
+            [MapTarget(typeof(CompositeFieldTarget), Direction = MapDirections.To, MapFields = true)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(PropertyTarget), Direction = MapDirections.From)]
+                [MapCompositeProperty(typeof(CompositePropertyTarget), typeof(Converter), nameof(CompositePropertyTarget.First), nameof(CompositePropertyTarget.Second), Direction = MapDirections.From)]
+                public int PropertyValue { get; set; }
+
+                [MapField(typeof(FieldTarget), Direction = MapDirections.From)]
+                [MapCompositeField(typeof(CompositeFieldTarget), typeof(Converter), nameof(CompositeFieldTarget.First), nameof(CompositeFieldTarget.Second), Direction = MapDirections.From)]
+                public int FieldValue;
+            }
+
+            public sealed class PropertyTarget { public int PropertyValue { get; set; } }
+            public sealed class CompositePropertyTarget
+            {
+                public int First { get; set; }
+                public int Second { get; set; }
+            }
+            public sealed class FieldTarget { public int FieldValue; }
+            public sealed class CompositeFieldTarget
+            {
+                public int First;
+                public int Second;
+            }
+            public sealed class Converter : IMapCompositeConverter<int, (int, int)>
+            {
+                public (int, int) Convert(int value, MapCompositeConvertArgs args) => (value, value);
+                public int ConvertBack((int, int) values, MapCompositeConvertArgs args) => values.Item1;
+            }
+            """;
+
+        var diagnostics = RunGenerator(source).Where(d => d.Id == "MAP0036").ToArray();
+
+        Assert.AreEqual(4, diagnostics.Length);
+        Assert.IsTrue(diagnostics.All(d => d.Severity == DiagnosticSeverity.Warning));
+        Assert.IsTrue(diagnostics.All(d => d.GetMessage().Contains("From")));
+        Assert.IsTrue(diagnostics.All(d => d.GetMessage().Contains("To")));
+        var locations = diagnostics.Select(GetLocationText).ToArray();
+        Assert.IsTrue(locations.Any(x => x.StartsWith("MapProperty(")));
+        Assert.IsTrue(locations.Any(x => x.StartsWith("MapCompositeProperty(")));
+        Assert.IsTrue(locations.Any(x => x.StartsWith("MapField(")));
+        Assert.IsTrue(locations.Any(x => x.StartsWith("MapCompositeField(")));
+    }
+
+    [TestMethod]
+    public void MAP0036_DoesNotReportWhenDirectionsOverlap()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                [MapProperty(typeof(Target), Direction = MapDirections.Both)]
+                public int Value { get; set; }
+            }
+
+            public sealed class Target { public int Value { get; set; } }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0036"));
     }
 
     [TestMethod]
