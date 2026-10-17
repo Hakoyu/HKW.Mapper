@@ -37,3 +37,16 @@ MAP0029 | HKWMapper | Warning | Descriptors
 MAP0030 | HKWMapper | Error | Descriptors
 MAP0031 | HKWMapper | Error | Descriptors
 MAP0032 | HKWMapper | Error | Descriptors
+MAP0033 | HKWMapper | Warning | Descriptors
+MAP0034 | HKWMapper | Error | Descriptors
+MAP0035 | HKWMapper | Error | Descriptors
+MAP0036 | HKWMapper | Warning | Descriptors
+MAP0037 | HKWMapper | Error | Descriptors
+MAP0038 | HKWMapper | Error | Descriptors
+MAP0039 | HKWMapper | Error | Descriptors
+MAP0040 | HKWMapper | Error | Descriptors
+MAP0041 | HKWMapper | Error | Descriptors
+MAP0042 | HKWMapper | Error | Descriptors
+MAP0043 | HKWMapper | Error | Descriptors
+MAP0044 | HKWMapper | Error | Descriptors
+MAP0045 | HKWMapper | Warning | Descriptors

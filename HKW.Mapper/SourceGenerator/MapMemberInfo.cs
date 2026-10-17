@@ -12,6 +12,8 @@ internal sealed class MapMemberInfo : IEquatable<MapMemberInfo>
         Type = property.Type;
         GetMethod = property.GetMethod;
         SetMethod = property.SetMethod;
+        IsInitOnly = property.SetMethod?.IsInitOnly is true;
+        IsRequired = property.IsRequired;
     }
 
     public MapMemberInfo(IFieldSymbol field, string? accessPath = null)
@@ -20,6 +22,7 @@ internal sealed class MapMemberInfo : IEquatable<MapMemberInfo>
         AccessPath = accessPath ?? field.Name;
         Type = field.Type;
         IsReadOnly = field.IsReadOnly || field.IsConst;
+        IsRequired = field.IsRequired;
     }
 
     public ISymbol Symbol { get; }
@@ -29,6 +32,8 @@ internal sealed class MapMemberInfo : IEquatable<MapMemberInfo>
     public bool IsField => Symbol is IFieldSymbol;
     public bool IsStatic => Symbol.IsStatic;
     public bool IsReadOnly { get; }
+    public bool IsInitOnly { get; }
+    public bool IsRequired { get; }
     public IMethodSymbol? GetMethod { get; }
     public IMethodSymbol? SetMethod { get; }
     public ImmutableArray<Location> Locations => Symbol.Locations;

@@ -68,6 +68,7 @@ internal class MapperGenerator
                 target.MapToMethod.Contents.Add($"return {MapTargetInfo.TargetParamName};");
             if (target.Direction.HasFlag(MapDirections.From))
                 target.MapFromMethod.Contents.Add($"return {MapTargetInfo.SourceParamName};");
+            FinalizeCreationMethods(target);
         }
     }
 
@@ -291,6 +292,18 @@ internal class MapperGenerator
         }
         TryReplacePropertyAction(mapTarget, propertySymbol);
         AddAfterPropertyAction(mapTarget, propertySymbol);
+        MoveInitOnlyTargetAssignmentToCreation(
+            mapTarget,
+            targetProperty,
+            propertySymbol,
+            mapToContentStart
+        );
+        RemoveInitOnlySourceMapFrom(
+            mapTarget,
+            sourceProperty,
+            direction,
+            mapFromContentStart
+        );
         RemoveDisabledDirectionContents(
             mapTarget,
             direction,
@@ -343,6 +356,82 @@ internal class MapperGenerator
                 mapFromContentStart,
                 mapTarget.MapFromMethod.Contents.Count - mapFromContentStart
             );
+    }
+
+    private void MoveInitOnlyTargetAssignmentToCreation(
+        MapTargetInfo mapTarget,
+        MapMemberInfo targetMember,
+        MapMemberInfo sourceMember,
+        int contentStart
+    )
+    {
+        if (targetMember.IsInitOnly is false && targetMember.IsRequired is false)
+            return;
+
+        var addedCount = mapTarget.MapToMethod.Contents.Count - contentStart;
+        if (addedCount <= 0)
+            return;
+        if (targetMember.AccessPath.IndexOf('.') >= 0)
+        {
+            if (targetMember.IsInitOnly)
+            {
+                mapTarget.MapToMethod.Contents.RemoveRange(contentStart, addedCount);
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.InitTargetMemberCannotBeCreated,
+                        sourceMember.Locations[0],
+                        targetMember.AccessPath
+                    )
+                );
+            }
+            return;
+        }
+        var prefix = $"{MapTargetInfo.TargetParamName}.{targetMember.AccessPath} = ";
+        var assignments = mapTarget.MapToMethod.Contents
+            .Skip(contentStart)
+            .Where(x => x.StartsWith(prefix, StringComparison.Ordinal) && x.EndsWith(";", StringComparison.Ordinal))
+            .ToArray();
+        if (targetMember.IsInitOnly)
+            mapTarget.MapToMethod.Contents.RemoveRange(contentStart, addedCount);
+        if (assignments.Length == 1)
+        {
+            mapTarget.CreationInitializers[targetMember.Name] = assignments[0]
+                .Substring(prefix.Length)
+                .TrimEnd(';');
+            return;
+        }
+
+        if (targetMember.IsInitOnly)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.InitTargetMemberCannotBeCreated,
+                    sourceMember.Locations[0],
+                    targetMember.AccessPath
+                )
+            );
+        }
+    }
+
+    private void RemoveInitOnlySourceMapFrom(
+        MapTargetInfo mapTarget,
+        MapMemberInfo sourceMember,
+        MapDirections direction,
+        int contentStart
+    )
+    {
+        if (sourceMember.IsInitOnly is false || direction.HasFlag(MapDirections.From) is false)
+            return;
+        var count = mapTarget.MapFromMethod.Contents.Count - contentStart;
+        if (count > 0)
+            mapTarget.MapFromMethod.Contents.RemoveRange(contentStart, count);
+        _classInfo.ProductionContext.ReportDiagnostic(
+            Diagnostic.Create(
+                Descriptors.InitOnlySourceMemberCannotMapFrom,
+                sourceMember.Locations[0],
+                sourceMember.AccessPath
+            )
+        );
     }
 
     private List<AttributeData>? GetMatchingAttributes(
@@ -646,6 +735,17 @@ internal class MapperGenerator
         var targetType = UnwrapNullable(targetProperty.Type);
 
         if (
+            TryMapImmutableCollectionProperty(
+                mapTarget,
+                sourceProperty,
+                targetProperty,
+                sourceType,
+                targetType
+            )
+        )
+            return true;
+
+        if (
             sourceType is IArrayTypeSymbol sourceArray
             && targetType is IArrayTypeSymbol targetArray
         )
@@ -713,6 +813,351 @@ internal class MapperGenerator
 
         return false;
     }
+
+    private bool TryMapImmutableCollectionProperty(
+        MapTargetInfo mapTarget,
+        MapMemberInfo sourceProperty,
+        MapMemberInfo targetProperty,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    )
+    {
+        var sourceKind = GetImmutableCollectionKind(sourceType);
+        var targetKind = GetImmutableCollectionKind(targetType);
+        if (sourceKind is null && targetKind is null)
+            return false;
+
+        var sourceExpression = $"{MapTargetInfo.SourceParamName}.{sourceProperty.AccessPath}";
+        var targetExpression = $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}";
+        if (IsDictionaryKind(sourceKind) || IsDictionaryKind(targetKind))
+        {
+            if (
+                TryGetDictionaryTypes(sourceType, out var sourceKey, out var sourceValue) is false
+                || TryGetDictionaryTypes(targetType, out var targetKey, out var targetValue) is false
+                || TryGetElementMapping(sourceKey, targetKey, out var keyMap) is false
+                || TryGetElementMapping(sourceValue, targetValue, out var valueMap) is false
+            )
+                return false;
+
+            if (keyMap.CanMapTo && valueMap.CanMapTo)
+            {
+                AppendDictionaryMapping(
+                    mapTarget.MapToMethod.Contents,
+                    sourceExpression,
+                    targetExpression,
+                    sourceProperty,
+                    targetProperty,
+                    targetType,
+                    targetKind,
+                    targetKey,
+                    targetValue,
+                    keyMap.ToTarget!,
+                    valueMap.ToTarget!
+                );
+            }
+            if (keyMap.CanMapFrom && valueMap.CanMapFrom)
+            {
+                AppendDictionaryMapping(
+                    mapTarget.MapFromMethod.Contents,
+                    targetExpression,
+                    sourceExpression,
+                    targetProperty,
+                    sourceProperty,
+                    sourceType,
+                    sourceKind,
+                    sourceKey,
+                    sourceValue,
+                    keyMap.ToSource!,
+                    valueMap.ToSource!
+                );
+            }
+            return true;
+        }
+
+        if (
+            TryGetEnumerableElementType(sourceType, out var sourceElement) is false
+            || TryGetEnumerableElementType(targetType, out var targetElement) is false
+            || TryGetElementMapping(sourceElement, targetElement, out var map) is false
+        )
+            return false;
+        if (map.CanMapTo)
+        {
+            AppendCollectionMapping(
+                mapTarget.MapToMethod.Contents,
+                sourceExpression,
+                targetExpression,
+                sourceProperty,
+                targetProperty,
+                targetType,
+                targetKind,
+                targetElement,
+                map.ToTarget!
+            );
+        }
+        if (map.CanMapFrom)
+        {
+            AppendCollectionMapping(
+                mapTarget.MapFromMethod.Contents,
+                targetExpression,
+                sourceExpression,
+                targetProperty,
+                sourceProperty,
+                sourceType,
+                sourceKind,
+                sourceElement,
+                map.ToSource!
+            );
+        }
+        return true;
+    }
+
+    private void AppendCollectionMapping(
+        List<string> contents,
+        string input,
+        string output,
+        MapMemberInfo inputMember,
+        MapMemberInfo outputMember,
+        ITypeSymbol outputType,
+        string? outputKind,
+        INamedTypeSymbol outputElement,
+        Func<string, string> convert
+    )
+    {
+        if (outputKind is not null)
+        {
+            if (IsNullable(inputMember.Type) && IsNullable(outputMember.Type) is false)
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.NullableCollectionRequiresNullableTarget,
+                        inputMember.Locations[0],
+                        inputMember.AccessPath,
+                        outputMember.AccessPath
+                    )
+                );
+                return;
+            }
+            var selected = BuildSelectExpression(input, outputElement, convert);
+            var factory = BuildImmutableCollectionFactory(outputKind, outputElement, selected);
+            var value = IsNullable(inputMember.Type) && IsNullable(outputMember.Type)
+                ? $"{input} is null ? null : {factory}"
+                : factory;
+            contents.Add($"{output} = {value};");
+            return;
+        }
+
+        if (TryGetGeneric(outputType, TypeFullNames.ICollectionT, out _) is false)
+            return;
+        var inputNullable = IsNullable(inputMember.Type);
+        if (inputNullable && IsNullable(outputMember.Type) is false)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.NullableCollectionRequiresNullableTarget,
+                    inputMember.Locations[0],
+                    inputMember.AccessPath,
+                    outputMember.AccessPath
+                )
+            );
+            return;
+        }
+        if (inputNullable)
+        {
+            contents.Add($"if ({input} is null) {output} = null;");
+            contents.Add("else");
+        }
+        contents.Add("{");
+        contents.Add($"if ({output} is null) {output} = new(); else {output}.Clear();");
+        contents.Add($"foreach (var item in {input}) {output}.Add({convert("item")});");
+        contents.Add("}");
+    }
+
+    private void AppendDictionaryMapping(
+        List<string> contents,
+        string input,
+        string output,
+        MapMemberInfo inputMember,
+        MapMemberInfo outputMember,
+        ITypeSymbol outputType,
+        string? outputKind,
+        INamedTypeSymbol outputKey,
+        INamedTypeSymbol outputValue,
+        Func<string, string> convertKey,
+        Func<string, string> convertValue
+    )
+    {
+        if (outputKind is not null)
+        {
+            if (IsNullable(inputMember.Type) && IsNullable(outputMember.Type) is false)
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.NullableCollectionRequiresNullableTarget,
+                        inputMember.Locations[0],
+                        inputMember.AccessPath,
+                        outputMember.AccessPath
+                    )
+                );
+                return;
+            }
+            var pairType =
+                $"global::System.Collections.Generic.KeyValuePair<{outputKey.GetGlobalFullName()}, {outputValue.GetGlobalFullName()}>";
+            var selected =
+                $"global::System.Linq.Enumerable.Select({input}, item => new {pairType}({convertKey("item.Key")}, {convertValue("item.Value")}))";
+            var factory = BuildImmutableDictionaryFactory(
+                outputKind,
+                outputKey,
+                outputValue,
+                selected
+            );
+            var value = IsNullable(inputMember.Type) && IsNullable(outputMember.Type)
+                ? $"{input} is null ? null : {factory}"
+                : factory;
+            contents.Add($"{output} = {value};");
+            return;
+        }
+
+        if (TryGetGeneric(outputType, TypeFullNames.IDictionaryT, out _) is false)
+            return;
+        var inputNullable = IsNullable(inputMember.Type);
+        if (inputNullable && IsNullable(outputMember.Type) is false)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.NullableCollectionRequiresNullableTarget,
+                    inputMember.Locations[0],
+                    inputMember.AccessPath,
+                    outputMember.AccessPath
+                )
+            );
+            return;
+        }
+        if (inputNullable)
+        {
+            contents.Add($"if ({input} is null) {output} = null;");
+            contents.Add("else");
+        }
+        contents.Add("{");
+        contents.Add($"if ({output} is null) {output} = new(); else {output}.Clear();");
+        contents.Add(
+            $"foreach (var item in {input}) {output}.Add({convertKey("item.Key")}, {convertValue("item.Value")});"
+        );
+        contents.Add("}");
+    }
+
+    private static string BuildSelectExpression(
+        string input,
+        INamedTypeSymbol outputElement,
+        Func<string, string> convert
+    ) =>
+        $"global::System.Linq.Enumerable.Select({input}, item => ({outputElement.GetGlobalFullName()})({convert("item")}))";
+
+    private static string BuildImmutableCollectionFactory(
+        string kind,
+        INamedTypeSymbol element,
+        string values
+    ) =>
+        kind switch
+        {
+            "ImmutableArray" => $"global::System.Collections.Immutable.ImmutableArray.CreateRange<{element.GetGlobalFullName()}>({values})",
+            "ImmutableList" => $"global::System.Collections.Immutable.ImmutableList.CreateRange<{element.GetGlobalFullName()}>({values})",
+            "ImmutableHashSet" => $"global::System.Collections.Immutable.ImmutableHashSet.CreateRange<{element.GetGlobalFullName()}>({values})",
+            "FrozenSet" => $"global::System.Collections.Frozen.FrozenSet.ToFrozenSet<{element.GetGlobalFullName()}>({values})",
+            _ => throw new InvalidOperationException(),
+        };
+
+    private static string BuildImmutableDictionaryFactory(
+        string kind,
+        INamedTypeSymbol key,
+        INamedTypeSymbol value,
+        string values
+    ) =>
+        kind switch
+        {
+            "ImmutableDictionary" => $"global::System.Collections.Immutable.ImmutableDictionary.CreateRange<{key.GetGlobalFullName()}, {value.GetGlobalFullName()}>({values})",
+            "FrozenDictionary" => $"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary<{key.GetGlobalFullName()}, {value.GetGlobalFullName()}>({values})",
+            _ => throw new InvalidOperationException(),
+        };
+
+    private static bool TryGetEnumerableElementType(
+        ITypeSymbol type,
+        out INamedTypeSymbol element
+    )
+    {
+        if (type is IArrayTypeSymbol array && array.ElementType is INamedTypeSymbol arrayElement)
+        {
+            element = arrayElement;
+            return true;
+        }
+        if (
+            type is INamedTypeSymbol named
+            && GetImmutableCollectionKind(type) is not null
+            && IsDictionaryKind(GetImmutableCollectionKind(type)) is false
+            && named.TypeArguments[0] is INamedTypeSymbol namedElement
+        )
+        {
+            element = namedElement;
+            return true;
+        }
+        if (TryGetGeneric(type, "System.Collections.Generic.IEnumerable<T>", out var args))
+        {
+            element = args[0];
+            return true;
+        }
+        element = null!;
+        return false;
+    }
+
+    private static bool TryGetDictionaryTypes(
+        ITypeSymbol type,
+        out INamedTypeSymbol key,
+        out INamedTypeSymbol value
+    )
+    {
+        if (
+            type is INamedTypeSymbol named
+            && IsDictionaryKind(GetImmutableCollectionKind(type))
+            && named.TypeArguments[0] is INamedTypeSymbol namedKey
+            && named.TypeArguments[1] is INamedTypeSymbol namedValue
+        )
+        {
+            key = namedKey;
+            value = namedValue;
+            return true;
+        }
+        if (
+            TryGetGeneric(type, TypeFullNames.IDictionaryT, out var args)
+            || TryGetGeneric(type, "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>", out args)
+        )
+        {
+            key = args[0];
+            value = args[1];
+            return true;
+        }
+        key = null!;
+        value = null!;
+        return false;
+    }
+
+    private static string? GetImmutableCollectionKind(ITypeSymbol type)
+    {
+        if (type is not INamedTypeSymbol named)
+            return null;
+        var metadataName = $"{named.OriginalDefinition.ContainingNamespace}.{named.OriginalDefinition.MetadataName}";
+        return metadataName switch
+        {
+            "System.Collections.Immutable.ImmutableArray`1" => "ImmutableArray",
+            "System.Collections.Immutable.ImmutableList`1" => "ImmutableList",
+            "System.Collections.Immutable.ImmutableHashSet`1" => "ImmutableHashSet",
+            "System.Collections.Immutable.ImmutableDictionary`2" => "ImmutableDictionary",
+            "System.Collections.Frozen.FrozenSet`1" => "FrozenSet",
+            "System.Collections.Frozen.FrozenDictionary`2" => "FrozenDictionary",
+            _ => null,
+        };
+    }
+
+    private static bool IsDictionaryKind(string? kind) =>
+        kind is "ImmutableDictionary" or "FrozenDictionary";
 
     private bool TryMapCollectionProperty(
         MapTargetInfo mapTarget,
@@ -1061,6 +1506,29 @@ internal class MapperGenerator
             mapFromContentStart
         );
         AddAfterPropertyAction(mapTarget, actionProperty);
+        if (targetProperties.Any(x => x.IsInitOnly))
+        {
+            mapTarget.MapToMethod.Contents.RemoveRange(
+                mapToContentStart,
+                mapTarget.MapToMethod.Contents.Count - mapToContentStart
+            );
+            foreach (var targetProperty in targetProperties.Where(x => x.IsInitOnly))
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.InitTargetMemberCannotBeCreated,
+                        location,
+                        targetProperty.AccessPath
+                    )
+                );
+            }
+        }
+        RemoveInitOnlySourceMapFrom(
+            mapTarget,
+            propertySymbol,
+            direction,
+            mapFromContentStart
+        );
         RemoveDisabledDirectionContents(
             mapTarget,
             direction,
@@ -1261,6 +1729,164 @@ internal class MapperGenerator
             mappings.Add((sourceProperty, direction));
         }
         return true;
+    }
+
+    private void FinalizeCreationMethods(MapTargetInfo mapTarget)
+    {
+        if (mapTarget.Direction.HasFlag(MapDirections.To) is false)
+            return;
+
+        if (mapTarget.Constructors.Count == 0 && mapTarget.CreationInitializers.Count > 0)
+        {
+            foreach (var memberName in mapTarget.CreationInitializers.Keys)
+            {
+                _classInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.InitTargetMemberCannotBeCreated,
+                        mapTarget.MapTargetLocation,
+                        memberName
+                    )
+                );
+            }
+        }
+
+        var requiredMembers = mapTarget.MemberByName.Values
+            .Where(x => x.IsRequired)
+            .Distinct()
+            .ToArray();
+        foreach (var constructorInfo in mapTarget.Constructors)
+        {
+            var constructor = constructorInfo.Constructor;
+            var setsRequiredMembers = constructor.GetAttributes().Any(x =>
+                x.AttributeClass?.GetGlobalFullName()
+                    == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"
+            );
+            var missingRequired = setsRequiredMembers
+                ? []
+                : requiredMembers
+                    .Where(x => mapTarget.CreationInitializers.ContainsKey(x.Name) is false)
+                    .ToArray();
+            if (missingRequired.Length > 0)
+            {
+                foreach (var member in missingRequired)
+                {
+                    _classInfo.ProductionContext.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Descriptors.RequiredTargetMemberNotInitialized,
+                            constructorInfo.Location,
+                            member.Name
+                        )
+                    );
+                }
+                continue;
+            }
+
+            var initializer = BuildObjectInitializer(mapTarget);
+            var arguments = constructor.Parameters.Select(GetConstructorArgument).ToArray();
+            var creation =
+                $"new {mapTarget.TargetType.GetGlobalFullName()}({string.Join(", ", arguments)}){initializer}";
+            if (constructor.Parameters.Length == 0)
+            {
+                if (mapTarget.TargetType.IsReferenceType)
+                {
+                    mapTarget.MapToMethod.Params![1] = new(
+                        $"{mapTarget.TargetType.GetGlobalFullName()}?",
+                        MapTargetInfo.TargetParamName
+                    );
+                    mapTarget.MapToMethod.Contents.Insert(
+                        0,
+                        $"{MapTargetInfo.TargetParamName} ??= {creation};"
+                    );
+                }
+                else if (mapTarget.CreationInitializers.Count > 0)
+                {
+                    mapTarget.MapToMethod.Contents.Insert(
+                        0,
+                        $"{MapTargetInfo.TargetParamName} = {creation};"
+                    );
+                }
+                continue;
+            }
+
+            var method = new MethodGenerateInfo(
+                mapTarget.MapToMethod.TypeName,
+                mapTarget.MapToName,
+                string.Empty
+            )
+            {
+                IsStatic = true,
+                Accessibility = mapTarget.MapToMethod.Accessibility,
+                Params = [],
+            };
+            method.Params.Add(
+                new(mapTarget.SourceType, MapTargetInfo.SourceParamName)
+                {
+                    GenerateType = ParameterGenerateType.This,
+                }
+            );
+            method.Params.Add(
+                new(
+                    mapTarget.TargetType.IsReferenceType
+                        ? $"{mapTarget.TargetType.GetGlobalFullName()}?"
+                        : $"global::System.Nullable<{mapTarget.TargetType.GetGlobalFullName()}>",
+                    MapTargetInfo.TargetParamName
+                )
+            );
+            foreach (var parameter in constructor.Parameters)
+            {
+                var generatedParameter = new ParameterGenerateInfo(
+                    parameter.Type,
+                    GetConstructorParameterName(parameter)
+                );
+                generatedParameter.GenerateType = parameter.IsParams
+                    ? ParameterGenerateType.Params
+                    : parameter.RefKind switch
+                    {
+                        RefKind.Ref => ParameterGenerateType.Ref,
+                        RefKind.Out => ParameterGenerateType.Out,
+                        RefKind.In => ParameterGenerateType.In,
+                        _ => ParameterGenerateType.None,
+                    };
+                method.Params.Add(generatedParameter);
+            }
+            method.Contents.Add(
+                $"if ({MapTargetInfo.TargetParamName} is not null) throw new global::System.ArgumentException(\"A target instance cannot be supplied when constructor arguments are used.\", nameof({MapTargetInfo.TargetParamName}));"
+            );
+            method.Contents.Add($"var mappedTarget = {creation};");
+            method.Contents.Add(
+                mapTarget.ConfigInfo?.MapTo.IsAsync is true
+                    ? $"return await {mapTarget.MapToName}({MapTargetInfo.SourceParamName}, mappedTarget);"
+                    : $"return {mapTarget.MapToName}({MapTargetInfo.SourceParamName}, mappedTarget);"
+            );
+            mapTarget.MapToCreationMethods.Add(method);
+        }
+    }
+
+    private static string BuildObjectInitializer(MapTargetInfo mapTarget) =>
+        mapTarget.CreationInitializers.Count == 0
+            ? string.Empty
+            : " { "
+                + string.Join(
+                    ", ",
+                    mapTarget.CreationInitializers.Select(x => $"{x.Key} = {x.Value}")
+                )
+                + " }";
+
+    private static string GetConstructorParameterName(IParameterSymbol parameter) =>
+        parameter.Name is MapTargetInfo.SourceParamName or MapTargetInfo.TargetParamName
+            ? $"constructor_{parameter.Name}"
+            : parameter.Name;
+
+    private static string GetConstructorArgument(IParameterSymbol parameter)
+    {
+        var modifier = parameter.RefKind switch
+        {
+            RefKind.Ref => "ref ",
+            RefKind.Out => "out ",
+            RefKind.In => "in ",
+            _ => string.Empty,
+        };
+        return modifier + GetConstructorParameterName(parameter);
     }
 
     private static void TryAddConfig(MapTargetInfo mapTarget)

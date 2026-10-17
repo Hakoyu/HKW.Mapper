@@ -12,6 +12,8 @@ internal static class TypeFullNames
 {
     public static string MapTargetAttribute { get; } =
         typeof(MapTargetAttribute).GetGlobalFullName();
+    public static string MapConstructorAttribute { get; } =
+        typeof(MapConstructorAttribute).GetGlobalFullName();
     public static string MapIgnorePropertyAttribute { get; } =
         typeof(MapIgnorePropertyAttribute).GetGlobalFullName();
     public static string MapPropertyAttribute { get; } =

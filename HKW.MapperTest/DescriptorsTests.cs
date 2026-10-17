@@ -1122,6 +1122,158 @@ public sealed class DescriptorsTests
         Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0029"));
     }
 
+    [TestMethod]
+    public void MAP0037_ReportsUnknownConstructorTarget()
+    {
+        AssertDiagnostic(
+            "MAP0037",
+            DiagnosticSeverity.Error,
+            "MapConstructor",
+            ["Missing", "does not match"],
+            """
+            [MapTarget(typeof(Target))]
+            [MapConstructor("Missing", typeof(int))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0038_ReportsMissingConstructorSignature()
+    {
+        AssertDiagnostic(
+            "MAP0038",
+            DiagnosticSeverity.Error,
+            "MapConstructor",
+            ["Target", "string"],
+            """
+            [MapTarget(typeof(Target))]
+            [MapConstructor(typeof(Target), typeof(string))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public Target(int value) {} public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0039_ReportsInaccessibleConstructor()
+    {
+        AssertDiagnostic(
+            "MAP0039",
+            DiagnosticSeverity.Error,
+            "MapConstructor",
+            ["Target", "not accessible"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            [MapConstructor(typeof(Target), typeof(int))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target
+            {
+                private Target(int value) { }
+                public int Value { get; set; }
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0040_ReportsDuplicateConstructorSelection()
+    {
+        AssertDiagnostic(
+            "MAP0040",
+            DiagnosticSeverity.Error,
+            "MapConstructor(typeof(Target), typeof(int))",
+            ["int", "Target"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            [MapConstructor(typeof(Target), typeof(int))]
+            [MapConstructor(typeof(Target), typeof(int))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target
+            {
+                public Target(int value) { }
+                public int Value { get; set; }
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0041_ReportsReadonlyStructReverseMapping()
+    {
+        AssertDiagnostic(
+            "MAP0041",
+            DiagnosticSeverity.Error,
+            "MapTarget",
+            ["Source", "cannot be modified", "Direction"],
+            """
+            [MapTarget(typeof(Target))]
+            public readonly struct Source { public int Value { get; init; } }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0042_ReportsUnmappedRequiredTargetMember()
+    {
+        AssertDiagnostic(
+            "MAP0042",
+            DiagnosticSeverity.Error,
+            "MapTarget",
+            ["Name", "not initialized"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target
+            {
+                public int Value { get; set; }
+                public required string Name { get; init; }
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0044_ReportsNullableCollectionToNonNullableImmutableTarget()
+    {
+        AssertDiagnostic(
+            "MAP0044",
+            DiagnosticSeverity.Error,
+            "Items",
+            ["Items", "non-nullable collection"],
+            """
+            [MapTarget(typeof(Target), Direction = MapDirections.To)]
+            public sealed class Source
+            {
+                public System.Collections.Generic.List<int>? Items { get; set; }
+            }
+            public sealed class Target
+            {
+                public System.Collections.Immutable.ImmutableList<int> Items { get; set; } = [];
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0045_WarnsAndKeepsMapToForInitOnlySourceMember()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(Target))]
+            public sealed record Source(int Value);
+            public sealed class Target { public int Value { get; set; } }
+            """;
+
+        var diagnostics = RunGenerator(source);
+        var diagnostic = diagnostics.Single(x => x.Id == "MAP0045");
+
+        Assert.AreEqual(DiagnosticSeverity.Warning, diagnostic.Severity);
+    }
+
     private static string Basic(string sourceProperty, string targetProperty, string? options = null) =>
         $$"""
         [MapTarget(typeof(Target){{(options is null ? string.Empty : ", " + options)}})]

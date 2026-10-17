@@ -51,7 +51,11 @@ internal class ClassSourceWriter
         foreach (var mapTarget in _classInfo.MapTargets)
         {
             if (mapTarget.Direction.HasFlag(MapDirections.To))
+            {
                 _writer.WriteInfo(mapTarget.MapToMethod);
+                foreach (var method in mapTarget.MapToCreationMethods)
+                    _writer.WriteInfo(method);
+            }
             if (mapTarget.Direction.HasFlag(MapDirections.From))
                 _writer.WriteInfo(mapTarget.MapFromMethod);
         }

@@ -11,7 +11,7 @@ internal class ClassInfo
     public ClassInfo(
         SourceProductionContext productionContext,
         Compilation compilation,
-        ClassDeclarationSyntax classSyntax,
+        TypeDeclarationSyntax classSyntax,
         INamedTypeSymbol classSymbol,
         List<AttributeData> attributeDatas
     )
@@ -40,6 +40,7 @@ internal class ClassInfo
                 ProductionContext.ReportDiagnostic(diagnostic);
             }
         }
+        ResolveMapConstructors();
         // 分析所有成员
         foreach (
             var propertySymbol in classSymbol
@@ -108,7 +109,7 @@ internal class ClassInfo
     public string TypeName => $"{Name}{ClassSyntax.TypeParameterList}";
     public string FullName => $"{Namespace}.{Name}";
     public string FullTypeName => $"{Namespace}.{Name}{ClassSyntax.TypeParameterList}";
-    public ClassDeclarationSyntax ClassSyntax { get; }
+    public TypeDeclarationSyntax ClassSyntax { get; }
     public INamedTypeSymbol ClassSymbol { get; private set; }
 
     public HashSet<MapTargetInfo> MapTargets { get; } = [];
@@ -126,6 +127,102 @@ internal class ClassInfo
         && field.IsConst is false
         && field.IsImplicitlyDeclared is false
         && field.DeclaredAccessibility >= Accessibility.Internal;
+
+    private void ResolveMapConstructors()
+    {
+        foreach (
+            var attribute in ClassSymbol.GetAttributes()
+                .Where(x => x.AttributeClass?.IsName(TypeFullNames.MapConstructorAttribute) is true)
+        )
+        {
+            var location = attribute.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                attribute.ApplicationSyntaxReference.Span
+            ) ?? Location.None;
+            var selector = attribute.ConstructorArguments[0];
+            var target = selector.Value is INamedTypeSymbol targetType
+                ? MapTargets.FirstOrDefault(x => x.TargetType.SymbolEquals(targetType))
+                : MapTargets.FirstOrDefault(x => x.TargetName == selector.Value as string);
+            if (target is null)
+            {
+                ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.MapConstructorTargetNotFound,
+                        location,
+                        selector.Value?.ToString() ?? string.Empty
+                    )
+                );
+                continue;
+            }
+
+            var parameterTypes = attribute.ConstructorArguments.Length > 1
+                ? attribute.ConstructorArguments[1].Values
+                    .Select(x => x.Value as ITypeSymbol)
+                    .Where(x => x is not null)
+                    .Cast<ITypeSymbol>()
+                    .ToArray()
+                : [];
+            var constructors = target.TargetType.InstanceConstructors
+                .Where(x =>
+                    x.Parameters.Length == parameterTypes.Length
+                    && x.Parameters.Select(p => p.Type)
+                        .Zip(parameterTypes, (left, right) => left.SymbolEquals(right))
+                        .All(equal => equal)
+                )
+                .ToArray();
+            if (constructors.Length == 0)
+            {
+                ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.MapConstructorNotFound,
+                        location,
+                        target.TargetType.GetName(),
+                        string.Join(", ", parameterTypes.Select(x => x.GetName()))
+                    )
+                );
+                continue;
+            }
+
+            var constructor = constructors[0];
+            if (target.TargetType.IsAbstract || IsAccessible(constructor) is false)
+            {
+                ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.MapConstructorInaccessible,
+                        location,
+                        target.TargetType.GetName()
+                    )
+                );
+                continue;
+            }
+            if (target.AddConstructor(constructor, isAutomatic: false, location) is false)
+            {
+                ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.DuplicateMapConstructor,
+                        location,
+                        string.Join(", ", parameterTypes.Select(x => x.GetName())),
+                        target.TargetName
+                    )
+                );
+            }
+        }
+
+        foreach (var target in MapTargets)
+        {
+            if (target.TargetType.IsAbstract)
+                continue;
+            var parameterless = target.TargetType.InstanceConstructors.FirstOrDefault(x =>
+                x.Parameters.Length == 0 && IsAccessible(x)
+            );
+            if (parameterless is not null)
+                target.AddConstructor(parameterless, isAutomatic: true, target.MapTargetLocation);
+        }
+    }
+
+    private bool IsAccessible(ISymbol symbol) =>
+        symbol.DeclaredAccessibility == Accessibility.Public
+        || symbol.DeclaredAccessibility >= Accessibility.Internal
+            && symbol.ContainingAssembly.SymbolEquals(Compilation.Assembly);
 
     public void AddConverters(INamedTypeSymbol typeSymbol, out string fieldName)
     {
@@ -244,6 +341,18 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         )
             Direction = direction;
 
+        if (SourceType.IsValueType && SourceType.IsReadOnly && Direction.HasFlag(MapDirections.From))
+        {
+            classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.ReadOnlyStructCannotMapFrom,
+                    MapTargetLocation,
+                    SourceType.GetName()
+                )
+            );
+            Direction &= ~MapDirections.From;
+        }
+
         if (
             attributeInfo.TryGetParam<bool>(nameof(MapTargetAttribute.MapFields), out var mapFields)
         )
@@ -344,7 +453,15 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             Accessibility = lowestAccessibility,
             Params =
             [
-                new(SourceType, SourceParamName) { GenerateType = ParameterGenerateType.This },
+                SourceType.IsValueType
+                    ? new($"ref {SourceType.GetGlobalFullName()}", SourceParamName)
+                    {
+                        GenerateType = ParameterGenerateType.This,
+                    }
+                    : new(SourceType, SourceParamName)
+                    {
+                        GenerateType = ParameterGenerateType.This,
+                    },
                 new(resolvedTargetType, TargetParamName),
             ],
         };
@@ -369,15 +486,36 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     public bool IsInvalid { get; }
 
     public INamedTypeSymbol TargetType { get; }
-    public MapDirections Direction { get; } = MapDirections.Both;
+    public MapDirections Direction { get; private set; } = MapDirections.Both;
     public bool MapFields { get; }
     public bool MapParentProperties { get; }
     public bool MapParentFields { get; }
 
     public MethodGenerateInfo MapToMethod { get; }
     public MethodGenerateInfo MapFromMethod { get; }
+    public List<MethodGenerateInfo> MapToCreationMethods { get; } = [];
+    public List<MapConstructorInfo> Constructors { get; } = [];
+    public Dictionary<string, string> CreationInitializers { get; } = new(StringComparer.Ordinal);
 
     public MapConfigInfo? ConfigInfo { get; }
+
+    public bool AddConstructor(IMethodSymbol constructor, bool isAutomatic, Location location)
+    {
+        if (
+            Constructors.Any(existing =>
+                existing.Constructor.Parameters.Length == constructor.Parameters.Length
+                && existing.Constructor.Parameters.Select(x => x.Type)
+                    .Zip(
+                        constructor.Parameters.Select(x => x.Type),
+                        (left, right) => left.SymbolEquals(right)
+                    )
+                    .All(equal => equal)
+            )
+        )
+            return false;
+        Constructors.Add(new(constructor, isAutomatic, location));
+        return true;
+    }
 
     #region IEquatable
     public override int GetHashCode()
@@ -397,6 +535,17 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         return TargetName == other.TargetName;
     }
     #endregion
+}
+
+internal sealed class MapConstructorInfo(
+    IMethodSymbol constructor,
+    bool isAutomatic,
+    Location location
+)
+{
+    public IMethodSymbol Constructor { get; } = constructor;
+    public bool IsAutomatic { get; } = isAutomatic;
+    public Location Location { get; } = location;
 }
 
 internal sealed class MapConfigInfo

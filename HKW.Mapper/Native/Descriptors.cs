@@ -304,4 +304,76 @@ internal static class Descriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor MapConstructorTargetNotFound = new(
+        id: "MAP0037",
+        title: "Map constructor target not found",
+        messageFormat: "Map constructor target '{0}' does not match any MapTarget on this source type.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapConstructorNotFound = new(
+        id: "MAP0038",
+        title: "Map constructor not found",
+        messageFormat: "Target type '{0}' does not contain a constructor with parameter types ({1}).",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapConstructorInaccessible = new(
+        id: "MAP0039",
+        title: "Map constructor is inaccessible",
+        messageFormat: "The selected constructor on target type '{0}' is not accessible from generated mapping code.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor DuplicateMapConstructor = new(
+        id: "MAP0040",
+        title: "Duplicate map constructor",
+        messageFormat: "The constructor ({0}) is selected more than once for map target '{1}'.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor ReadOnlyStructCannotMapFrom = new(
+        id: "MAP0041",
+        title: "Readonly struct cannot map from a target",
+        messageFormat: "Readonly struct source '{0}' cannot be modified by MapFrom. Use Direction = MapDirections.To.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor RequiredTargetMemberNotInitialized = new(
+        id: "MAP0042",
+        title: "Required target member is not initialized",
+        messageFormat: "Required target member '{0}' is not initialized by this mapping, so the creation overload is not generated.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor InitTargetMemberCannotBeCreated = new(
+        id: "MAP0043",
+        title: "Init-only target member cannot be initialized",
+        messageFormat: "Init-only target member '{0}' cannot be represented in the generated object initializer.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor NullableCollectionRequiresNullableTarget = new(
+        id: "MAP0044",
+        title: "Nullable collection requires a nullable target",
+        messageFormat: "Nullable source collection member '{0}' cannot map to non-nullable collection target member '{1}'.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor InitOnlySourceMemberCannotMapFrom = new(
+        id: "MAP0045",
+        title: "Init-only source member cannot map from a target",
+        messageFormat: "Init-only source member '{0}' cannot be modified by MapFrom; only its MapTo direction is generated.",
+        category: _category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
 }

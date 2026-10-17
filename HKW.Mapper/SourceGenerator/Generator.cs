@@ -16,12 +16,12 @@ internal partial class Generator : IIncrementalGenerator
         var candidates = context
             .SyntaxProvider.ForAttributeWithMetadataName(
                 typeof(MapTargetAttribute).GetFullName(),
-                static (node, _) => node is ClassDeclarationSyntax,
+                static (node, _) => node is TypeDeclarationSyntax,
                 static (attributeContext, _) =>
                 {
                     return
                         attributeContext.TargetSymbol is INamedTypeSymbol symbol
-                        && attributeContext.TargetNode is ClassDeclarationSyntax syntax
+                        && attributeContext.TargetNode is TypeDeclarationSyntax syntax
                         ? new Candidate(syntax, symbol)
                         : null;
                 }
@@ -56,20 +56,20 @@ internal partial class Generator : IIncrementalGenerator
 
     private sealed class Candidate
     {
-        public Candidate(ClassDeclarationSyntax syntax, INamedTypeSymbol symbol)
+        public Candidate(TypeDeclarationSyntax syntax, INamedTypeSymbol symbol)
         {
             Syntax = syntax;
             Symbol = symbol;
         }
 
-        public ClassDeclarationSyntax Syntax { get; }
+        public TypeDeclarationSyntax Syntax { get; }
         public INamedTypeSymbol Symbol { get; }
     }
 
     private static ClassInfo? ClassValidator(
         SourceProductionContext productionContext,
         Compilation compilation,
-        ClassDeclarationSyntax classSyntax,
+        TypeDeclarationSyntax classSyntax,
         INamedTypeSymbol classSymbol
     )
     {

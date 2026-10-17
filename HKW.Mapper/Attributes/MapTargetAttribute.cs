@@ -17,7 +17,7 @@ namespace HKW.Mapper;
 /// ]]></code>
 /// </para>
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
 public sealed class MapTargetAttribute : Attribute
 {
     /// <inheritdoc/>

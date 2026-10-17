@@ -44,6 +44,9 @@ user.MapTo(dto);
 // dto.Id == 1
 // dto.Name == "Ada"
 
+var createdDto = user.MapTo((UserDto?)null);
+// 目标具有可访问无参构造函数时，传入 null 会创建并返回新实例
+
 dto.Id = 2;
 user.MapFrom(dto);
 // user.Id == 2
@@ -60,6 +63,45 @@ public sealed class User
 ```
 
 此时生成的方法名为 `MapToUser` 和 `MapFromUser`。同一个源类型可以通过多个 `[MapTargetAttribute]` 映射到多个目标类型，但每个 `TargetName` 必须不同。
+
+## 构造函数与创建式映射
+
+目标具有可访问的无参构造函数时，现有写入式方法同时接受 nullable 目标：传入非 null 实例时保持原地写入，传入 null 时创建目标。需要调用有参构造函数时，在源类型上用可重复的 `[MapConstructor]` 精确声明目标与参数类型：
+
+```csharp
+[MapTarget(typeof(UserDto), Direction = MapDirections.To)]
+[MapConstructor(typeof(UserDto), typeof(int))]
+public sealed class User
+{
+    public required string Name { get; init; }
+}
+
+public sealed class UserDto(int revision)
+{
+    public int Revision { get; } = revision;
+    public required string Name { get; init; }
+}
+
+var dto = user.MapTo((UserDto?)null, 3);
+```
+
+也可以使用目标名称选择构造函数：
+
+```csharp
+[MapConstructor("Api", typeof(int), typeof(string))]
+```
+
+参数类型序列必须与一个可访问的目标构造函数精确匹配。所有构造参数均由调用方提供。有参重载的 nullable 目标参数只用于选择目标；它必须为 null，传入现有实例会抛出 `ArgumentException`。无法由构造函数或对象初始化器满足 `required` 成员时，不生成对应创建重载并报告诊断。`init` 目标成员只在创建路径的对象初始化器中赋值，写入现有实例时不会修改。
+
+## record 与 struct
+
+`[MapTarget]` 可用于 class、record class、struct 和 record struct。可变 struct 源的 `MapFrom` 使用 `this ref`，因此接收者必须是可写变量；readonly struct 仅支持 `MapTo`，请求反向映射会产生诊断。反向映射始终修改现有源实例，不会重建不可变 record。
+
+## Immutable 与 Frozen 集合
+
+集合映射支持 `ImmutableArray<T>`、`ImmutableList<T>`、`ImmutableHashSet<T>`、`ImmutableDictionary<TKey,TValue>`、`FrozenSet<T>` 和 `FrozenDictionary<TKey,TValue>`。目标不可变集合通过工厂 API 创建新实例，不执行 `Clear`/`Add`；元素以及字典键值可以使用已有的嵌套映射。可空来源映射到可空不可变目标时保留 null；可空来源映射到非空不可变目标会报告诊断。
+
+生成器仍以 `netstandard2.0` 为目标，并只在消费项目的编译中实际存在相应 Immutable/Frozen 类型时生成相关 API 调用；Frozen 集合通常要求消费项目使用支持 `System.Collections.Frozen` 的目标框架。
 
 ## 属性配置
 
