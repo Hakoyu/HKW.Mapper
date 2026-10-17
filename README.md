@@ -428,9 +428,40 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 
 可以通过 `[MapTarget(typeof(UserDto), Direction = MapDirections.To)]` 只生成源到目标方法，也可以使用 `MapDirections.From` 或默认的 `MapDirections.Both`。数组、`IList<T>`、`IDictionary<TKey, TValue>` 和 `ISet<T>` 会分别生成专用映射代码；集合目标需要可写、可清空并支持添加元素。嵌套对象要求子类型存在对应的 `[MapTarget]` 映射，并且目标可无参初始化；嵌套映射的 To/From 方向分别检查。多态映射仅对编译期已声明的具体源/目标映射生成分派代码，不会通过反射发现未知派生类型。
 
+## 性能基准
+
+`HKW.Mapper.Benchmark` 使用 BenchmarkDotNet 对比 HKW.Mapper 编译期生成代码与 Mapster 默认 `Adapt` 路径，包含以下场景：
+
+- `Flat`：只包含标量属性的扁平对象
+- `Complex`：嵌套对象、数组、集合以及成员扁平化
+- `Recursive`：递归对象、递归集合和值类型集合
+- `Total`：依次执行以上三种映射
+
+两种映射器使用相同的输入对象并创建新的目标对象。Mapster 会在 `GlobalSetup` 中完成首次表达式编译，因此测量结果表示预热后的稳态性能，不包含 Mapster 的首次编译成本。Setup 还会验证关键值、集合数量和深拷贝结果，防止比较不同的映射语义。
+
+运行完整的短作业基准：
+
+```powershell
+dotnet run --configuration Release --project .\HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj -- --filter "*MappingBenchmark*"
+```
+
+快速验证全部基准是否能够运行：
+
+```powershell
+dotnet run --configuration Release --project .\HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj -- --filter "*MappingBenchmark*" --job Dry
+```
+
+只运行扁平对象场景：
+
+```powershell
+dotnet run --configuration Release --project .\HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj -- --filter "*FlatMappingBenchmark*"
+```
+
+报告会导出为 Markdown、CSV 和 HTML，并包含 `Ns/Map`、`Bytes/Map`、耗时比率和内存比率。结果位于 `BenchmarkDotNet.Artifacts`。基准数字取决于 CPU、运行时版本、操作系统和对象形状，不应直接推广到其他应用负载。
+
 ## 从源码构建
 
-仓库包含库项目和 MSTest 测试项目。需要安装 .NET SDK 10.0 或兼容当前测试项目的 SDK：
+仓库包含库项目、MSTest 测试项目和 BenchmarkDotNet 基准项目。需要安装 .NET SDK 10.0 或兼容当前测试项目的 SDK：
 
 ```bash
 dotnet restore HKW.Mapper.sln
