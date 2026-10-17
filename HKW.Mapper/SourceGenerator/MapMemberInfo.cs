@@ -37,6 +37,7 @@ internal sealed class MapMemberInfo : IEquatable<MapMemberInfo>
     public IMethodSymbol? GetMethod { get; }
     public IMethodSymbol? SetMethod { get; }
     public ImmutableArray<Location> Locations => Symbol.Locations;
+
     public ImmutableArray<AttributeData> GetAttributes() => Symbol.GetAttributes();
 
     public override string ToString() => Symbol.ToString();
