@@ -147,6 +147,10 @@ public sealed class User
 }
 ```
 
+无论通过 `[MapIgnoreProperty]`、`MapTarget.IgnoreProperties`、配置类的 `IgnoreProperties`，还是 `[MapProperty(..., Ignore = true)]` 忽略属性，如果该属性同时是待创建目标的 `required` 成员，生成器都不会报告 `MAP0042`，但也不会生成自动创建目标实例的重载；调用方需要提供已有目标实例。
+
+成员级 `[MapIgnoreProperty]` 对该属性的所有映射目标生效，其他三种方式仅对指定的映射目标生效。忽略配置始终优先于同一目标的映射特性或配置转换器；存在冲突时报告 `MAP0028` 警告。忽略列表中的成员不存在或不在当前映射范围时报告 `MAP0049`；配置类忽略列表无法静态解析时报告 `MAP0050`。
+
 `MapParentProperties` 默认为 `false`；设置为 `true` 后，映射会包含源类型的可访问父类属性。也可以按映射目标批量忽略源属性；配置类中的忽略项会与 `MapTarget` 上的忽略项合并：
 
 ```csharp
@@ -267,7 +271,7 @@ public sealed class UserDto
 }
 ```
 
-`MapParentFields` 独立控制父类字段；配置类也可通过可静态解析的 `string[] IgnoreFields` 合并忽略项。readonly 字段可以读取：源 readonly 字段支持 `MapTo`，目标 readonly 字段支持 `MapFrom`。如果当前 `Direction` 需要写入 readonly 字段（包括默认的 `Both`），生成器会报告 `MAP0031` 并跳过该成员。
+字段可通过 `[MapIgnoreField]`、`MapTarget.IgnoreFields`、配置类 `IgnoreFields` 或 `[MapField(..., Ignore = true)]` 忽略，并遵循与属性相同的作用域、优先级、冲突警告及 `required` 处理规则。`MapParentFields` 独立控制父类字段；字段映射未启用、父字段超出当前范围或名称不存在时，忽略列表条目会报告 `MAP0049`。配置类也可通过可静态解析的 `string[] IgnoreFields` 合并忽略项。readonly 字段可以读取：源 readonly 字段支持 `MapTo`，目标 readonly 字段支持 `MapFrom`。如果当前 `Direction` 需要写入 readonly 字段（包括默认的 `Both`），生成器会报告 `MAP0031` 并跳过该成员。
 
 `MapFieldAttribute` 支持与 `MapPropertyAttribute` 相同的重命名、点分目标成员路径、根相对 `SourcePath`、`IMapConverter<TSourceValue, TTargetValue>`、`MapType` 和忽略设置。路径可以混合属性与字段，例如 `Address.City.Name` 的任一段都可以是字段；只要源或目标路径包含字段，就必须在 `MapTargetAttribute` 上启用 `MapFields = true`。路径遵循与属性路径相同的直接访问和 null 行为。一个源字段映射到多个目标成员时，使用 `MapCompositeFieldAttribute` 和 `IMapCompositeConverter<TSourceValue, TTargetValues>`；`MapCompositeFieldAttribute` 也支持 `SourcePath`，但组合映射的目标名称仍不支持点分路径。
 

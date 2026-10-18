@@ -34,13 +34,9 @@ internal sealed class MemberMappingProcessor
     internal void ParseProperty(MapTargetInfo mapTarget, MapMemberInfo propertySymbol)
     {
         var isField = propertySymbol.IsField;
-        if (
-            (isField ? mapTarget.IgnoreFields : mapTarget.IgnoreProperties).Contains(
-                propertySymbol.Name
-            )
-        )
-            return;
-
+        var ignoredByList = (isField ? mapTarget.IgnoreFields : mapTarget.IgnoreProperties).Contains(
+            propertySymbol.Name
+        );
         var atts = propertySymbol.GetAttributes();
         var ignoreAttributeName = isField
             ? TypeFullNames.MapIgnoreFieldAttribute
@@ -58,27 +54,69 @@ internal sealed class MemberMappingProcessor
             .ToArray();
         var propertyAttributes = atts.Where(a => a.AttributeClass!.IsName(memberAttributeName))
             .ToArray();
-        // 检查全局忽略属性
-        if (ignoreAttribute is not null)
-        {
-            if (
-                (compositeAttributes.Length > 0 || propertyAttributes.Length > 0)
-                && _context.ReportedIgnoreAttributeConflicts.Add(propertySymbol)
-            )
-            {
-                var syntaxReference = ignoreAttribute.ApplicationSyntaxReference!;
-                _context.ClassInfo.ProductionContext.ReportDiagnostic(
-                    Diagnostic.Create(
-                        Descriptors.MapIgnoreOverridesMappingAttributes,
-                        syntaxReference.SyntaxTree.GetLocation(syntaxReference.Span)
-                    )
-                );
-            }
-            return;
-        }
         var targetCompositeAttributes = compositeAttributes
             .Where(attribute => _actions.GetCompositePropertyTargetName(attribute) == mapTarget.TargetName)
             .ToArray();
+        var matchingAttributes = new List<AttributeData>();
+        foreach (var attribute in propertyAttributes)
+        {
+            var targetName = _actions.GetMapPropertyTargetName(attribute);
+            if (mapTarget.TargetName == targetName)
+            {
+                matchingAttributes.Add(attribute);
+            }
+            else if (
+                ignoreAttribute is null
+                && _context.ClassInfo.MapTargets.All(x => x.TargetName != targetName)
+            )
+            {
+                _context.ClassInfo.ProductionContext.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.MemberMappingTargetNotFound,
+                        attribute.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
+                            attribute.ApplicationSyntaxReference.Span
+                        ),
+                        targetName
+                    )
+                );
+            }
+        }
+
+        var memberIgnoreAttribute = matchingAttributes.FirstOrDefault(IsMemberIgnoreAttribute);
+        if (ignoreAttribute is not null || ignoredByList || memberIgnoreAttribute is not null)
+        {
+            TrackIgnoredRequiredTargetMember(mapTarget, propertySymbol);
+            var hasMappingConflict =
+                targetCompositeAttributes.Length > 0
+                || matchingAttributes.Any(x => x != memberIgnoreAttribute)
+                || memberIgnoreAttribute is not null
+                    && HasMappingOptionsBesidesIgnore(memberIgnoreAttribute)
+                || HasConfigMapping(mapTarget, propertySymbol);
+            if (hasMappingConflict)
+            {
+                var location =
+                    ignoreAttribute?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                        ignoreAttribute.ApplicationSyntaxReference.Span
+                    )
+                    ?? memberIgnoreAttribute?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                        memberIgnoreAttribute.ApplicationSyntaxReference.Span
+                    )
+                    ?? GetListIgnoreLocation(mapTarget, propertySymbol);
+                var conflictKey = $"{mapTarget.TargetName}:{propertySymbol.IsField}:{propertySymbol.Name}";
+                if (_context.ReportedIgnoreConflicts.Add(conflictKey))
+                {
+                    _context.ClassInfo.ProductionContext.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Descriptors.MapIgnoreOverridesMappingAttributes,
+                            location,
+                            propertySymbol.Name,
+                            mapTarget.TargetName
+                        )
+                    );
+                }
+            }
+            return;
+        }
         if (
             targetCompositeAttributes.Length == 1
             && propertyAttributes.Any(attribute =>
@@ -125,27 +163,6 @@ internal sealed class MemberMappingProcessor
             return;
         }
 
-        // 获取当前映射目标有效的特性
-        var matchingAttributes = new List<AttributeData>();
-        foreach (var att in propertyAttributes)
-        {
-            var targetName = _actions.GetMapPropertyTargetName(att);
-            if (mapTarget.TargetName == targetName)
-            {
-                matchingAttributes.Add(att);
-            }
-            else if (_context.ClassInfo.MapTargets.All(x => x.TargetName != targetName))
-            {
-                var diagnostic = Diagnostic.Create(
-                    Descriptors.MemberMappingTargetNotFound,
-                    att.ApplicationSyntaxReference!.SyntaxTree.GetLocation(
-                        att.ApplicationSyntaxReference.Span
-                    ),
-                    targetName
-                );
-                _context.ClassInfo.ProductionContext.ReportDiagnostic(diagnostic);
-            }
-        }
         if (matchingAttributes.Count > 1)
         {
             var diagnostic = Diagnostic.Create(
@@ -159,13 +176,6 @@ internal sealed class MemberMappingProcessor
         var attributeData = matchingAttributes.FirstOrDefault();
 
         var attributeInfo = attributeData is null ? null : new AttributeInfo(attributeData);
-        // 指定特性忽略
-        if (
-            attributeInfo?.TryGetParam<bool>(nameof(MapPropertyAttribute.Ignore), out var ignore)
-                is true
-            && ignore is true
-        )
-            return;
 
         var targetMemberParameter = isField
             ? nameof(MapFieldAttribute.FieldName)
@@ -402,6 +412,60 @@ internal sealed class MemberMappingProcessor
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.AccessPath} = {MapTargetInfo.TargetParamName}.{targetProperty.AccessPath};"
         );
+    }
+
+    private static Location GetListIgnoreLocation(
+        MapTargetInfo mapTarget,
+        MapMemberInfo sourceMember
+    )
+    {
+        if (mapTarget.ConfigInfo is null)
+            return mapTarget.MapTargetLocation;
+        var configIgnores = sourceMember.IsField
+            ? mapTarget.ConfigInfo.IgnoreFields
+            : mapTarget.ConfigInfo.IgnoreProperties;
+        if (configIgnores.Contains(sourceMember.Name) is false)
+            return mapTarget.MapTargetLocation;
+        var location = sourceMember.IsField
+            ? mapTarget.ConfigInfo.IgnoreFieldsLocation
+            : mapTarget.ConfigInfo.IgnorePropertiesLocation;
+        return location == Location.None ? mapTarget.MapTargetLocation : location;
+    }
+
+    private static bool IsMemberIgnoreAttribute(AttributeData attribute) =>
+        attribute.NamedArguments.Any(x =>
+            x.Key == nameof(MapPropertyAttribute.Ignore) && x.Value.Value is true
+        );
+
+    private static bool HasMappingOptionsBesidesIgnore(AttributeData attribute) =>
+        attribute.ConstructorArguments.Length > 1
+        || attribute.NamedArguments.Any(x => x.Key != nameof(MapPropertyAttribute.Ignore));
+
+    private static bool HasConfigMapping(MapTargetInfo mapTarget, MapMemberInfo sourceMember)
+    {
+        if (mapTarget.ConfigInfo is null)
+            return false;
+        return mapTarget.ConfigInfo.Converters.TryGetValue(sourceMember.Name, out var converter)
+                && converter.IsFieldConverter == sourceMember.IsField
+            || mapTarget.ConfigInfo.CompositeConverters.TryGetValue(
+                sourceMember.Name,
+                out var composite
+            )
+                && composite.IsFieldConverter == sourceMember.IsField;
+    }
+
+    private static void TrackIgnoredRequiredTargetMember(
+        MapTargetInfo mapTarget,
+        MapMemberInfo sourceMember
+    )
+    {
+        if (
+            mapTarget.MemberByName.TryGetValue(sourceMember.Name, out var targetMember) is false
+            || targetMember.IsRequired is false
+        )
+            return;
+
+        mapTarget.IgnoredRequiredTargetMembers.Add(targetMember.Name);
     }
 
     private static bool TryMapNullableProperty(

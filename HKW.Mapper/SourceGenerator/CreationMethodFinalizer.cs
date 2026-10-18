@@ -50,7 +50,11 @@ internal sealed class CreationMethodFinalizer
                     .ToArray();
             if (missingRequired.Length > 0)
             {
-                foreach (var member in missingRequired)
+                foreach (
+                    var member in missingRequired.Where(x =>
+                        mapTarget.IgnoredRequiredTargetMembers.Contains(x.Name) is false
+                    )
+                )
                 {
                     _context.ClassInfo.ProductionContext.ReportDiagnostic(
                         Diagnostic.Create(

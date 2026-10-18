@@ -559,7 +559,7 @@ public sealed class DescriptorsTests
             "MAP0028",
             DiagnosticSeverity.Warning,
             "MapIgnoreProperty",
-            ["ignore attribute", "remove other mapping attributes", "member"],
+            ["ignore configuration", "Value", "Target", "redundant mapping configuration"],
             """
             [MapTarget(typeof(Target))]
             public sealed class Source
@@ -570,6 +570,90 @@ public sealed class DescriptorsTests
             public sealed class Target;
             """
         );
+    }
+
+    [TestMethod]
+    public void MAP0028_ReportsMapTargetIgnoreOverridingFieldMapping()
+    {
+        AssertDiagnostic(
+            "MAP0028",
+            DiagnosticSeverity.Warning,
+            "MapTarget",
+            ["ignore configuration", "Value", "Target"],
+            """
+            [MapTarget(typeof(Target), MapFields = true, IgnoreFields = new[] { nameof(Source.Value) })]
+            public sealed class Source
+            {
+                [MapField(typeof(Target))]
+                public int Value;
+            }
+            public sealed class Target { public int Value; }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0028_ReportsConfigIgnoreOverridingConverter()
+    {
+        AssertDiagnostic(
+            "MAP0028",
+            DiagnosticSeverity.Warning,
+            "IgnoreProperties",
+            ["ignore configuration", "Value", "Target"],
+            """
+            [MapTarget(typeof(Target), typeof(Config))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            public sealed class Config : MapperConfig<Source, Target>
+            {
+                public Config(Source source, Target target) : base(source, target) { }
+                public string[] IgnoreProperties { get; } = [nameof(Source.Value)];
+                public MapConfigPropertyConverter<int, int> ValueConverter { get; } =
+                    new(nameof(Source.Value), (value, _) => value, (value, _) => value);
+            }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0028_ReportsMapFieldIgnoreWithMappingOptions()
+    {
+        AssertDiagnostic(
+            "MAP0028",
+            DiagnosticSeverity.Warning,
+            "MapField",
+            ["ignore configuration", "Value", "Target"],
+            """
+            [MapTarget(typeof(Target), MapFields = true)]
+            public sealed class Source
+            {
+                [MapField(typeof(Target), nameof(Target.Other), Ignore = true)]
+                public int Value;
+            }
+            public sealed class Target { public int Other; }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0028_DoesNotReportTargetSpecificIgnoreForAnotherMapping()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapTarget(typeof(TargetA))]
+            [MapTarget(typeof(TargetB))]
+            public sealed class Source
+            {
+                [MapProperty(typeof(TargetA), Ignore = true)]
+                [MapProperty(typeof(TargetB))]
+                public int Value { get; set; }
+            }
+            public sealed class TargetA { public int Value { get; set; } }
+            public sealed class TargetB { public int Value { get; set; } }
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(d => d.Id == "MAP0028"));
     }
 
     [TestMethod]
@@ -1245,6 +1329,129 @@ public sealed class DescriptorsTests
     }
 
     [TestMethod]
+    public void MAP0042_DoesNotReportExplicitlyIgnoredRequiredTargetMember()
+    {
+        const string source = """
+            [MapTarget(typeof(Model))]
+            public sealed partial class Model
+            {
+                public Model() { }
+
+                [MapIgnoreProperty]
+                public required object Obj { get; set; }
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(WithUsings(source)).Any(d => d.Id == "MAP0042"));
+    }
+
+    [TestMethod]
+    public void MAP0042_DoesNotReportRequiredTargetMemberIgnoredByMapTarget()
+    {
+        const string source = """
+            [MapTarget(typeof(Model), IgnoreProperties = new[] { nameof(Model.Obj) })]
+            public sealed partial class Model
+            {
+                public Model() { }
+
+                public required object Obj { get; set; }
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(WithUsings(source)).Any(d => d.Id == "MAP0042"));
+    }
+
+    [TestMethod]
+    public void MAP0042_DoesNotReportRequiredTargetMemberIgnoredByConfig()
+    {
+        const string source = """
+            [MapTarget(typeof(Model), typeof(Config))]
+            public sealed partial class Model
+            {
+                public Model() { }
+
+                public required object Obj { get; set; }
+            }
+
+            public sealed class Config : MapperConfig<Model, Model>
+            {
+                public Config(Model source, Model target) : base(source, target) { }
+
+                public string[] IgnoreProperties { get; } = [nameof(Model.Obj)];
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(WithUsings(source)).Any(d => d.Id == "MAP0042"));
+    }
+
+    [TestMethod]
+    public void MAP0042_DoesNotReportRequiredFieldIgnoredByAnyMechanism()
+    {
+        var sources = new[]
+        {
+            """
+            [MapTarget(typeof(Model), MapFields = true)]
+            public sealed partial class Model
+            {
+                public Model() { }
+                [MapIgnoreField]
+                public required object Value;
+            }
+            """,
+            """
+            [MapTarget(typeof(Model), MapFields = true, IgnoreFields = new[] { nameof(Model.Value) })]
+            public sealed partial class Model
+            {
+                public Model() { }
+                public required object Value;
+            }
+            """,
+            """
+            [MapTarget(typeof(Model), typeof(Config), MapFields = true)]
+            public sealed partial class Model
+            {
+                public Model() { }
+                public required object Value;
+            }
+            public sealed class Config : MapperConfig<Model, Model>
+            {
+                public Config(Model source, Model target) : base(source, target) { }
+                public string[] IgnoreFields { get; } = [nameof(Model.Value)];
+            }
+            """,
+            """
+            [MapTarget(typeof(Model), MapFields = true)]
+            public sealed partial class Model
+            {
+                public Model() { }
+                [MapField(typeof(Model), Ignore = true)]
+                public required object Value;
+            }
+            """,
+        };
+
+        foreach (var source in sources)
+            Assert.IsFalse(RunGenerator(WithUsings(source)).Any(d => d.Id == "MAP0042"));
+    }
+
+    [TestMethod]
+    public void MAP0042_DoesNotReportRequiredPropertyIgnoredByMapProperty()
+    {
+        const string source = """
+            [MapTarget(typeof(Model))]
+            public sealed partial class Model
+            {
+                public Model() { }
+
+                [MapProperty(typeof(Model), Ignore = true)]
+                public required object Obj { get; set; }
+            }
+            """;
+
+        Assert.IsFalse(RunGenerator(WithUsings(source)).Any(d => d.Id == "MAP0042"));
+    }
+
+    [TestMethod]
     public void MAP0044_ReportsNullableCollectionToNonNullableImmutableTarget()
     {
         AssertDiagnostic(
@@ -1295,7 +1502,7 @@ public sealed class DescriptorsTests
             [MapTarget(typeof(Target), Direction = MapDirections.To)]
             public sealed class Source
             {
-                [MapProperty(typeof(Target), MapToCondition = MapMemberCondition.SourceIsNotNullOrDefault)]
+                [MapProperty(typeof(Target), MapToCondition = MapMemberCondition.SourceIsNotDefault)]
                 public int Value { get; set; }
             }
             public sealed class Target { public int Value { get; init; } }
@@ -1315,7 +1522,7 @@ public sealed class DescriptorsTests
             [MapTarget(typeof(Target), Direction = MapDirections.To)]
             public sealed class Source
             {
-                [MapProperty(typeof(Target), MapToCondition = MapMemberCondition.SourceIsNullOrDefault)]
+                [MapProperty(typeof(Target), MapToCondition = MapMemberCondition.SourceIsDefault)]
                 public string Value { get; set; } = string.Empty;
             }
             public sealed class Target { public required string Value { get; set; } }
@@ -1389,6 +1596,60 @@ public sealed class DescriptorsTests
             [MapSource(typeof(Source), typeof(TargetA), TargetName = "Same")]
             [MapSource(typeof(Source), typeof(TargetB), TargetName = "Same")]
             public static partial class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0049_ReportsUnavailableIgnoredProperty()
+    {
+        AssertDiagnostic(
+            "MAP0049",
+            DiagnosticSeverity.Warning,
+            "MapTarget",
+            ["property", "Missing", "Target", "mapping scope"],
+            """
+            [MapTarget(typeof(Target), IgnoreProperties = new[] { "Missing" })]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0049_ReportsIgnoredFieldWhenFieldMappingIsDisabled()
+    {
+        AssertDiagnostic(
+            "MAP0049",
+            DiagnosticSeverity.Warning,
+            "MapTarget",
+            ["field", "Value", "Target", "mapping scope"],
+            """
+            [MapTarget(typeof(Target), IgnoreFields = new[] { nameof(Source.Value) })]
+            public sealed class Source { public int Value; }
+            public sealed class Target { public int Value; }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0050_ReportsUnanalyzableConfigIgnoreInitializer()
+    {
+        AssertDiagnostic(
+            "MAP0050",
+            DiagnosticSeverity.Warning,
+            "IgnoreProperties",
+            ["IgnoreProperties", "statically analyzable", "string array"],
+            """
+            [MapTarget(typeof(Target), typeof(Config))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+            public sealed class Config : MapperConfig<Source, Target>
+            {
+                public Config(Source source, Target target) : base(source, target) { }
+                public string[] IgnoreProperties { get; } = GetIgnored();
+                private static string[] GetIgnored() => [nameof(Source.Value)];
+            }
             """
         );
     }

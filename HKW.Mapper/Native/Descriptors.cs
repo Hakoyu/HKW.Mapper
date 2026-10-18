@@ -234,8 +234,8 @@ internal static class Descriptors
     );
     public static readonly DiagnosticDescriptor MapIgnoreOverridesMappingAttributes = new(
         id: "MAP0028",
-        title: "Ignore attribute overrides mapping attributes",
-        messageFormat: "Only the ignore attribute is used; remove other mapping attributes from this member.",
+        title: "Ignore configuration overrides mapping configuration",
+        messageFormat: "Only the ignore configuration is used for source member '{0}' in mapping target '{1}'; remove the redundant mapping configuration.",
         category: _category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true
@@ -398,6 +398,22 @@ internal static class Descriptors
         messageFormat: "MapSource target name '{0}' is already declared for source type '{1}'. Remove the duplicate declaration or use a different target name.",
         category: _category,
         DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor IgnoredSourceMemberNotFound = new(
+        id: "MAP0049",
+        title: "Ignored source member is not available",
+        messageFormat: "Ignored source {0} '{1}' is not available in mapping target '{2}'. Check the member name and mapping scope.",
+        category: _category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapConfigIgnoreInitializerCannotBeAnalyzed = new(
+        id: "MAP0050",
+        title: "Map config ignore initializer cannot be analyzed",
+        messageFormat: "Map config member '{0}' must use a statically analyzable inline string array initializer.",
+        category: _category,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
 }

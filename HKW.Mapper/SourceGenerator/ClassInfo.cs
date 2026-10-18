@@ -404,14 +404,20 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                 out var ignoreProperties
             )
         )
+        {
+            AttributeIgnoreProperties.UnionWith(ignoreProperties);
             IgnoreProperties.UnionWith(ignoreProperties);
+        }
         if (
             attributeInfo.TryGetParams<string>(
                 nameof(MapTargetAttribute.IgnoreFields),
                 out var ignoreFields
             )
         )
+        {
+            AttributeIgnoreFields.UnionWith(ignoreFields);
             IgnoreFields.UnionWith(ignoreFields);
+        }
 
         if (ConfigInfo is not null)
         {
@@ -506,8 +512,10 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         + $"{(ConfigInfo?.MapFrom.IsAsync is true ? "Async" : "")}";
 
     public Dictionary<string, MapMemberInfo> MemberByName { get; } = [];
-    public HashSet<string> IgnoreProperties { get; } = new();
-    public HashSet<string> IgnoreFields { get; } = new();
+    public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> IgnoreFields { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> AttributeIgnoreProperties { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> AttributeIgnoreFields { get; } = new(StringComparer.Ordinal);
     public Location MapTargetLocation { get; }
 
     public bool IsInvalid { get; }
@@ -523,6 +531,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     public List<MethodGenerateInfo> MapToCreationMethods { get; } = [];
     public List<MapConstructorInfo> Constructors { get; } = [];
     public Dictionary<string, string> CreationInitializers { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> IgnoredRequiredTargetMembers { get; } = new(StringComparer.Ordinal);
 
     public MapConfigInfo? ConfigInfo { get; }
 
@@ -631,6 +640,8 @@ internal sealed class MapConfigInfo
     public MapActionInfo MapFrom { get; } = new();
     public HashSet<string> IgnoreProperties { get; } = new(StringComparer.Ordinal);
     public HashSet<string> IgnoreFields { get; } = new(StringComparer.Ordinal);
+    public Location IgnorePropertiesLocation { get; private set; } = Location.None;
+    public Location IgnoreFieldsLocation { get; private set; } = Location.None;
 
     private bool CheckIgnoredMembers(IPropertySymbol propertySymbol)
     {
@@ -649,6 +660,11 @@ internal sealed class MapConfigInfo
         )
             return false;
 
+        if (propertySymbol.Name == nameof(MapTargetAttribute.IgnoreProperties))
+            IgnorePropertiesLocation = propertySyntax.GetLocation();
+        else
+            IgnoreFieldsLocation = propertySyntax.GetLocation();
+
         IEnumerable<ExpressionSyntax>? expressions = propertySyntax.Initializer?.Value switch
         {
             CollectionExpressionSyntax collection => collection
@@ -659,14 +675,38 @@ internal sealed class MapConfigInfo
             _ => null,
         };
         if (expressions is null)
+        {
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MapConfigIgnoreInitializerCannotBeAnalyzed,
+                    propertySyntax.GetLocation(),
+                    propertySymbol.Name
+                )
+            );
             return true;
+        }
 
         var semanticModel = _classInfo.Compilation.GetSemanticModel(propertySyntax.SyntaxTree);
+        var reportedUnanalyzableInitializer = false;
         foreach (var expression in expressions)
         {
             var propertyName = expression.GetConstantString(semanticModel);
             if (string.IsNullOrWhiteSpace(propertyName) is false)
+            {
                 destination.Add(propertyName!);
+                continue;
+            }
+
+            if (reportedUnanalyzableInitializer)
+                continue;
+            _classInfo.ProductionContext.ReportDiagnostic(
+                Diagnostic.Create(
+                    Descriptors.MapConfigIgnoreInitializerCannotBeAnalyzed,
+                    expression.GetLocation(),
+                    propertySymbol.Name
+                )
+            );
+            reportedUnanalyzableInitializer = true;
         }
         return true;
     }

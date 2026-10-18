@@ -1,4 +1,4 @@
-﻿; Unshipped analyzer release
+; Unshipped analyzer release
 ; https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.Analyzers/ReleaseTrackingAnalyzers.Help.md
 
 ### New Rules
@@ -53,3 +53,5 @@ MAP0045 | HKWMapper | Warning | Descriptors
 MAP0046 | HKWMapper | Error | Descriptors
 MAP0047 | HKWMapper | Error | Descriptors
 MAP0048 | HKWMapper | Error | Descriptors
+MAP0049 | HKWMapper | Warning | Descriptors
+MAP0050 | HKWMapper | Warning | Descriptors

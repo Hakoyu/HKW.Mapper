@@ -20,5 +20,5 @@ internal sealed class MapperGenerationContext
         MapTargetInfo,
         Dictionary<string, List<(MapMemberInfo Source, MapDirections Direction)>>
     > MappedTargets { get; } = [];
-    internal HashSet<MapMemberInfo> ReportedIgnoreAttributeConflicts { get; } = [];
+    internal HashSet<string> ReportedIgnoreConflicts { get; } = [];
 }
