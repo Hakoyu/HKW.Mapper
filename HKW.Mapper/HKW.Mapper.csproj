@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.3.6</Version>
+    <Version>0.3.7</Version>
     <Company>HKW</Company>
     <Authors>HKW</Authors>
     <PackageDescription>High-performance Mapper with SourceGenerator</PackageDescription>
@@ -18,6 +18,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageId>HKW.Mapper</PackageId>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <PropertyGroup>
