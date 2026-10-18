@@ -1,4 +1,4 @@
-# HKW.Mapper
+﻿# HKW.Mapper
 
 基于 Roslyn Source Generator 的高性能对象映射库。映射代码在编译期生成，不依赖运行时反射；支持双向映射、属性重命名、属性忽略、自定义转换器以及映射生命周期配置。
 
@@ -76,7 +76,7 @@ var dto = user.MapTo(new UserDto());
 // 也可以直接调用 UserMappings.MapTo(user, new UserDto())
 ```
 
-`MapSourceAttribute` 支持 `MapTargetAttribute` 的全部选项，包括可选的第三个映射配置类型、`TargetName`、`Direction`、`MapFields`、父成员映射和忽略列表。`MapProperty`、`MapField`、`MapConstructor` 等配置仍声明在源类型上并会被读取：
+`MapSourceAttribute` 支持 `MapTargetAttribute` 的全部选项，包括可选的第三个映射配置类型、`TargetName`、`Direction`、`MapFields`、父成员映射和忽略列表。`MapProperty`、`MapField` 等成员配置仍声明在源类型上并会被读取。目标需要使用有参构造函数时，在同一外部映射类上使用 `MapSourceConstructorAttribute`，并同时指定源类型与目标类型或 `TargetName`：
 
 ```csharp
 [MapSource(
@@ -86,6 +86,7 @@ var dto = user.MapTo(new UserDto());
     TargetName = "Api",
     Direction = MapDirections.To
 )]
+[MapSourceConstructor(typeof(User), "Api", typeof(int))]
 public static partial class UserMappings;
 ```
 
@@ -275,10 +276,10 @@ public sealed class UserDto
 
 `MapFieldAttribute` 支持与 `MapPropertyAttribute` 相同的重命名、点分目标成员路径、根相对 `SourcePath`、`IMapConverter<TSourceValue, TTargetValue>`、`MapType` 和忽略设置。路径可以混合属性与字段，例如 `Address.City.Name` 的任一段都可以是字段；只要源或目标路径包含字段，就必须在 `MapTargetAttribute` 上启用 `MapFields = true`。路径遵循与属性路径相同的直接访问和 null 行为。一个源字段映射到多个目标成员时，使用 `MapCompositeFieldAttribute` 和 `IMapCompositeConverter<TSourceValue, TTargetValues>`；`MapCompositeFieldAttribute` 也支持 `SourcePath`，但组合映射的目标名称仍不支持点分路径。
 
-配置类可使用字段专用转换器：
+配置类使用统一的 `MapConfigMemberConverter<TSourceValue, TTargetValue>` 处理普通成员。源和目标成员均可为属性或字段，因此支持属性到字段及字段到属性的映射：
 
 ```csharp
-public MapConfigFieldConverter<int, string> NumberConverter { get; } =
+public MapConfigMemberConverter<int, string> NumberConverter { get; } =
     new(
         nameof(Source.Number),
         nameof(Target.Text),
@@ -286,7 +287,7 @@ public MapConfigFieldConverter<int, string> NumberConverter { get; } =
         (value, _) => int.Parse(value)
     );
 
-public MapConfigCompositeFieldConverter<Range, (int Low, int High)> RangeConverter { get; } =
+public MapConfigCompositeMemberConverter<Range, (int Low, int High)> RangeConverter { get; } =
     new(
         nameof(Source.Range),
         [nameof(Target.Low), nameof(Target.High)],
@@ -360,7 +361,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
     public OrderMapperConfig(Order source, OrderDto target)
         : base(source, target) { }
 
-    public MapConfigPropertyConverter<int, int> AmountConverter { get; } =
+    public MapConfigMemberConverter<int, int> AmountConverter { get; } =
         new(
             nameof(Order.Amount),
             (value, _) => value + 10,
@@ -369,7 +370,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 }
 ```
 
-配置类转换器按源属性名和目标属性名查找。对于同一属性，它的优先级高于属性级转换器。
+配置类转换器按源成员名和目标成员名查找，源和目标可分别为属性或字段。对于同一成员，它的优先级高于成员特性中配置的转换器。
 
 ### 复合属性转换器
 
@@ -413,7 +414,7 @@ public sealed class RangeDto
 读取目标属性、组成元组并调用 `ConvertBack`。两个方向都会通过 `MapCompositeConvertArgs`
 传入原始源对象、目标对象、源属性名以及有序目标属性名。目标属性声明顺序是映射契约的一部分。
 
-也可以在 `MapperConfig<TSource, TTarget>` 中使用复合配置转换器，无需在源属性上添加特性：
+也可以在 `MapperConfig<TSource, TTarget>` 中使用统一的复合成员配置转换器，无需在源成员上添加特性。源成员及每个目标成员均可独立为属性或字段：
 
 ```csharp
 public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
@@ -421,7 +422,7 @@ public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
     public RangeMapperConfig(RangeModel source, RangeDto target)
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<Range, (int Min, int Max)> RangeConverter { get; } =
+    public MapConfigCompositeMemberConverter<Range, (int Min, int Max)> RangeConverter { get; } =
         new(
             nameof(RangeModel.Range),
             [nameof(RangeDto.Min), nameof(RangeDto.Max)],
@@ -430,9 +431,8 @@ public sealed class RangeMapperConfig : MapperConfig<RangeModel, RangeDto>
 }
 ```
 
-若同一个源属性同时配置了 `MapConfigCompositePropertyConverter` 和
-`[MapCompositeProperty]`，配置类中的目标属性列表及转换逻辑具有更高优先级。
-目标属性数组必须直接写在配置属性初始化器中，以便源生成器在编译期分析。
+若同一个源成员同时配置了 `MapConfigCompositeMemberConverter` 和对应的复合映射特性，配置类中的目标成员列表及转换逻辑具有更高优先级。
+目标成员数组必须直接写在配置属性初始化器中，以便源生成器在编译期分析。
 
 ## 引用类型属性
 

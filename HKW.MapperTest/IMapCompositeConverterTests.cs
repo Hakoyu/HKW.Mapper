@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -76,7 +76,7 @@ public sealed class IMapCompositeConverterTests
     {
         MapCompositeConvertArgs? convertArgs = null;
         MapCompositeConvertArgs? convertBackArgs = null;
-        var converter = new MapConfigCompositePropertyConverter<
+        var converter = new MapConfigCompositeMemberConverter<
             IMapCompositeRangeValue,
             (int Min, int Max)
         >(
@@ -145,7 +145,7 @@ public sealed class IMapCompositeConverterTests
     public void MapConfigCompositeConverterRejectsNullDelegates()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigCompositePropertyConverter<IMapCompositeRangeValue, (int, int)>(
+            new MapConfigCompositeMemberConverter<IMapCompositeRangeValue, (int, int)>(
                 "Value",
                 ["A", "B"],
                 null!,
@@ -153,7 +153,7 @@ public sealed class IMapCompositeConverterTests
             )
         );
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigCompositePropertyConverter<IMapCompositeRangeValue, (int, int)>(
+            new MapConfigCompositeMemberConverter<IMapCompositeRangeValue, (int, int)>(
                 "Value",
                 ["A", "B"],
                 (value, _) => (value.Min, value.Max),
@@ -162,7 +162,7 @@ public sealed class IMapCompositeConverterTests
         );
     }
 
-    private static MapConfigCompositePropertyConverter<
+    private static MapConfigCompositeMemberConverter<
         IMapCompositeRangeValue,
         (int, int)
     > CreateConfigConverter(string sourceProperty, string[] targetProperties) =>
@@ -329,7 +329,7 @@ public sealed class IMapCompositeConfigCompatibleTarget
 }
 
 public sealed class IMapCompositeCompatibleConfig
-    : MapperConfig<IMapCompositeConfigCompatibleSource, IMapCompositeConfigCompatibleTarget>
+    : MapperConfigBase<IMapCompositeConfigCompatibleSource, IMapCompositeConfigCompatibleTarget>
 {
     public IMapCompositeCompatibleConfig(
         IMapCompositeConfigCompatibleSource source,
@@ -337,7 +337,7 @@ public sealed class IMapCompositeCompatibleConfig
     )
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<
+    public MapConfigCompositeMemberConverter<
         IList<int>,
         (IList<string> TextValues, IReadOnlyList<int> DoubledValues)
     > ValuesConverter { get; } =

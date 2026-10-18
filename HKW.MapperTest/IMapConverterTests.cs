@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -16,14 +16,26 @@ public sealed class IMapConverterTests
 
         Assert.AreEqual("number:4", target.Text);
         Assert.AreEqual(1, IMapConverterTestTrackingConverter.ConvertCalls);
-        AssertConvertArgs(IMapConverterTestTrackingConverter.LastArgs, source, target, "Number", "Text");
+        AssertConvertArgs(
+            IMapConverterTestTrackingConverter.LastArgs,
+            source,
+            target,
+            "Number",
+            "Text"
+        );
 
         target.Text = "number:9";
         source.MapFrom(target);
 
         Assert.AreEqual(9, source.Number);
         Assert.AreEqual(1, IMapConverterTestTrackingConverter.ConvertBackCalls);
-        AssertConvertArgs(IMapConverterTestTrackingConverter.LastArgs, source, target, "Number", "Text");
+        AssertConvertArgs(
+            IMapConverterTestTrackingConverter.LastArgs,
+            source,
+            target,
+            "Number",
+            "Text"
+        );
     }
 
     [TestMethod]
@@ -115,7 +127,7 @@ public sealed class IMapConverterTests
     }
 
     [TestMethod]
-    public void MapConfigPropertyConverterConstructorsDelegateBothDirections()
+    public void MapConfigMemberConverterConstructorsDelegateBothDirections()
     {
         var source = new object();
         var target = new object();
@@ -124,7 +136,7 @@ public sealed class IMapConverterTests
         MapConvertArgs observedSameNameArgs = default;
         MapConvertArgs observedRedirectedArgs = default;
 
-        var sameNameConverter = new MapConfigPropertyConverter<int, string>(
+        var sameNameConverter = new MapConfigMemberConverter<int, string>(
             "Value",
             (value, args) =>
             {
@@ -137,7 +149,7 @@ public sealed class IMapConverterTests
                 return int.Parse(value[5..]);
             }
         );
-        var redirectedConverter = new MapConfigPropertyConverter<int, string>(
+        var redirectedConverter = new MapConfigMemberConverter<int, string>(
             "Number",
             "Text",
             (value, args) =>
@@ -163,19 +175,30 @@ public sealed class IMapConverterTests
     }
 
     [TestMethod]
-    public void MapConfigPropertyConverterRejectsNullDelegatesForBothConstructors()
+    public void MapConfigMemberConverterRejectsEmptyMemberNames()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new MapConfigMemberConverter<int, string>("", (_, _) => string.Empty, (_, _) => 0)
+        );
+        Assert.Throws<ArgumentException>(() =>
+            new MapConfigMemberConverter<int, string>("Value", " ", (_, _) => string.Empty, (_, _) => 0)
+        );
+    }
+
+    [TestMethod]
+    public void MapConfigMemberConverterRejectsNullDelegatesForBothConstructors()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyConverter<int, string>("Value", null!, (_, _) => 0)
+            new MapConfigMemberConverter<int, string>("Value", null!, (_, _) => 0)
         );
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyConverter<int, string>("Value", (_, _) => string.Empty, null!)
+            new MapConfigMemberConverter<int, string>("Value", (_, _) => string.Empty, null!)
         );
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyConverter<int, string>("Number", "Text", null!, (_, _) => 0)
+            new MapConfigMemberConverter<int, string>("Number", "Text", null!, (_, _) => 0)
         );
         Assert.Throws<ArgumentNullException>(() =>
-            new MapConfigPropertyConverter<int, string>(
+            new MapConfigMemberConverter<int, string>(
                 "Number",
                 "Text",
                 (_, _) => string.Empty,
@@ -281,7 +304,10 @@ public sealed class IMapConverterTestConfigInterfaceTarget
 }
 
 public sealed class IMapConverterTestInterfaceGenericConfig
-    : MapperConfig<IMapConverterTestConfigInterfaceSource, IMapConverterTestConfigInterfaceTarget>
+    : MapperConfigBase<
+        IMapConverterTestConfigInterfaceSource,
+        IMapConverterTestConfigInterfaceTarget
+    >
 {
     public IMapConverterTestInterfaceGenericConfig(
         IMapConverterTestConfigInterfaceSource source,
@@ -289,7 +315,7 @@ public sealed class IMapConverterTestInterfaceGenericConfig
     )
         : base(source, target) { }
 
-    public MapConfigPropertyConverter<IList<int>, IList<string>> ValuesConverter { get; } =
+    public MapConfigMemberConverter<IList<int>, IList<string>> ValuesConverter { get; } =
         new(
             nameof(IMapConverterTestConfigInterfaceSource.Values),
             (values, _) => values.Select(value => value.ToString()).ToList(),
@@ -297,8 +323,7 @@ public sealed class IMapConverterTestInterfaceGenericConfig
         );
 }
 
-public sealed class IMapConverterTestConcreteListConverter
-    : IMapConverter<List<int>, List<string>>
+public sealed class IMapConverterTestConcreteListConverter : IMapConverter<List<int>, List<string>>
 {
     public List<string> Convert(List<int> value, MapConvertArgs args) =>
         value.Select(x => x.ToString()).ToList();
@@ -327,8 +352,7 @@ public interface IIMapConverterTestEnumWrapper
     Enum Value { get; }
 }
 
-public sealed class IMapConverterTestEnumWrapper<TEnum>(TEnum value)
-    : IIMapConverterTestEnumWrapper
+public sealed class IMapConverterTestEnumWrapper<TEnum>(TEnum value) : IIMapConverterTestEnumWrapper
     where TEnum : struct, Enum
 {
     public TEnum Value { get; } = value;
@@ -354,10 +378,7 @@ public sealed class IMapConverterTestBoxingConverter
 [MapTarget(typeof(IMapConverterTestBoxingTarget))]
 public sealed class IMapConverterTestBoxingSource
 {
-    [MapProperty(
-        typeof(IMapConverterTestBoxingTarget),
-        typeof(IMapConverterTestBoxingConverter)
-    )]
+    [MapProperty(typeof(IMapConverterTestBoxingTarget), typeof(IMapConverterTestBoxingConverter))]
     public IMapConverterTestEnumWrapper<IMapConverterTestMode> Mode { get; set; } =
         new(IMapConverterTestMode.First);
 }
@@ -398,7 +419,7 @@ public sealed class IMapConverterTestIgnoredAttributeConverter : IMapConverter<i
 }
 
 public sealed class IMapConverterTestConfig
-    : MapperConfig<IMapConverterTestConfiguredSource, IMapConverterTestConfiguredTarget>
+    : MapperConfigBase<IMapConverterTestConfiguredSource, IMapConverterTestConfiguredTarget>
 {
     public IMapConverterTestConfig(
         IMapConverterTestConfiguredSource source,
@@ -406,7 +427,7 @@ public sealed class IMapConverterTestConfig
     )
         : base(source, target) { }
 
-    public MapConfigPropertyConverter<int, string> NumberConverter { get; } =
+    public MapConfigMemberConverter<int, string> NumberConverter { get; } =
         new(
             nameof(IMapConverterTestConfiguredSource.Number),
             nameof(IMapConverterTestConfiguredTarget.Text),

@@ -25,7 +25,7 @@ internal sealed class CompositeMappingProcessor
         _resolver = resolver;
     }
 
-    internal bool TryUseConfigCompositePropertyConverter(
+    internal bool TryUseConfigCompositeMemberConverter(
         MapTargetInfo mapTarget,
         MapMemberInfo propertySymbol,
         AttributeInfo? attributeInfo
@@ -34,7 +34,6 @@ internal sealed class CompositeMappingProcessor
         if (
             mapTarget.ConfigInfo?.CompositeConverters.TryGetValue(propertySymbol.Name, out var data)
                 is not true
-            || data.IsFieldConverter != propertySymbol.IsField
         )
             return false;
 

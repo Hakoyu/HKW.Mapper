@@ -416,4 +416,28 @@ internal static class Descriptors
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor InvalidMapSourceConstructorContainer = new(
+        id: "MAP0051",
+        title: "Invalid MapSource constructor container",
+        messageFormat: "MapSourceConstructor must be declared on a top-level, non-generic static partial class that declares MapSource.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapSourceConstructorSourceNotFound = new(
+        id: "MAP0052",
+        title: "MapSource constructor source not found",
+        messageFormat: "MapSourceConstructor source type '{0}' does not match any MapSource on this container.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor MapSourceConstructorTargetNotFound = new(
+        id: "MAP0053",
+        title: "MapSource constructor target not found",
+        messageFormat: "MapSourceConstructor target '{0}' does not match any MapSource for source type '{1}' on this container.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

@@ -144,17 +144,29 @@ internal class ClassInfo
 
     private void ResolveMapConstructors()
     {
-        foreach (
-            var attribute in ClassSymbol
-                .GetAttributes()
-                .Where(x => x.AttributeClass?.IsName(TypeFullNames.MapConstructorAttribute) is true)
-        )
+        var constructorAttributeName = UsesExternalContainer
+            ? TypeFullNames.MapSourceConstructorAttribute
+            : TypeFullNames.MapConstructorAttribute;
+        var attributes = (UsesExternalContainer ? OutputContainerSymbol! : ClassSymbol)
+            .GetAttributes()
+            .Where(x => x.AttributeClass?.IsName(constructorAttributeName) is true);
+        if (UsesExternalContainer)
+        {
+            attributes = attributes.Where(x =>
+                x.ConstructorArguments[0].Value is INamedTypeSymbol sourceType
+                && ClassSymbol.SymbolEquals(sourceType)
+            );
+        }
+
+        foreach (var attribute in attributes)
         {
             var location =
                 attribute.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
                     attribute.ApplicationSyntaxReference.Span
                 ) ?? Location.None;
-            var selector = attribute.ConstructorArguments[0];
+            var selectorIndex = UsesExternalContainer ? 1 : 0;
+            var parameterTypesIndex = UsesExternalContainer ? 2 : 1;
+            var selector = attribute.ConstructorArguments[selectorIndex];
             var target = selector.Value is INamedTypeSymbol targetType
                 ? MapTargets.FirstOrDefault(x => x.TargetType.SymbolEquals(targetType))
                 : MapTargets.FirstOrDefault(x => x.TargetName == selector.Value as string);
@@ -162,18 +174,21 @@ internal class ClassInfo
             {
                 ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
-                        Descriptors.MapConstructorTargetNotFound,
+                        UsesExternalContainer
+                            ? Descriptors.MapSourceConstructorTargetNotFound
+                            : Descriptors.MapConstructorTargetNotFound,
                         location,
-                        selector.Value?.ToString() ?? string.Empty
+                        selector.Value?.ToString() ?? string.Empty,
+                        ClassSymbol.GetName()
                     )
                 );
                 continue;
             }
 
             var parameterTypes =
-                attribute.ConstructorArguments.Length > 1
+                attribute.ConstructorArguments.Length > parameterTypesIndex
                     ? attribute
-                        .ConstructorArguments[1]
+                        .ConstructorArguments[parameterTypesIndex]
                         .Values.Select(x => x.Value as ITypeSymbol)
                         .Where(x => x is not null)
                         .Cast<ITypeSymbol>()
@@ -601,21 +616,13 @@ internal sealed class MapConfigInfo
                     continue;
                 if (CheckProperty(propertySymbol, out var sourceName, out var targetName))
                 {
-                    var isFieldConverter =
-                        propertySymbol.Type.Name == nameof(MapConfigFieldConverter<object, object>);
-                    Converters.Add(sourceName, (targetName, propertySymbol, isFieldConverter));
+                    Converters.Add(sourceName, (targetName, propertySymbol));
                 }
                 else if (
                     CheckCompositeProperty(propertySymbol, out sourceName, out var targetNames)
                 )
                 {
-                    var isFieldConverter =
-                        propertySymbol.Type.Name
-                        == nameof(MapConfigCompositeFieldConverter<object, ValueTuple>);
-                    CompositeConverters.Add(
-                        sourceName,
-                        (targetNames, propertySymbol, isFieldConverter)
-                    );
+                    CompositeConverters.Add(sourceName, (targetNames, propertySymbol));
                 }
             }
             else if (member is IMethodSymbol methodSymbol)
@@ -628,13 +635,10 @@ internal sealed class MapConfigInfo
     private readonly ClassInfo _classInfo;
 
     public INamedTypeSymbol Type { get; }
+    public Dictionary<string, (string TargetName, IPropertySymbol Property)> Converters { get; } = [];
     public Dictionary<
         string,
-        (string TargetName, IPropertySymbol Property, bool IsFieldConverter)
-    > Converters { get; } = [];
-    public Dictionary<
-        string,
-        (string[] TargetNames, IPropertySymbol Property, bool IsFieldConverter)
+        (string[] TargetNames, IPropertySymbol Property)
     > CompositeConverters { get; } = [];
     public MapActionInfo MapTo { get; } = new();
     public MapActionInfo MapFrom { get; } = new();
@@ -719,10 +723,7 @@ internal sealed class MapConfigInfo
     {
         // 获取转换器属性并检查
         sourceName = targetName = string.Empty;
-        if (
-            propertySymbol.Type.Name != nameof(MapConfigPropertyConverter<object, object>)
-            && propertySymbol.Type.Name != nameof(MapConfigFieldConverter<object, object>)
-        )
+        if (propertySymbol.Type.Name != nameof(MapConfigMemberConverter<object, object>))
             return false;
         if (propertySymbol.DeclaringSyntaxReferences.Length < 1)
             return false;
@@ -776,9 +777,7 @@ internal sealed class MapConfigInfo
         targetNames = [];
         if (
             propertySymbol.Type.Name
-                != nameof(MapConfigCompositePropertyConverter<object, ValueTuple>)
-            && propertySymbol.Type.Name
-                != nameof(MapConfigCompositeFieldConverter<object, ValueTuple>)
+            != nameof(MapConfigCompositeMemberConverter<object, ValueTuple>)
         )
             return false;
         if (

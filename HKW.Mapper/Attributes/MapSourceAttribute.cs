@@ -62,7 +62,7 @@ public sealed class MapSourceAttribute : Attribute
     public string? TargetName { get; set; }
 
     /// <summary>
-    /// 映射设置, 目标必须继承至 <see cref="MapperConfig{TSource, TTarget}"/>
+    /// 映射设置, 目标必须继承至 <see cref="MapperConfigBase{TSource, TTarget}"/>
     /// </summary>
     public Type? Config { get; }
 

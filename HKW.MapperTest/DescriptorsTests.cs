@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -110,16 +110,16 @@ public sealed class DescriptorsTests
             {
                 public Config(Source source, Target target) : base(source, target) { }
 
-                public MapConfigPropertyConverter<int, int> FirstPropertyConverter { get; } =
+                public MapConfigMemberConverter<int, int> FirstPropertyConverter { get; } =
                     new(nameof(Source.FirstProperty), nameof(Target.Property), (value, _) => value, (value, _) => value);
 
-                public MapConfigPropertyConverter<int, int> SecondPropertyConverter { get; } =
+                public MapConfigMemberConverter<int, int> SecondPropertyConverter { get; } =
                     new(nameof(Source.SecondProperty), nameof(Target.Property), (value, _) => value, (value, _) => value);
 
-                public MapConfigFieldConverter<int, int> FirstFieldConverter { get; } =
+                public MapConfigMemberConverter<int, int> FirstFieldConverter { get; } =
                     new(nameof(Source.FirstField), nameof(Target.Field), (value, _) => value, (value, _) => value);
 
-                public MapConfigFieldConverter<int, int> SecondFieldConverter { get; } =
+                public MapConfigMemberConverter<int, int> SecondFieldConverter { get; } =
                     new(nameof(Source.SecondField), nameof(Target.Field), (value, _) => value, (value, _) => value);
             }
             """;
@@ -269,7 +269,7 @@ public sealed class DescriptorsTests
             "ValueConverter",
             ["source member name", "non-empty string"],
             Config(
-                "public MapConfigPropertyConverter<int, int> ValueConverter { get; } = new(\"\", (value, _) => value, (value, _) => value);"
+                "public MapConfigMemberConverter<int, int> ValueConverter { get; } = new(\"\", (value, _) => value, (value, _) => value);"
             )
         );
     }
@@ -506,7 +506,7 @@ public sealed class DescriptorsTests
             "ValueConverter",
             ["source member", "two unique target members"],
             Config(
-                "public MapConfigCompositePropertyConverter<int, (int, int)> ValueConverter { get; } = "
+                "public MapConfigCompositeMemberConverter<int, (int, int)> ValueConverter { get; } = "
                     + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.First)], (value, _) => (value, value), (values, _) => values.Item1);",
                 "public int First { get; set; } public int Second { get; set; }"
             )
@@ -522,7 +522,7 @@ public sealed class DescriptorsTests
             "ValueConverter",
             ["inline object initializer", "inline target member array"],
             Config(
-                "public MapConfigCompositePropertyConverter<int, (int, int)> ValueConverter => "
+                "public MapConfigCompositeMemberConverter<int, (int, int)> ValueConverter => "
                     + "new(nameof(Source.Value), [nameof(Target.First), nameof(Target.Second)], (value, _) => (value, value), (values, _) => values.Item1);",
                 "public int First { get; set; } public int Second { get; set; }"
             )
@@ -538,7 +538,7 @@ public sealed class DescriptorsTests
             "MapProperty",
             ["config converter", "redundant mapping attribute"],
             Config(
-                "public MapConfigPropertyConverter<int, int> ValueConverter { get; } = new(nameof(Source.Value), (value, _) => value, (value, _) => value);",
+                "public MapConfigMemberConverter<int, int> ValueConverter { get; } = new(nameof(Source.Value), (value, _) => value, (value, _) => value);",
                 "public int Value { get; set; }",
                 "[MapProperty(typeof(Target), typeof(AttributeConverter))] public int Value { get; set; }",
                 """
@@ -608,7 +608,7 @@ public sealed class DescriptorsTests
             {
                 public Config(Source source, Target target) : base(source, target) { }
                 public string[] IgnoreProperties { get; } = [nameof(Source.Value)];
-                public MapConfigPropertyConverter<int, int> ValueConverter { get; } =
+                public MapConfigMemberConverter<int, int> ValueConverter { get; } =
                     new(nameof(Source.Value), (value, _) => value, (value, _) => value);
             }
             """
@@ -1650,6 +1650,142 @@ public sealed class DescriptorsTests
                 public string[] IgnoreProperties { get; } = GetIgnored();
                 private static string[] GetIgnored() => [nameof(Source.Value)];
             }
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0051_ReportsInvalidMapSourceConstructorContainer()
+    {
+        AssertDiagnostic(
+            "MAP0051",
+            DiagnosticSeverity.Error,
+            "MapSourceConstructor",
+            ["top-level", "static partial", "MapSource"],
+            """
+            public sealed class Source;
+            public sealed class Target(int value);
+
+            [MapSourceConstructor(typeof(Source), typeof(Target), typeof(int))]
+            public sealed class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MapSourceDoesNotReadMapConstructorFromSourceType()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            [MapConstructor(typeof(Target), typeof(string))]
+            public sealed class Source;
+            public sealed class Target(int value);
+
+            [MapSource(typeof(Source), typeof(Target), Direction = MapDirections.To)]
+            public static partial class Mappings;
+            """;
+
+        Assert.IsFalse(RunGenerator(source).Any(x => x.Id == "MAP0038"));
+    }
+
+    [TestMethod]
+    public void MAP0052_ReportsUnknownMapSourceConstructorSource()
+    {
+        AssertDiagnostic(
+            "MAP0052",
+            DiagnosticSeverity.Error,
+            "MapSourceConstructor",
+            ["OtherSource", "does not match", "MapSource"],
+            """
+            public sealed class Source;
+            public sealed class OtherSource;
+            public sealed class Target(int value);
+
+            [MapSource(typeof(Source), typeof(Target), Direction = MapDirections.To)]
+            [MapSourceConstructor(typeof(OtherSource), typeof(Target), typeof(int))]
+            public static partial class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0053_ReportsUnknownMapSourceConstructorTarget()
+    {
+        AssertDiagnostic(
+            "MAP0053",
+            DiagnosticSeverity.Error,
+            "MapSourceConstructor",
+            ["OtherTarget", "Source", "does not match"],
+            """
+            public sealed class Source;
+            public sealed class Target(int value);
+            public sealed class OtherTarget(int value);
+
+            [MapSource(typeof(Source), typeof(Target), Direction = MapDirections.To)]
+            [MapSourceConstructor(typeof(Source), typeof(OtherTarget), typeof(int))]
+            public static partial class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0038_ReportsMissingMapSourceConstructorSignature()
+    {
+        AssertDiagnostic(
+            "MAP0038",
+            DiagnosticSeverity.Error,
+            "MapSourceConstructor",
+            ["Target", "string"],
+            """
+            public sealed class Source;
+            public sealed class Target(int value);
+
+            [MapSource(typeof(Source), typeof(Target), Direction = MapDirections.To)]
+            [MapSourceConstructor(typeof(Source), typeof(Target), typeof(string))]
+            public static partial class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0039_ReportsInaccessibleMapSourceConstructor()
+    {
+        AssertDiagnostic(
+            "MAP0039",
+            DiagnosticSeverity.Error,
+            "MapSourceConstructor",
+            ["Target", "not accessible"],
+            """
+            public sealed class Source;
+            public sealed class Target
+            {
+                private Target(int value) { }
+            }
+
+            [MapSource(typeof(Source), typeof(Target), Direction = MapDirections.To)]
+            [MapSourceConstructor(typeof(Source), typeof(Target), typeof(int))]
+            public static partial class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0040_ReportsDuplicateMapSourceConstructorSelection()
+    {
+        AssertDiagnostic(
+            "MAP0040",
+            DiagnosticSeverity.Error,
+            "MapSourceConstructor",
+            ["int", "Target"],
+            """
+            public sealed class Source;
+            public sealed class Target(int value);
+
+            [MapSource(typeof(Source), typeof(Target), Direction = MapDirections.To)]
+            [MapSourceConstructor(typeof(Source), typeof(Target), typeof(int))]
+            [MapSourceConstructor(typeof(Source), typeof(Target), typeof(int))]
+            public static partial class Mappings;
             """
         );
     }

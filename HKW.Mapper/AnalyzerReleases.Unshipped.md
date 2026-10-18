@@ -55,3 +55,6 @@ MAP0047 | HKWMapper | Error | Descriptors
 MAP0048 | HKWMapper | Error | Descriptors
 MAP0049 | HKWMapper | Warning | Descriptors
 MAP0050 | HKWMapper | Warning | Descriptors
+MAP0051 | HKWMapper | Error | Descriptors
+MAP0052 | HKWMapper | Error | Descriptors
+MAP0053 | HKWMapper | Error | Descriptors

@@ -69,6 +69,49 @@ public sealed class MapConfigTests
     }
 
     [TestMethod]
+    public void ConfigMemberConverterMapsEveryPropertyAndFieldCombination()
+    {
+        var source = new MapConfigMemberSource
+        {
+            PropertyToProperty = 1,
+            PropertyToField = 2,
+            FieldToProperty = 3,
+            FieldToField = 4,
+            CompositePropertyToFields = new(5, 6),
+            CompositeFieldToProperties = new(7, 8),
+        };
+        var target = new MapConfigMemberTarget();
+
+        source.MapTo(target);
+
+        Assert.AreEqual("value:1", target.PropertyFromProperty);
+        Assert.AreEqual("value:2", target.FieldFromProperty);
+        Assert.AreEqual("value:3", target.PropertyFromField);
+        Assert.AreEqual("value:4", target.FieldFromField);
+        Assert.AreEqual(5, target.CompositePropertyLow);
+        Assert.AreEqual(6, target.CompositePropertyHigh);
+        Assert.AreEqual(7, target.CompositeFieldLow);
+        Assert.AreEqual(8, target.CompositeFieldHigh);
+
+        target.PropertyFromProperty = "value:11";
+        target.FieldFromProperty = "value:12";
+        target.PropertyFromField = "value:13";
+        target.FieldFromField = "value:14";
+        target.CompositePropertyLow = 15;
+        target.CompositePropertyHigh = 16;
+        target.CompositeFieldLow = 17;
+        target.CompositeFieldHigh = 18;
+        source.MapFrom(target);
+
+        Assert.AreEqual(11, source.PropertyToProperty);
+        Assert.AreEqual(12, source.PropertyToField);
+        Assert.AreEqual(13, source.FieldToProperty);
+        Assert.AreEqual(14, source.FieldToField);
+        Assert.AreEqual(new MapConfigRange(15, 16), source.CompositePropertyToFields);
+        Assert.AreEqual(new MapConfigRange(17, 18), source.CompositeFieldToProperties);
+    }
+
+    [TestMethod]
     public void ConfigConverterTakesPriorityOverPropertyAttribute()
     {
         var source = new MapConfigPrioritySource { Value = 3 };
@@ -160,7 +203,7 @@ public sealed class MapConfigSyncTarget
 }
 
 public sealed class MapConfigSyncConfiguration
-    : MapperConfig<MapConfigSyncSource, MapConfigSyncTarget>
+    : MapperConfigBase<MapConfigSyncSource, MapConfigSyncTarget>
 {
     public MapConfigSyncConfiguration(MapConfigSyncSource source, MapConfigSyncTarget target)
         : base(source, target) { }
@@ -226,7 +269,7 @@ public sealed class MapConfigAsyncTarget
 }
 
 public sealed class MapConfigAsyncConfiguration
-    : MapperConfig<MapConfigAsyncSource, MapConfigAsyncTarget>
+    : MapperConfigBase<MapConfigAsyncSource, MapConfigAsyncTarget>
 {
     public MapConfigAsyncConfiguration(MapConfigAsyncSource source, MapConfigAsyncTarget target)
         : base(source, target) { }
@@ -291,7 +334,7 @@ public sealed class MapConfigRedirectTarget
 }
 
 public sealed class MapConfigRedirectConfiguration
-    : MapperConfig<MapConfigRedirectSource, MapConfigRedirectTarget>
+    : MapperConfigBase<MapConfigRedirectSource, MapConfigRedirectTarget>
 {
     public MapConfigRedirectConfiguration(
         MapConfigRedirectSource source,
@@ -299,7 +342,7 @@ public sealed class MapConfigRedirectConfiguration
     )
         : base(source, target) { }
 
-    public MapConfigPropertyConverter<int, string> NumberConverter { get; } =
+    public MapConfigMemberConverter<int, string> NumberConverter { get; } =
         new(
             nameof(MapConfigRedirectSource.Number),
             nameof(MapConfigRedirectTarget.Text),
@@ -319,6 +362,96 @@ public sealed class MapConfigRedirectConfiguration
                 Assert.AreEqual(nameof(MapConfigRedirectTarget.Text), args.TargetPropertyName);
                 return int.Parse(value[11..]);
             }
+        );
+}
+
+[MapTarget(typeof(MapConfigMemberTarget), typeof(MapConfigMemberConfiguration), MapFields = true)]
+public sealed class MapConfigMemberSource
+{
+    public int PropertyToProperty { get; set; }
+    public int PropertyToField { get; set; }
+    public int FieldToProperty;
+    public int FieldToField;
+    public MapConfigRange CompositePropertyToFields { get; set; }
+    public MapConfigRange CompositeFieldToProperties;
+}
+
+public sealed class MapConfigMemberTarget
+{
+    public string PropertyFromProperty { get; set; } = string.Empty;
+    public string FieldFromProperty = string.Empty;
+    public string PropertyFromField { get; set; } = string.Empty;
+    public string FieldFromField = string.Empty;
+    public int CompositePropertyLow;
+    public int CompositePropertyHigh;
+    public int CompositeFieldLow { get; set; }
+    public int CompositeFieldHigh { get; set; }
+}
+
+public sealed class MapConfigMemberConfiguration
+    : MapperConfigBase<MapConfigMemberSource, MapConfigMemberTarget>
+{
+    public MapConfigMemberConfiguration(MapConfigMemberSource source, MapConfigMemberTarget target)
+        : base(source, target) { }
+
+    public MapConfigMemberConverter<int, string> PropertyToPropertyConverter { get; } =
+        new(
+            nameof(MapConfigMemberSource.PropertyToProperty),
+            nameof(MapConfigMemberTarget.PropertyFromProperty),
+            (value, _) => $"value:{value}",
+            (value, _) => int.Parse(value[6..])
+        );
+
+    public MapConfigMemberConverter<int, string> PropertyToFieldConverter { get; } =
+        new(
+            nameof(MapConfigMemberSource.PropertyToField),
+            nameof(MapConfigMemberTarget.FieldFromProperty),
+            (value, _) => $"value:{value}",
+            (value, _) => int.Parse(value[6..])
+        );
+
+    public MapConfigMemberConverter<int, string> FieldToPropertyConverter { get; } =
+        new(
+            nameof(MapConfigMemberSource.FieldToProperty),
+            nameof(MapConfigMemberTarget.PropertyFromField),
+            (value, _) => $"value:{value}",
+            (value, _) => int.Parse(value[6..])
+        );
+
+    public MapConfigMemberConverter<int, string> FieldToFieldConverter { get; } =
+        new(
+            nameof(MapConfigMemberSource.FieldToField),
+            nameof(MapConfigMemberTarget.FieldFromField),
+            (value, _) => $"value:{value}",
+            (value, _) => int.Parse(value[6..])
+        );
+
+    public MapConfigCompositeMemberConverter<
+        MapConfigRange,
+        (int Low, int High)
+    > CompositePropertyToFieldsConverter { get; } =
+        new(
+            nameof(MapConfigMemberSource.CompositePropertyToFields),
+            [
+                nameof(MapConfigMemberTarget.CompositePropertyLow),
+                nameof(MapConfigMemberTarget.CompositePropertyHigh),
+            ],
+            (value, _) => (value.Low, value.High),
+            (values, _) => new(values.Low, values.High)
+        );
+
+    public MapConfigCompositeMemberConverter<
+        MapConfigRange,
+        (int Low, int High)
+    > CompositeFieldToPropertiesConverter { get; } =
+        new(
+            nameof(MapConfigMemberSource.CompositeFieldToProperties),
+            [
+                nameof(MapConfigMemberTarget.CompositeFieldLow),
+                nameof(MapConfigMemberTarget.CompositeFieldHigh),
+            ],
+            (value, _) => (value.Low, value.High),
+            (values, _) => new(values.Low, values.High)
         );
 }
 
@@ -343,7 +476,7 @@ public sealed class MapConfigAttributePriorityConverter : IMapConverter<int, int
 }
 
 public sealed class MapConfigPriorityConfiguration
-    : MapperConfig<MapConfigPrioritySource, MapConfigPriorityTarget>
+    : MapperConfigBase<MapConfigPrioritySource, MapConfigPriorityTarget>
 {
     public MapConfigPriorityConfiguration(
         MapConfigPrioritySource source,
@@ -351,7 +484,7 @@ public sealed class MapConfigPriorityConfiguration
     )
         : base(source, target) { }
 
-    public MapConfigPropertyConverter<int, int> ValueConverter { get; } =
+    public MapConfigMemberConverter<int, int> ValueConverter { get; } =
         new(
             nameof(MapConfigPrioritySource.Value),
             (value, _) => value + 10,
@@ -384,7 +517,7 @@ public sealed class MapConfigInheritedTarget
 }
 
 public sealed class MapConfigInheritedConfiguration
-    : MapperConfig<MapConfigInheritedSource, MapConfigInheritedTarget>
+    : MapperConfigBase<MapConfigInheritedSource, MapConfigInheritedTarget>
 {
     public MapConfigInheritedConfiguration(
         MapConfigInheritedSource source,
@@ -394,7 +527,7 @@ public sealed class MapConfigInheritedConfiguration
 
     public string[] IgnoreProperties { get; } = [nameof(MapConfigInheritedSource.IgnoredByConfig)];
 
-    public MapConfigPropertyConverter<int, string> NumberConverter { get; } =
+    public MapConfigMemberConverter<int, string> NumberConverter { get; } =
         new(
             nameof(MapConfigInheritedSource.Number),
             (value, _) => value.ToString(),
@@ -439,7 +572,7 @@ public sealed class MapConfigAttributeCompositeConverter
 }
 
 public sealed class MapConfigCompositeConfiguration
-    : MapperConfig<MapConfigCompositeSource, MapConfigCompositeTarget>
+    : MapperConfigBase<MapConfigCompositeSource, MapConfigCompositeTarget>
 {
     public MapConfigCompositeConfiguration(
         MapConfigCompositeSource source,
@@ -447,7 +580,7 @@ public sealed class MapConfigCompositeConfiguration
     )
         : base(source, target) { }
 
-    public MapConfigCompositePropertyConverter<
+    public MapConfigCompositeMemberConverter<
         MapConfigRange,
         (int Low, int High)
     > PlainConverter { get; } =
@@ -458,7 +591,7 @@ public sealed class MapConfigCompositeConfiguration
             (values, _) => new(values.Low, values.High)
         );
 
-    public MapConfigCompositePropertyConverter<
+    public MapConfigCompositeMemberConverter<
         MapConfigRange,
         (int Low, int High)
     > PriorityConverter { get; } =

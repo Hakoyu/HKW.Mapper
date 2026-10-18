@@ -14,6 +14,15 @@ internal partial class Generator : IIncrementalGenerator
         GeneratorHelper.Initialize();
         var mapTargetCandidates = GetCandidates(context, typeof(MapTargetAttribute).GetFullName());
         var mapSourceCandidates = GetCandidates(context, typeof(MapSourceAttribute).GetFullName());
+        var mapSourceConstructorCandidates = GetCandidates(
+            context,
+            typeof(MapSourceConstructorAttribute).GetFullName()
+        );
+
+        context.RegisterSourceOutput(
+            mapSourceConstructorCandidates,
+            static (spc, candidates) => ValidateMapSourceConstructors(spc, candidates)
+        );
 
         context.RegisterSourceOutput(
             context.CompilationProvider.Combine(mapTargetCandidates.Combine(mapSourceCandidates)),
@@ -146,6 +155,54 @@ internal partial class Generator : IIncrementalGenerator
         && candidate.Symbol.TypeParameters.Length == 0
         && candidate.Symbol.IsStatic
         && candidate.Syntax.Modifiers.Any(SyntaxKind.PartialKeyword);
+
+    private static void ValidateMapSourceConstructors(
+        SourceProductionContext context,
+        ImmutableArray<Candidate> candidates
+    )
+    {
+        foreach (var candidate in candidates)
+        {
+            var constructors = candidate.Symbol.GetAttributes()
+                .Where(x =>
+                    x.AttributeClass?.GetGlobalFullName()
+                    == TypeFullNames.MapSourceConstructorAttribute
+                )
+                .ToArray();
+            var mapSources = candidate.Symbol.GetAttributes()
+                .Where(x => x.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapSourceAttribute)
+                .ToArray();
+            if (IsValidMapSourceContainer(candidate) is false || mapSources.Length == 0)
+            {
+                foreach (var constructor in constructors)
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            Descriptors.InvalidMapSourceConstructorContainer,
+                            GetLocation(constructor)
+                        )
+                    );
+                continue;
+            }
+
+            var sourceTypes = new HashSet<INamedTypeSymbol>(
+                mapSources.Select(GetSourceType).OfType<INamedTypeSymbol>(),
+                SymbolEqualityComparer.Default
+            );
+            foreach (var constructor in constructors)
+            {
+                var sourceType = GetSourceType(constructor);
+                if (sourceType is not null && sourceTypes.Contains(sourceType))
+                    continue;
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Descriptors.MapSourceConstructorSourceNotFound,
+                        GetLocation(constructor),
+                        sourceType?.GetName() ?? string.Empty
+                    )
+                );
+            }
+        }
+    }
 
     private static INamedTypeSymbol? GetSourceType(AttributeData attribute) =>
         attribute.ConstructorArguments.FirstOrDefault().Value as INamedTypeSymbol;

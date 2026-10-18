@@ -16,6 +16,8 @@ internal static class TypeFullNames
         typeof(MapSourceAttribute).GetGlobalFullName();
     public static string MapConstructorAttribute { get; } =
         typeof(MapConstructorAttribute).GetGlobalFullName();
+    public static string MapSourceConstructorAttribute { get; } =
+        typeof(MapSourceConstructorAttribute).GetGlobalFullName();
     public static string MapIgnorePropertyAttribute { get; } =
         typeof(MapIgnorePropertyAttribute).GetGlobalFullName();
     public static string MapPropertyAttribute { get; } =
@@ -28,19 +30,15 @@ internal static class TypeFullNames
     public static string MapCompositeFieldAttribute { get; } =
         typeof(MapCompositeFieldAttribute).GetGlobalFullName();
 
-    public static string MapConfigClass { get; } = typeof(MapperConfig<,>).GetGlobalFullName();
+    public static string MapConfigClass { get; } = typeof(MapperConfigBase<,>).GetGlobalFullName();
     public static string MapConverterInterface { get; } =
         typeof(IMapConverter<,>).GetGlobalFullName();
     public static string MapCompositeConverterInterface { get; } =
         typeof(IMapCompositeConverter<,>).GetGlobalFullName();
-    public static string MapConfigPropertyConverter { get; } =
-        typeof(MapConfigPropertyConverter<,>).GetGlobalFullName();
-    public static string MapConfigPropertyCompositeConverter { get; } =
-        typeof(MapConfigCompositePropertyConverter<,>).GetGlobalFullName();
-    public static string MapConfigFieldConverter { get; } =
-        typeof(MapConfigFieldConverter<,>).GetGlobalFullName();
-    public static string MapConfigFieldCompositeConverter { get; } =
-        typeof(MapConfigCompositeFieldConverter<,>).GetGlobalFullName();
+    public static string MapConfigMemberConverter { get; } =
+        typeof(MapConfigMemberConverter<,>).GetGlobalFullName();
+    public static string MapConfigCompositeMemberConverter { get; } =
+        typeof(MapConfigCompositeMemberConverter<,>).GetGlobalFullName();
 
     public static string MapToConfigActionAttribute { get; } =
         typeof(MapToConfigActionAttribute).GetGlobalFullName();

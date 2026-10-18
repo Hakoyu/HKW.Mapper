@@ -48,8 +48,9 @@ public sealed class ConstructorAndImmutableTests
     [TestMethod]
     public void RequiredSettableMemberIsInitializedDuringCreation()
     {
-        var target = new RequiredSettableSource { Name = "required" }
-            .MapTo((RequiredSettableTarget?)null);
+        var target = new RequiredSettableSource { Name = "required" }.MapTo(
+            (RequiredSettableTarget?)null
+        );
 
         Assert.AreEqual("required", target.Name);
     }
@@ -57,8 +58,10 @@ public sealed class ConstructorAndImmutableTests
     [TestMethod]
     public void TargetNameSelectsConstructorOverload()
     {
-        var target = new NamedConstructorSource { Value = 5 }
-            .MapToAlias((NamedConstructorTarget?)null, "tag");
+        var target = new NamedConstructorSource { Value = 5 }.MapToAlias(
+            (NamedConstructorTarget?)null,
+            "tag"
+        );
 
         Assert.AreEqual("tag", target.Tag);
         Assert.AreEqual(5, target.Value);
@@ -67,8 +70,10 @@ public sealed class ConstructorAndImmutableTests
     [TestMethod]
     public async Task ConstructorOverloadPreservesAsyncConfigActions()
     {
-        var target = await new AsyncConstructorSource { Value = 6 }
-            .MapToAsync((AsyncConstructorTarget?)null, 11);
+        var target = await new AsyncConstructorSource { Value = 6 }.MapToAsync(
+            (AsyncConstructorTarget?)null,
+            11
+        );
 
         Assert.AreEqual(11, target.Seed);
         Assert.AreEqual(6, target.Value);
@@ -86,8 +91,9 @@ public sealed class ConstructorAndImmutableTests
         structSource.MapFrom(new StructMappingTarget { Value = 9 });
         Assert.AreEqual(9, structSource.Value);
 
-        var recordStructTarget = new RecordStructSource { Value = 14 }
-            .MapTo(default(RecordStructTarget));
+        var recordStructTarget = new RecordStructSource { Value = 14 }.MapTo(
+            default(RecordStructTarget)
+        );
         Assert.AreEqual(14, recordStructTarget.Value);
     }
 
@@ -137,8 +143,7 @@ public sealed class ConstructorAndImmutableTests
     [TestMethod]
     public void ImmutableCollectionCanInitializeInitOnlyTargetMember()
     {
-        var target = new InitImmutableSource { Items = [4, 5] }
-            .MapTo((InitImmutableTarget?)null);
+        var target = new InitImmutableSource { Items = [4, 5] }.MapTo((InitImmutableTarget?)null);
 
         CollectionAssert.AreEqual(new[] { 4, 5 }, target.Items.ToArray());
     }
@@ -194,7 +199,11 @@ public sealed class NamedConstructorTarget(string tag)
     public int Value { get; set; }
 }
 
-[MapTarget(typeof(AsyncConstructorTarget), typeof(AsyncConstructorConfig), Direction = MapDirections.To)]
+[MapTarget(
+    typeof(AsyncConstructorTarget),
+    typeof(AsyncConstructorConfig),
+    Direction = MapDirections.To
+)]
 [MapConstructor(typeof(AsyncConstructorTarget), typeof(int))]
 public sealed class AsyncConstructorSource
 {
@@ -209,7 +218,7 @@ public sealed class AsyncConstructorTarget(int seed)
 }
 
 public sealed class AsyncConstructorConfig
-    : MapperConfig<AsyncConstructorSource, AsyncConstructorTarget>
+    : MapperConfigBase<AsyncConstructorSource, AsyncConstructorTarget>
 {
     public AsyncConstructorConfig(AsyncConstructorSource source, AsyncConstructorTarget target)
         : base(source, target) { }
@@ -270,7 +279,10 @@ public sealed class ImmutableCollectionSource
     [MapProperty(typeof(ImmutableCollectionTarget), nameof(ImmutableCollectionTarget.Dictionary))]
     public Dictionary<string, int> Pairs { get; set; } = [];
 
-    [MapProperty(typeof(ImmutableCollectionTarget), nameof(ImmutableCollectionTarget.FrozenDictionary))]
+    [MapProperty(
+        typeof(ImmutableCollectionTarget),
+        nameof(ImmutableCollectionTarget.FrozenDictionary)
+    )]
     public Dictionary<string, int> FrozenPairs { get; set; } = [];
 }
 
@@ -301,7 +313,9 @@ public sealed class ImmutableCollectionTarget
     public ImmutableArray<int> Array { get; set; }
     public ImmutableList<int> List { get; set; } = [];
     public ImmutableHashSet<int> Set { get; set; } = [];
-    public ImmutableDictionary<string, int> Dictionary { get; set; } = ImmutableDictionary<string, int>.Empty;
+    public ImmutableDictionary<string, int> Dictionary { get; set; } =
+        ImmutableDictionary<string, int>.Empty;
     public FrozenSet<int> FrozenSet { get; set; } = System.Array.Empty<int>().ToFrozenSet();
-    public FrozenDictionary<string, int> FrozenDictionary { get; set; } = new Dictionary<string, int>().ToFrozenDictionary();
+    public FrozenDictionary<string, int> FrozenDictionary { get; set; } =
+        new Dictionary<string, int>().ToFrozenDictionary();
 }

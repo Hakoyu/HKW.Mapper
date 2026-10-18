@@ -27,7 +27,12 @@ public sealed class MapSourceTests
     [TestMethod]
     public void SupportsMapTargetOptionsAndSourceMemberMetadata()
     {
-        var source = new ConfiguredExternalSource { Value = 3, Ignored = 4, Field = 5 };
+        var source = new ConfiguredExternalSource
+        {
+            Value = 3,
+            Ignored = 4,
+            Field = 5,
+        };
         var target = new ConfiguredExternalTarget { Ignored = 40 };
 
         source.MapToConfigured(target);
@@ -73,6 +78,30 @@ public sealed class MapSourceTests
 
         Assert.AreEqual(13, target.Items.Single().Value);
     }
+
+    [TestMethod]
+    public void SelectsMapSourceConstructorByTargetType()
+    {
+        var target = new ExternalConstructorSource { Value = 21 }.MapTo(
+            (ExternalConstructorTarget?)null,
+            8
+        );
+
+        Assert.AreEqual(8, target.Seed);
+        Assert.AreEqual(21, target.Value);
+    }
+
+    [TestMethod]
+    public void SelectsMapSourceConstructorByTargetName()
+    {
+        var target = new NamedExternalConstructorSource { Value = 34 }.MapToExternalAlias(
+            (NamedExternalConstructorTarget?)null,
+            "tag"
+        );
+
+        Assert.AreEqual("tag", target.Tag);
+        Assert.AreEqual(34, target.Value);
+    }
 }
 
 [MapSource(typeof(ExternalMapSource), typeof(ExternalMapTarget))]
@@ -84,10 +113,39 @@ public sealed class MapSourceTests
     MapFields = true,
     IgnoreProperties = [nameof(ConfiguredExternalSource.Ignored)]
 )]
-[MapSource(typeof(KeyValuePair<string, int>), typeof(ExternalKeyValueTarget), Direction = MapDirections.To)]
-[MapSource(typeof(ConfigExternalSource), typeof(ConfigExternalTarget), typeof(ConfigExternalMapperConfig))]
+[MapSource(
+    typeof(KeyValuePair<string, int>),
+    typeof(ExternalKeyValueTarget),
+    Direction = MapDirections.To
+)]
+[MapSource(
+    typeof(ConfigExternalSource),
+    typeof(ConfigExternalTarget),
+    typeof(ConfigExternalMapperConfig)
+)]
 [MapSource(typeof(ExternalCollectionItemSource), typeof(ExternalCollectionItemTarget))]
-[MapSource(typeof(ExternalCollectionSource), typeof(ExternalCollectionTarget), Direction = MapDirections.To)]
+[MapSource(
+    typeof(ExternalCollectionSource),
+    typeof(ExternalCollectionTarget),
+    Direction = MapDirections.To
+)]
+[MapSource(
+    typeof(ExternalConstructorSource),
+    typeof(ExternalConstructorTarget),
+    Direction = MapDirections.To
+)]
+[MapSource(
+    typeof(NamedExternalConstructorSource),
+    typeof(NamedExternalConstructorTarget),
+    TargetName = "ExternalAlias",
+    Direction = MapDirections.To
+)]
+[MapSourceConstructor(
+    typeof(ExternalConstructorSource),
+    typeof(ExternalConstructorTarget),
+    typeof(int)
+)]
+[MapSourceConstructor(typeof(NamedExternalConstructorSource), "ExternalAlias", typeof(string))]
 public static partial class ExternalMappings;
 
 public sealed class ExternalMapSource
@@ -137,7 +195,7 @@ public sealed class ConfigExternalTarget
 }
 
 public sealed class ConfigExternalMapperConfig
-    : MapperConfig<ConfigExternalSource, ConfigExternalTarget>
+    : MapperConfigBase<ConfigExternalSource, ConfigExternalTarget>
 {
     public ConfigExternalMapperConfig(ConfigExternalSource source, ConfigExternalTarget target)
         : base(source, target) { }
@@ -160,5 +218,27 @@ public sealed class ExternalCollectionItemSource
 
 public sealed class ExternalCollectionItemTarget
 {
+    public int Value { get; set; }
+}
+
+public sealed class ExternalConstructorSource
+{
+    public int Value { get; set; }
+}
+
+public sealed class ExternalConstructorTarget(int seed)
+{
+    public int Seed { get; } = seed;
+    public int Value { get; set; }
+}
+
+public sealed class NamedExternalConstructorSource
+{
+    public int Value { get; set; }
+}
+
+public sealed class NamedExternalConstructorTarget(string tag)
+{
+    public string Tag { get; } = tag;
     public int Value { get; set; }
 }

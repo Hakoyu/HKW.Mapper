@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -401,12 +401,12 @@ public sealed class ConfigFieldTarget
     public int High;
 }
 
-public sealed class ConfigFieldMap : MapperConfig<ConfigFieldSource, ConfigFieldTarget>
+public sealed class ConfigFieldMap : MapperConfigBase<ConfigFieldSource, ConfigFieldTarget>
 {
     public ConfigFieldMap(ConfigFieldSource source, ConfigFieldTarget target)
         : base(source, target) { }
 
-    public MapConfigFieldConverter<int, string> NumberConverter { get; } =
+    public MapConfigMemberConverter<int, string> NumberConverter { get; } =
         new(
             nameof(ConfigFieldSource.Number),
             nameof(ConfigFieldTarget.Text),
@@ -414,7 +414,7 @@ public sealed class ConfigFieldMap : MapperConfig<ConfigFieldSource, ConfigField
             (value, _) => int.Parse(value[6..])
         );
 
-    public MapConfigCompositeFieldConverter<
+    public MapConfigCompositeMemberConverter<
         FieldRange,
         (int Low, int High)
     > RangeConverter { get; } =

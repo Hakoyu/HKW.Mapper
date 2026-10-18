@@ -62,7 +62,7 @@ internal sealed class ConverterMappingProcessor
         );
     }
 
-    internal bool TryUseConfigPropertyConverter(
+    internal bool TryUseConfigMemberConverter(
         MapTargetInfo mapTarget,
         MapMemberInfo propertySymbol,
         MapMemberInfo targetProperty
@@ -71,7 +71,6 @@ internal sealed class ConverterMappingProcessor
         if (
             mapTarget.ConfigInfo?.Converters.TryGetValue(propertySymbol.Name, out var data)
                 is not true
-            || data.IsFieldConverter != propertySymbol.IsField
         )
             return false;
 

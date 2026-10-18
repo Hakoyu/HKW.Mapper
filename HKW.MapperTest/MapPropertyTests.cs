@@ -1,4 +1,4 @@
-using HKW.Mapper;
+﻿using HKW.Mapper;
 
 namespace HKW.MapperTest;
 
@@ -96,14 +96,8 @@ public sealed class MapPropertyTests
 
         Assert.AreEqual("Primary", target.Name);
         Assert.AreEqual("31", target.Text);
-        Assert.AreEqual(
-            "Profile.Name",
-            MptFixtureSourcePathNameConverter.LastSourcePropertyName
-        );
-        Assert.AreEqual(
-            "Number.Value",
-            MptFixtureSourcePathNumberConverter.LastSourcePropertyName
-        );
+        Assert.AreEqual("Profile.Name", MptFixtureSourcePathNameConverter.LastSourcePropertyName);
+        Assert.AreEqual("Number.Value", MptFixtureSourcePathNumberConverter.LastSourcePropertyName);
 
         target.Name = "Returned";
         target.Text = "37";
@@ -111,23 +105,14 @@ public sealed class MapPropertyTests
 
         Assert.AreEqual("Returned", source.Profile.Name);
         Assert.AreEqual(37, source.Number.Value);
-        Assert.AreEqual(
-            "Profile.Name",
-            MptFixtureSourcePathNameConverter.LastSourcePropertyName
-        );
-        Assert.AreEqual(
-            "Number.Value",
-            MptFixtureSourcePathNumberConverter.LastSourcePropertyName
-        );
+        Assert.AreEqual("Profile.Name", MptFixtureSourcePathNameConverter.LastSourcePropertyName);
+        Assert.AreEqual("Number.Value", MptFixtureSourcePathNumberConverter.LastSourcePropertyName);
     }
 
     [TestMethod]
     public void SourcePathKeepsAnnotatedMemberAsDefaultTargetName()
     {
-        var source = new MptFixtureSourcePathDefaultSource
-        {
-            Node = new() { Value = "Mapped" },
-        };
+        var source = new MptFixtureSourcePathDefaultSource { Node = new() { Value = "Mapped" } };
         var target = new MptFixtureSourcePathDefaultTarget();
 
         source.MapTo(target);
@@ -308,7 +293,10 @@ public sealed class MptFixtureTargetNameTarget
 [MapTarget(typeof(MptFixtureTypePropertyNameTarget))]
 public sealed class MptFixtureTypePropertyNameSource
 {
-    [MapProperty(typeof(MptFixtureTypePropertyNameTarget), nameof(MptFixtureTypePropertyNameTarget.Renamed))]
+    [MapProperty(
+        typeof(MptFixtureTypePropertyNameTarget),
+        nameof(MptFixtureTypePropertyNameTarget.Renamed)
+    )]
     public int Original { get; set; }
 }
 
@@ -506,7 +494,7 @@ public sealed class MptFixtureConfigPathNode
 }
 
 public sealed class MptFixtureConfigPathMap
-    : MapperConfig<MptFixtureConfigPathSource, MptFixtureConfigPathTarget>
+    : MapperConfigBase<MptFixtureConfigPathSource, MptFixtureConfigPathTarget>
 {
     public MptFixtureConfigPathMap(
         MptFixtureConfigPathSource source,
@@ -516,7 +504,7 @@ public sealed class MptFixtureConfigPathMap
 
     public static string? LastTargetPropertyName { get; private set; }
 
-    public MapConfigPropertyConverter<int, string> ValueConverter { get; } =
+    public MapConfigMemberConverter<int, string> ValueConverter { get; } =
         new(
             nameof(MptFixtureConfigPathSource.Value),
             "Node.Text",

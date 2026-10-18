@@ -133,7 +133,7 @@ internal sealed class MemberMappingProcessor
             );
         }
         if (
-            _composites.TryUseConfigCompositePropertyConverter(
+            _composites.TryUseConfigCompositeMemberConverter(
                 mapTarget,
                 propertySymbol,
                 targetCompositeAttributes.Length == 1
@@ -189,7 +189,6 @@ internal sealed class MemberMappingProcessor
         if (
             mapTarget.ConfigInfo?.Converters.TryGetValue(propertySymbol.Name, out var configData)
                 is true
-            && configData.IsFieldConverter == isField
         )
         {
             targetPropertyName = configData.TargetName;
@@ -277,7 +276,7 @@ internal sealed class MemberMappingProcessor
         var mapToContentStart = mapTarget.MapToMethod.Contents.Count;
         var mapFromContentStart = mapTarget.MapFromMethod.Contents.Count;
         _actions.AddBeforePropertyAction(mapTarget, propertySymbol);
-        if (_converters.TryUseConfigPropertyConverter(mapTarget, sourceProperty, targetProperty))
+        if (_converters.TryUseConfigMemberConverter(mapTarget, sourceProperty, targetProperty))
         {
             if (
                 attributeInfo?.TryGetParam<INamedTypeSymbol>(
@@ -445,13 +444,8 @@ internal sealed class MemberMappingProcessor
     {
         if (mapTarget.ConfigInfo is null)
             return false;
-        return mapTarget.ConfigInfo.Converters.TryGetValue(sourceMember.Name, out var converter)
-                && converter.IsFieldConverter == sourceMember.IsField
-            || mapTarget.ConfigInfo.CompositeConverters.TryGetValue(
-                sourceMember.Name,
-                out var composite
-            )
-                && composite.IsFieldConverter == sourceMember.IsField;
+        return mapTarget.ConfigInfo.Converters.ContainsKey(sourceMember.Name)
+            || mapTarget.ConfigInfo.CompositeConverters.ContainsKey(sourceMember.Name);
     }
 
     private static void TrackIgnoredRequiredTargetMember(
