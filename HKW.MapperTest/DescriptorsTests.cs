@@ -1323,6 +1323,76 @@ public sealed class DescriptorsTests
         );
     }
 
+    [TestMethod]
+    public void MAP0047_ReportsInvalidMapSourceContainers()
+    {
+        const string source = """
+            using HKW.Mapper;
+
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+
+            [MapSource(typeof(Source), typeof(Target))]
+            public partial class NotStatic;
+
+            [MapSource(typeof(Source), typeof(Target))]
+            public static class NotPartial;
+
+            [MapSource(typeof(Source), typeof(Target))]
+            public static partial class Generic<T>;
+
+            public sealed class Outer
+            {
+                [MapSource(typeof(Source), typeof(Target))]
+                public static partial class Nested;
+            }
+            """;
+
+        var diagnostics = RunGenerator(source).Where(x => x.Id == "MAP0047").ToArray();
+
+        Assert.AreEqual(4, diagnostics.Length);
+        Assert.IsTrue(diagnostics.All(x => x.Severity == DiagnosticSeverity.Error));
+    }
+
+    [TestMethod]
+    public void MAP0048_ReportsMapSourceConflictWithMapTarget()
+    {
+        AssertDiagnostic(
+            "MAP0048",
+            DiagnosticSeverity.Error,
+            "MapSource",
+            ["Target", "Source", "already declared"],
+            """
+            [MapTarget(typeof(Target))]
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class Target { public int Value { get; set; } }
+
+            [MapSource(typeof(Source), typeof(Target))]
+            public static partial class Mappings;
+            """
+        );
+    }
+
+    [TestMethod]
+    public void MAP0048_ReportsDuplicateMapSourceTargetName()
+    {
+        AssertDiagnostic(
+            "MAP0048",
+            DiagnosticSeverity.Error,
+            "MapSource",
+            ["Same", "Source", "already declared"],
+            """
+            public sealed class Source { public int Value { get; set; } }
+            public sealed class TargetA { public int Value { get; set; } }
+            public sealed class TargetB { public int Value { get; set; } }
+
+            [MapSource(typeof(Source), typeof(TargetA), TargetName = "Same")]
+            [MapSource(typeof(Source), typeof(TargetB), TargetName = "Same")]
+            public static partial class Mappings;
+            """
+        );
+    }
+
     private static string Basic(
         string sourceProperty,
         string targetProperty,

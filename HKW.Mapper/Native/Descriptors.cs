@@ -384,4 +384,20 @@ internal static class Descriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+    public static readonly DiagnosticDescriptor InvalidMapSourceContainer = new(
+        id: "MAP0047",
+        title: "Invalid MapSource container",
+        messageFormat: "MapSource must be declared on a top-level, non-generic static partial class.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+    public static readonly DiagnosticDescriptor DuplicateMapSourceTargetName = new(
+        id: "MAP0048",
+        title: "Duplicate MapSource target name",
+        messageFormat: "MapSource target name '{0}' is already declared for source type '{1}'. Remove the duplicate declaration or use a different target name.",
+        category: _category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

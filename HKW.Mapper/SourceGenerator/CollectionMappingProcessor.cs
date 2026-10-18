@@ -579,20 +579,21 @@ internal sealed class CollectionMappingProcessor
             (canMapTo || canMapFrom)
             && targetType is INamedTypeSymbol namedTarget
             && namedTarget.InstanceConstructors.Any(c =>
-                c.Parameters.Length == 0 && c.DeclaredAccessibility >= Accessibility.Internal
+                c.Parameters.Length == 0
+                && nested!.ClassInfo.IsMappableMember(c)
             )
         )
         {
             var nestedTarget = nested!;
-            var extensionType = nestedTarget.SourceType.GetFullName().ReplaceDotToUnderline();
+            var extensionType = nestedTarget.ClassInfo.ExtensionClassFullName;
             mapping = new(
                 canMapTo
                     ? value =>
-                        $"global::HKW.Mapper.{extensionType}MapExtensions.{nestedTarget.MapToName}({value}, new {targetType.GetGlobalFullName()}())"
+                        $"{extensionType}.{nestedTarget.MapToName}({value}, new {targetType.GetGlobalFullName()}())"
                     : null,
                 canMapFrom
                     ? value =>
-                        $"global::HKW.Mapper.{extensionType}MapExtensions.{nestedTarget.MapFromName}(new {sourceType.GetGlobalFullName()}(), {value})"
+                        $"{extensionType}.{nestedTarget.MapFromName}(new {sourceType.GetGlobalFullName()}(), {value})"
                     : null,
                 canMapTo,
                 canMapFrom

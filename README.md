@@ -64,6 +64,33 @@ public sealed class User
 
 此时生成的方法名为 `MapToUser` 和 `MapFromUser`。同一个源类型可以通过多个 `[MapTargetAttribute]` 映射到多个目标类型，但每个 `TargetName` 必须不同。
 
+### 在源类型外声明映射
+
+当源类型无法直接添加特性时，可以把 `[MapSourceAttribute]` 标记在顶级、非泛型的 `static partial class` 上。前两个参数分别是源类型和目标类型，生成的扩展方法及辅助字段会直接加入该类：
+
+```csharp
+[MapSource(typeof(User), typeof(UserDto))]
+public static partial class UserMappings;
+
+var dto = user.MapTo(new UserDto());
+// 也可以直接调用 UserMappings.MapTo(user, new UserDto())
+```
+
+`MapSourceAttribute` 支持 `MapTargetAttribute` 的全部选项，包括可选的第三个映射配置类型、`TargetName`、`Direction`、`MapFields`、父成员映射和忽略列表。`MapProperty`、`MapField`、`MapConstructor` 等配置仍声明在源类型上并会被读取：
+
+```csharp
+[MapSource(
+    typeof(User),
+    typeof(UserDto),
+    typeof(UserMapperConfig),
+    TargetName = "Api",
+    Direction = MapDirections.To
+)]
+public static partial class UserMappings;
+```
+
+同一源类型的所有 `[MapTarget]` 和 `[MapSource]` 共享目标名称空间。若 `[MapSource]` 的 `TargetName` 与已有声明相同，生成器会在该 `[MapSource]` 上报告错误；例如源类型上的 `[MapTarget(typeof(UserDto))]` 与外部的 `[MapSource(typeof(User), typeof(UserDto))]` 不能同时存在。
+
 ## 构造函数与创建式映射
 
 目标具有可访问的无参构造函数时，现有写入式方法同时接受 nullable 目标：传入非 null 实例时保持原地写入，传入 null 时创建目标。需要调用有参构造函数时，在源类型上用可重复的 `[MapConstructor]` 精确声明目标与参数类型：
@@ -144,7 +171,7 @@ public sealed class UserMapperConfig : MapperConfig<User, UserDto>
 
 ### 重命名属性
 
-使用固定的公共 `[MapPropertyAttribute]` 配置目标类型或目标名称，不再生成专用属性特性：
+使用固定的公共 `[MapPropertyAttribute]` 配置目标类型或目标名称：
 
 ```text
 [MapProperty(typeof(UserDto), "Name")]
@@ -491,37 +518,6 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 ## 映射方向和边界
 
 可以通过 `[MapTarget(typeof(UserDto), Direction = MapDirections.To)]` 只生成源到目标方法，也可以使用 `MapDirections.From` 或默认的 `MapDirections.Both`。数组、`IList<T>`、`IDictionary<TKey, TValue>` 和 `ISet<T>` 会分别生成专用映射代码；集合目标需要可写、可清空并支持添加元素。嵌套对象要求子类型存在对应的 `[MapTarget]` 映射，并且目标可无参初始化；嵌套映射的 To/From 方向分别检查。多态映射仅对编译期已声明的具体源/目标映射生成分派代码，不会通过反射发现未知派生类型。
-
-## 性能基准
-
-`HKW.Mapper.Benchmark` 使用 BenchmarkDotNet 对比 HKW.Mapper 编译期生成代码与 Mapster 默认 `Adapt` 路径，包含以下场景：
-
-- `Flat`：只包含标量属性的扁平对象
-- `Complex`：嵌套对象、数组、集合以及成员扁平化
-- `Recursive`：递归对象、递归集合和值类型集合
-- `Total`：依次执行以上三种映射
-
-两种映射器使用相同的输入对象并创建新的目标对象。Mapster 会在 `GlobalSetup` 中完成首次表达式编译，因此测量结果表示预热后的稳态性能，不包含 Mapster 的首次编译成本。Setup 还会验证关键值、集合数量和深拷贝结果，防止比较不同的映射语义。
-
-运行完整的短作业基准：
-
-```powershell
-dotnet run --configuration Release --project .\HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj -- --filter "*MappingBenchmark*"
-```
-
-快速验证全部基准是否能够运行：
-
-```powershell
-dotnet run --configuration Release --project .\HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj -- --filter "*MappingBenchmark*" --job Dry
-```
-
-只运行扁平对象场景：
-
-```powershell
-dotnet run --configuration Release --project .\HKW.Mapper.Benchmark\HKW.Mapper.Benchmark.csproj -- --filter "*FlatMappingBenchmark*"
-```
-
-报告会导出为 Markdown、CSV 和 HTML，并包含 `Ns/Map`、`Bytes/Map`、耗时比率和内存比率。结果位于 `BenchmarkDotNet.Artifacts`。基准数字取决于 CPU、运行时版本、操作系统和对象形状，不应直接推广到其他应用负载。
 
 ## 从源码构建
 

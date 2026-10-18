@@ -33,13 +33,24 @@ internal class ClassSourceWriter
         // 添加全部引用
         //_writer.WriteLine(_classInfo.Usings);
         // 添加命名空间
-        _writer.WriteLine($"namespace HKW.Mapper");
-        _writer.WriteLine("{");
-        _writer.Indent++;
+        var outputNamespace = _classInfo.UsesExternalContainer
+            ? _classInfo.OutputContainerSymbol!.ContainingNamespace.ToDisplayString()
+            : "HKW.Mapper";
+        var hasNamespace = string.IsNullOrEmpty(outputNamespace) is false;
+        if (hasNamespace)
+        {
+            _writer.WriteLine($"namespace {outputNamespace}");
+            _writer.WriteLine("{");
+            _writer.Indent++;
+        }
         // 获取可访问性
-        var accessibility = _classInfo.ClassSyntax.Modifiers.GetAccessibility();
+        var declarationSyntax = _classInfo.OutputContainerSyntax ?? _classInfo.ClassSyntax!;
+        var accessibility = declarationSyntax.Modifiers.GetAccessibility();
+        var className = _classInfo.UsesExternalContainer
+            ? _classInfo.OutputContainerSymbol!.Name
+            : $"{_classInfo.ClassSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat).Replace('.', '_')}MapExtensions";
         _writer.WriteLine(
-            $"{accessibility} static class {_classInfo.ClassSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat).Replace('.', '_')}MapExtensions"
+            $"{accessibility} static {(_classInfo.UsesExternalContainer ? "partial " : string.Empty)}class {className}"
         );
         _writer.WriteLine("{");
         _writer.Indent++;
@@ -63,10 +74,16 @@ internal class ClassSourceWriter
         _writer.Indent--;
         _writer.WriteLine();
         _writer.WriteLine("}");
-        _writer.Indent--;
-        _writer.WriteLine("}");
+        if (hasNamespace)
+        {
+            _writer.Indent--;
+            _writer.WriteLine("}");
+        }
+        var hintName = _classInfo.UsesExternalContainer
+            ? $"{_classInfo.OutputContainerSymbol!.GetFullName()}_{_classInfo.ClassSymbol.GetFullName()}MapExtensions.g.cs"
+            : $"{_classInfo.FullTypeName}MapExtensions.g.cs";
         _classInfo.ProductionContext.AddSource(
-            $"{_classInfo.FullTypeName.ReplaceBraces()}MapExtensions.g.cs",
+            hintName.ReplaceBraces().Replace('<', '_').Replace('>', '_'),
             ((StringWriter)_writer.InnerWriter).ToString()
         );
     }

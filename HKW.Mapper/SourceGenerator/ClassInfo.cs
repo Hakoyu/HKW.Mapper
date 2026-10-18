@@ -11,15 +11,19 @@ internal class ClassInfo
     public ClassInfo(
         SourceProductionContext productionContext,
         Compilation compilation,
-        TypeDeclarationSyntax classSyntax,
+        TypeDeclarationSyntax? classSyntax,
         INamedTypeSymbol classSymbol,
-        List<AttributeData> attributeDatas
+        List<AttributeData> attributeDatas,
+        INamedTypeSymbol? outputContainerSymbol = null,
+        TypeDeclarationSyntax? outputContainerSyntax = null
     )
     {
         ProductionContext = productionContext;
         Compilation = compilation;
         ClassSyntax = classSyntax;
         ClassSymbol = classSymbol;
+        OutputContainerSymbol = outputContainerSymbol;
+        OutputContainerSyntax = outputContainerSyntax;
         Name = classSymbol.Name;
         Namespace = classSymbol.ContainingNamespace.ToString();
 
@@ -46,7 +50,7 @@ internal class ClassInfo
             var propertySymbol in classSymbol
                 .GetMembers()
                 .OfType<IPropertySymbol>()
-                .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+                .Where(IsMappableMember)
         )
         {
             if (propertySymbol.IsStatic)
@@ -74,7 +78,7 @@ internal class ClassInfo
                     foreach (
                         var propertySymbol in type.GetMembers()
                             .OfType<IPropertySymbol>()
-                            .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+                            .Where(IsMappableMember)
                     )
                     {
                         if (
@@ -105,11 +109,17 @@ internal class ClassInfo
     public SourceProductionContext ProductionContext { get; }
     public string Namespace { get; }
     public string Name { get; }
-    public string TypeName => $"{Name}{ClassSyntax.TypeParameterList}";
-    public string FullName => $"{Namespace}.{Name}";
-    public string FullTypeName => $"{Namespace}.{Name}{ClassSyntax.TypeParameterList}";
-    public TypeDeclarationSyntax ClassSyntax { get; }
-    public INamedTypeSymbol ClassSymbol { get; private set; }
+    public string TypeName => ClassSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+    public string FullName => ClassSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+    public string FullTypeName => FullName;
+    public TypeDeclarationSyntax? ClassSyntax { get; }
+    public INamedTypeSymbol ClassSymbol { get; }
+    public INamedTypeSymbol? OutputContainerSymbol { get; }
+    public TypeDeclarationSyntax? OutputContainerSyntax { get; }
+    public bool UsesExternalContainer => OutputContainerSymbol is not null;
+    public string ExtensionClassFullName => UsesExternalContainer
+        ? OutputContainerSymbol!.GetGlobalFullName()
+        : $"global::HKW.Mapper.{ClassSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat).Replace('.', '_')}MapExtensions";
 
     public HashSet<MapTargetInfo> MapTargets { get; } = [];
 
@@ -121,11 +131,16 @@ internal class ClassInfo
     public List<FieldGenerateInfo> MapConverters { get; } = [];
     public List<FieldGenerateInfo> MapConfigs { get; } = [];
 
-    private static bool IsMappableField(IFieldSymbol field) =>
+    internal bool IsMappableMember(ISymbol member) =>
+        UsesExternalContainer
+            ? Compilation.IsSymbolAccessibleWithin(member, OutputContainerSymbol!)
+            : member.DeclaredAccessibility >= Accessibility.Internal;
+
+    private bool IsMappableField(IFieldSymbol field) =>
         field.IsStatic is false
         && field.IsConst is false
         && field.IsImplicitlyDeclared is false
-        && field.DeclaredAccessibility >= Accessibility.Internal;
+        && IsMappableMember(field);
 
     private void ResolveMapConstructors()
     {
@@ -230,7 +245,10 @@ internal class ClassInfo
     public void AddConverters(INamedTypeSymbol typeSymbol, out string fieldName)
     {
         var typeFullName = typeSymbol.GetGlobalFullName();
-        var baseFieldName = "_" + typeSymbol.Name.FirstLetterToLower();
+        var baseFieldName =
+            "_"
+            + (UsesExternalContainer ? ClassSymbol.Name.FirstLetterToLower() + "_" : string.Empty)
+            + typeSymbol.Name.FirstLetterToLower();
         fieldName = baseFieldName;
         var count = 0;
         foreach (var converter in MapConverters)
@@ -264,6 +282,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
     )
 #pragma warning restore CS8618, S3776
     {
+        ClassInfo = classInfo;
         SourceType = sourceType;
         MapTargetLocation =
             attributeData.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
@@ -407,7 +426,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
             foreach (
                 var property in type.GetMembers()
                     .OfType<IPropertySymbol>()
-                    .Where(x => x.DeclaredAccessibility >= Accessibility.Internal)
+                    .Where(classInfo.IsMappableMember)
             )
                 MemberByName.TryAdd(property.Name, new(property));
         }
@@ -422,7 +441,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
                             x.IsStatic is false
                             && x.IsConst is false
                             && x.IsImplicitlyDeclared is false
-                            && x.DeclaredAccessibility >= Accessibility.Internal
+                            && classInfo.IsMappableMember(x)
                         )
                 )
                     MemberByName.TryAdd(field.Name, new(field));
@@ -474,6 +493,7 @@ internal class MapTargetInfo : IEquatable<MapTargetInfo>
         };
     }
 
+    public ClassInfo ClassInfo { get; }
     public INamedTypeSymbol SourceType { get; }
     public string TargetName { get; }
     public string MapToName =>
