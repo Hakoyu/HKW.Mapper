@@ -70,7 +70,7 @@ internal sealed class ConverterMappingProcessor
     {
         if (
             mapTarget.ConfigInfo?.Converters.TryGetValue(propertySymbol.Name, out var data)
-                is not true
+            is not true
         )
             return false;
 
@@ -101,15 +101,13 @@ internal sealed class ConverterMappingProcessor
         );
         var convertArgs =
             $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.AccessPath}\", \"{targetProperty.AccessPath}\")";
-        var convertedTargetValue =
-            $"{convertName}.{nameof(IMapConverter<,>.Convert)}({sourceValue}, {convertArgs})";
+        var convertedTargetValue = $"{convertName}.Convert({sourceValue}, {convertArgs})";
         var targetValue = ConvertExpression(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}",
             targetProperty.Type,
             converterTargetType
         );
-        var convertedSourceValue =
-            $"{convertName}.{nameof(IMapConverter<,>.ConvertBack)}({targetValue}, {convertArgs})";
+        var convertedSourceValue = $"{convertName}.ConvertBack({targetValue}, {convertArgs})";
         mapTarget.MapToMethod.Contents.Add(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );
@@ -127,10 +125,7 @@ internal sealed class ConverterMappingProcessor
     )
     {
         if (
-            attributeInfo?.TryGetParam<INamedTypeSymbol>(
-                nameof(MapPropertyAttribute.ConverterType),
-                out var converterType
-            )
+            attributeInfo?.TryGetParam<INamedTypeSymbol>("ConverterType", out var converterType)
                 is not true
             || converterType is null
         )
@@ -178,15 +173,13 @@ internal sealed class ConverterMappingProcessor
         );
         var convertArgs =
             $"new global::HKW.Mapper.MapConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.AccessPath}\", \"{targetProperty.AccessPath}\")";
-        var convertedTargetValue =
-            $"{fieldName}.{nameof(IMapConverter<,>.Convert)}({sourceValue}, {convertArgs})";
+        var convertedTargetValue = $"{fieldName}.Convert({sourceValue}, {convertArgs})";
         var targetValue = ConvertExpression(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath}",
             targetProperty.Type,
             converterTargetType
         );
-        var convertedSourceValue =
-            $"{fieldName}.{nameof(IMapConverter<,>.ConvertBack)}({targetValue}, {convertArgs})";
+        var convertedSourceValue = $"{fieldName}.ConvertBack({targetValue}, {convertArgs})";
         mapTarget.MapToMethod.Contents.Add(
             $"{MapTargetInfo.TargetParamName}.{targetProperty.AccessPath} = {ConvertExpression(convertedTargetValue, converterTargetType, targetProperty.Type)};"
         );

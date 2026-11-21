@@ -181,7 +181,12 @@ public sealed class IMapConverterTests
             new MapConfigMemberConverter<int, string>("", (_, _) => string.Empty, (_, _) => 0)
         );
         Assert.Throws<ArgumentException>(() =>
-            new MapConfigMemberConverter<int, string>("Value", " ", (_, _) => string.Empty, (_, _) => 0)
+            new MapConfigMemberConverter<int, string>(
+                "Value",
+                " ",
+                (_, _) => string.Empty,
+                (_, _) => 0
+            )
         );
     }
 

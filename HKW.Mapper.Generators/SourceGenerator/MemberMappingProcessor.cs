@@ -34,9 +34,9 @@ internal sealed class MemberMappingProcessor
     internal void ParseProperty(MapTargetInfo mapTarget, MapMemberInfo propertySymbol)
     {
         var isField = propertySymbol.IsField;
-        var ignoredByList = (isField ? mapTarget.IgnoreFields : mapTarget.IgnoreProperties).Contains(
-            propertySymbol.Name
-        );
+        var ignoredByList = (
+            isField ? mapTarget.IgnoreFields : mapTarget.IgnoreProperties
+        ).Contains(propertySymbol.Name);
         var atts = propertySymbol.GetAttributes();
         var ignoreAttributeName = isField
             ? TypeFullNames.MapIgnoreFieldAttribute
@@ -55,7 +55,9 @@ internal sealed class MemberMappingProcessor
         var propertyAttributes = atts.Where(a => a.AttributeClass!.IsName(memberAttributeName))
             .ToArray();
         var targetCompositeAttributes = compositeAttributes
-            .Where(attribute => _actions.GetCompositePropertyTargetName(attribute) == mapTarget.TargetName)
+            .Where(attribute =>
+                _actions.GetCompositePropertyTargetName(attribute) == mapTarget.TargetName
+            )
             .ToArray();
         var matchingAttributes = new List<AttributeData>();
         foreach (var attribute in propertyAttributes)
@@ -94,15 +96,15 @@ internal sealed class MemberMappingProcessor
                 || HasConfigMapping(mapTarget, propertySymbol);
             if (hasMappingConflict)
             {
-                var location =
-                    ignoreAttribute?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
-                        ignoreAttribute.ApplicationSyntaxReference.Span
-                    )
+                var location = ignoreAttribute?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
+                    ignoreAttribute.ApplicationSyntaxReference.Span
+                )
                     ?? memberIgnoreAttribute?.ApplicationSyntaxReference?.SyntaxTree.GetLocation(
                         memberIgnoreAttribute.ApplicationSyntaxReference.Span
                     )
                     ?? GetListIgnoreLocation(mapTarget, propertySymbol);
-                var conflictKey = $"{mapTarget.TargetName}:{propertySymbol.IsField}:{propertySymbol.Name}";
+                var conflictKey =
+                    $"{mapTarget.TargetName}:{propertySymbol.IsField}:{propertySymbol.Name}";
                 if (_context.ReportedIgnoreConflicts.Add(conflictKey))
                 {
                     _context.ClassInfo.ProductionContext.ReportDiagnostic(
@@ -159,7 +161,11 @@ internal sealed class MemberMappingProcessor
             return;
         if (matchingCompositeAttributes.Count == 1)
         {
-            _composites.MapCompositeProperty(mapTarget, propertySymbol, matchingCompositeAttributes[0]);
+            _composites.MapCompositeProperty(
+                mapTarget,
+                propertySymbol,
+                matchingCompositeAttributes[0]
+            );
             return;
         }
 
@@ -177,9 +183,7 @@ internal sealed class MemberMappingProcessor
 
         var attributeInfo = attributeData is null ? null : new AttributeInfo(attributeData);
 
-        var targetMemberParameter = isField
-            ? nameof(MapFieldAttribute.FieldName)
-            : nameof(MapPropertyAttribute.PropertyName);
+        var targetMemberParameter = isField ? "FieldName" : "PropertyName";
         if (
             attributeInfo?.TryGetParam<string>(targetMemberParameter, out var targetPropertyName)
             is not true
@@ -188,7 +192,7 @@ internal sealed class MemberMappingProcessor
         var hasConfigConverter = false;
         if (
             mapTarget.ConfigInfo?.Converters.TryGetValue(propertySymbol.Name, out var configData)
-                is true
+            is true
         )
         {
             targetPropertyName = configData.TargetName;
@@ -197,32 +201,28 @@ internal sealed class MemberMappingProcessor
 
         var direction = hasConfigConverter
             ? mapTarget.Direction
-            : _actions.GetEffectiveDirection(
-                mapTarget,
-                attributeInfo,
-                attributeData,
-                nameof(MapPropertyAttribute.Direction)
-            );
+            : _actions.GetEffectiveDirection(mapTarget, attributeInfo, attributeData, "Direction");
         if (direction == 0)
             return;
 
         var sourceProperty = propertySymbol;
         if (
             hasConfigConverter is false
-            && attributeInfo?.TryGetParam<string>(
-                nameof(MapPropertyAttribute.SourcePath),
-                out var sourcePath
-            )
-                is true
+            && attributeInfo?.TryGetParam<string>("SourcePath", out var sourcePath) is true
         )
         {
-            sourceProperty = _resolver.ResolveSourcePath(mapTarget, propertySymbol, sourcePath, direction);
+            sourceProperty = _resolver.ResolveSourcePath(
+                mapTarget,
+                propertySymbol,
+                sourcePath,
+                direction
+            );
             if (sourceProperty is null)
                 return;
         }
         var hasAttributeConverter =
             attributeInfo?.TryGetParam<INamedTypeSymbol>(
-                nameof(MapPropertyAttribute.ConverterType),
+                "ConverterType",
                 out var attributeConverterType
             )
                 is true
@@ -238,13 +238,10 @@ internal sealed class MemberMappingProcessor
         if (targetProperty is null)
             return;
 
-        var mapToCondition = MemberConditionBuilder.GetCondition(
-            attributeInfo,
-            nameof(MapPropertyAttribute.MapToCondition)
-        );
+        var mapToCondition = MemberConditionBuilder.GetCondition(attributeInfo, "MapToCondition");
         var mapFromCondition = MemberConditionBuilder.GetCondition(
             attributeInfo,
-            nameof(MapPropertyAttribute.MapFromCondition)
+            "MapFromCondition"
         );
         if (
             mapToCondition is not MapMemberCondition.None
@@ -269,7 +266,12 @@ internal sealed class MemberMappingProcessor
         if (
             hasConfigConverter is false
             && hasAttributeConverter is false
-            && _actions.TryReserveTargetProperties(mapTarget, sourceProperty, [targetProperty], direction)
+            && _actions.TryReserveTargetProperties(
+                mapTarget,
+                sourceProperty,
+                [targetProperty],
+                direction
+            )
                 is false
         )
             return;
@@ -279,17 +281,19 @@ internal sealed class MemberMappingProcessor
         if (_converters.TryUseConfigMemberConverter(mapTarget, sourceProperty, targetProperty))
         {
             if (
-                attributeInfo?.TryGetParam<INamedTypeSymbol>(
-                    nameof(MapPropertyAttribute.ConverterType),
-                    out var converterType
-                )
+                attributeInfo?.TryGetParam<INamedTypeSymbol>("ConverterType", out var converterType)
                     is true
                 && converterType is not null
             )
                 _actions.ReportConfigConverterOverridesAttribute(attributeData!);
         }
         else if (
-            _converters.TryUsePropertyConverter(mapTarget, sourceProperty, attributeInfo, targetProperty)
+            _converters.TryUsePropertyConverter(
+                mapTarget,
+                sourceProperty,
+                attributeInfo,
+                targetProperty
+            )
             is false
         )
         {
@@ -341,13 +345,7 @@ internal sealed class MemberMappingProcessor
         MapMemberInfo targetProperty
     )
     {
-        if (
-            attributeInfo?.TryGetParam<MapPropertyType>(
-                nameof(MapPropertyAttribute.MapType),
-                out var mapType
-            )
-            is not true
-        )
+        if (attributeInfo?.TryGetParam<MapPropertyType>("MapType", out var mapType) is not true)
             mapType = default;
 
         if (mapType is MapPropertyType.ConstructFromSelf)
@@ -432,13 +430,11 @@ internal sealed class MemberMappingProcessor
     }
 
     private static bool IsMemberIgnoreAttribute(AttributeData attribute) =>
-        attribute.NamedArguments.Any(x =>
-            x.Key == nameof(MapPropertyAttribute.Ignore) && x.Value.Value is true
-        );
+        attribute.NamedArguments.Any(x => x.Key == "Ignore" && x.Value.Value is true);
 
     private static bool HasMappingOptionsBesidesIgnore(AttributeData attribute) =>
         attribute.ConstructorArguments.Length > 1
-        || attribute.NamedArguments.Any(x => x.Key != nameof(MapPropertyAttribute.Ignore));
+        || attribute.NamedArguments.Any(x => x.Key != "Ignore");
 
     private static bool HasConfigMapping(MapTargetInfo mapTarget, MapMemberInfo sourceMember)
     {

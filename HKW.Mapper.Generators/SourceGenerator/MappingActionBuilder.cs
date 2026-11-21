@@ -201,18 +201,11 @@ internal sealed class MappingActionBuilder
     {
         var attributeInfo = attribute.GetInfo()!;
         var targetName = string.Empty;
-        if (
-            attributeInfo.TryGetParam<INamedTypeSymbol>(
-                nameof(MapPropertyAttribute.TargetType),
-                out var targetType
-            )
-        )
+        if (attributeInfo.TryGetParam<INamedTypeSymbol>("TargetType", out var targetType))
         {
             targetName = targetType.Name;
         }
-        else if (
-            attributeInfo.TryGetParam<string>(nameof(MapPropertyAttribute.TargetName), out var name)
-        )
+        else if (attributeInfo.TryGetParam<string>("TargetName", out var name))
         {
             targetName = name;
         }

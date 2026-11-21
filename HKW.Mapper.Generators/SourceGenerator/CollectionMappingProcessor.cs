@@ -143,7 +143,8 @@ internal sealed class CollectionMappingProcessor
         {
             if (
                 TryGetDictionaryTypes(sourceType, out var sourceKey, out var sourceValue) is false
-                || TryGetDictionaryTypes(targetType, out var targetKey, out var targetValue) is false
+                || TryGetDictionaryTypes(targetType, out var targetKey, out var targetValue)
+                    is false
                 || TryGetElementMapping(sourceKey, targetKey, out var keyMap) is false
                 || TryGetElementMapping(sourceValue, targetValue, out var valueMap) is false
             )
@@ -235,7 +236,10 @@ internal sealed class CollectionMappingProcessor
     {
         if (outputKind is not null)
         {
-            if (ConverterMappingProcessor.IsNullable(inputMember.Type) && ConverterMappingProcessor.IsNullable(outputMember.Type) is false)
+            if (
+                ConverterMappingProcessor.IsNullable(inputMember.Type)
+                && ConverterMappingProcessor.IsNullable(outputMember.Type) is false
+            )
             {
                 _context.ClassInfo.ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
@@ -249,9 +253,11 @@ internal sealed class CollectionMappingProcessor
             }
             var selected = BuildSelectExpression(input, outputElement, convert);
             var factory = BuildImmutableCollectionFactory(outputKind, outputElement, selected);
-            var value = ConverterMappingProcessor.IsNullable(inputMember.Type) && ConverterMappingProcessor.IsNullable(outputMember.Type)
-                ? $"{input} is null ? null : {factory}"
-                : factory;
+            var value =
+                ConverterMappingProcessor.IsNullable(inputMember.Type)
+                && ConverterMappingProcessor.IsNullable(outputMember.Type)
+                    ? $"{input} is null ? null : {factory}"
+                    : factory;
             contents.Add($"{output} = {value};");
             return;
         }
@@ -298,7 +304,10 @@ internal sealed class CollectionMappingProcessor
     {
         if (outputKind is not null)
         {
-            if (ConverterMappingProcessor.IsNullable(inputMember.Type) && ConverterMappingProcessor.IsNullable(outputMember.Type) is false)
+            if (
+                ConverterMappingProcessor.IsNullable(inputMember.Type)
+                && ConverterMappingProcessor.IsNullable(outputMember.Type) is false
+            )
             {
                 _context.ClassInfo.ProductionContext.ReportDiagnostic(
                     Diagnostic.Create(
@@ -320,9 +329,11 @@ internal sealed class CollectionMappingProcessor
                 outputValue,
                 selected
             );
-            var value = ConverterMappingProcessor.IsNullable(inputMember.Type) && ConverterMappingProcessor.IsNullable(outputMember.Type)
-                ? $"{input} is null ? null : {factory}"
-                : factory;
+            var value =
+                ConverterMappingProcessor.IsNullable(inputMember.Type)
+                && ConverterMappingProcessor.IsNullable(outputMember.Type)
+                    ? $"{input} is null ? null : {factory}"
+                    : factory;
             contents.Add($"{output} = {value};");
             return;
         }
@@ -369,10 +380,14 @@ internal sealed class CollectionMappingProcessor
     ) =>
         kind switch
         {
-            "ImmutableArray" => $"global::System.Collections.Immutable.ImmutableArray.CreateRange<{element.GetGlobalFullName()}>({values})",
-            "ImmutableList" => $"global::System.Collections.Immutable.ImmutableList.CreateRange<{element.GetGlobalFullName()}>({values})",
-            "ImmutableHashSet" => $"global::System.Collections.Immutable.ImmutableHashSet.CreateRange<{element.GetGlobalFullName()}>({values})",
-            "FrozenSet" => $"global::System.Collections.Frozen.FrozenSet.ToFrozenSet<{element.GetGlobalFullName()}>({values})",
+            "ImmutableArray" =>
+                $"global::System.Collections.Immutable.ImmutableArray.CreateRange<{element.GetGlobalFullName()}>({values})",
+            "ImmutableList" =>
+                $"global::System.Collections.Immutable.ImmutableList.CreateRange<{element.GetGlobalFullName()}>({values})",
+            "ImmutableHashSet" =>
+                $"global::System.Collections.Immutable.ImmutableHashSet.CreateRange<{element.GetGlobalFullName()}>({values})",
+            "FrozenSet" =>
+                $"global::System.Collections.Frozen.FrozenSet.ToFrozenSet<{element.GetGlobalFullName()}>({values})",
             _ => throw new InvalidOperationException(),
         };
 
@@ -384,15 +399,14 @@ internal sealed class CollectionMappingProcessor
     ) =>
         kind switch
         {
-            "ImmutableDictionary" => $"global::System.Collections.Immutable.ImmutableDictionary.CreateRange<{key.GetGlobalFullName()}, {value.GetGlobalFullName()}>({values})",
-            "FrozenDictionary" => $"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary<{key.GetGlobalFullName()}, {value.GetGlobalFullName()}>({values})",
+            "ImmutableDictionary" =>
+                $"global::System.Collections.Immutable.ImmutableDictionary.CreateRange<{key.GetGlobalFullName()}, {value.GetGlobalFullName()}>({values})",
+            "FrozenDictionary" =>
+                $"global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary<{key.GetGlobalFullName()}, {value.GetGlobalFullName()}>({values})",
             _ => throw new InvalidOperationException(),
         };
 
-    private static bool TryGetEnumerableElementType(
-        ITypeSymbol type,
-        out INamedTypeSymbol element
-    )
+    private static bool TryGetEnumerableElementType(ITypeSymbol type, out INamedTypeSymbol element)
     {
         if (type is IArrayTypeSymbol array && array.ElementType is INamedTypeSymbol arrayElement)
         {
@@ -437,7 +451,11 @@ internal sealed class CollectionMappingProcessor
         }
         if (
             TryGetGeneric(type, TypeFullNames.IDictionaryT, out var args)
-            || TryGetGeneric(type, "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>", out args)
+            || TryGetGeneric(
+                type,
+                "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>",
+                out args
+            )
         )
         {
             key = args[0];
@@ -453,7 +471,8 @@ internal sealed class CollectionMappingProcessor
     {
         if (type is not INamedTypeSymbol named)
             return null;
-        var metadataName = $"{named.OriginalDefinition.ContainingNamespace}.{named.OriginalDefinition.MetadataName}";
+        var metadataName =
+            $"{named.OriginalDefinition.ContainingNamespace}.{named.OriginalDefinition.MetadataName}";
         return metadataName switch
         {
             "System.Collections.Immutable.ImmutableArray`1" => "ImmutableArray",
@@ -579,8 +598,7 @@ internal sealed class CollectionMappingProcessor
             (canMapTo || canMapFrom)
             && targetType is INamedTypeSymbol namedTarget
             && namedTarget.InstanceConstructors.Any(c =>
-                c.Parameters.Length == 0
-                && nested!.ClassInfo.IsMappableMember(c)
+                c.Parameters.Length == 0 && nested!.ClassInfo.IsMappableMember(c)
             )
         )
         {

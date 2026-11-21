@@ -33,14 +33,17 @@ internal sealed class CompositeMappingProcessor
     {
         if (
             mapTarget.ConfigInfo?.CompositeConverters.TryGetValue(propertySymbol.Name, out var data)
-                is not true
+            is not true
         )
             return false;
 
         var converterType = (INamedTypeSymbol)data.Property.Type;
         var converterSourceType = converterType.TypeArguments[0];
         var location = data.Property.Locations[0];
-        if (_converters.AreConverterTypesCompatible(converterSourceType, propertySymbol.Type) is false)
+        if (
+            _converters.AreConverterTypesCompatible(converterSourceType, propertySymbol.Type)
+            is false
+        )
         {
             _context.ClassInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(
@@ -118,7 +121,10 @@ internal sealed class CompositeMappingProcessor
             );
             if (targetProperty is null)
                 return;
-            if (_converters.AreConverterTypesCompatible(tupleElements[i].Type, targetProperty.Type) is false)
+            if (
+                _converters.AreConverterTypesCompatible(tupleElements[i].Type, targetProperty.Type)
+                is false
+            )
             {
                 var diagnostic = Diagnostic.Create(
                     Descriptors.CompositeTargetMemberTypeMismatch,
@@ -134,18 +140,12 @@ internal sealed class CompositeMappingProcessor
             targetProperties.Add(targetProperty);
         }
 
-        var mapToCondition = MemberConditionBuilder.GetCondition(
-            attributeInfo,
-            nameof(MapCompositePropertyAttribute.MapToCondition)
-        );
+        var mapToCondition = MemberConditionBuilder.GetCondition(attributeInfo, "MapToCondition");
         var mapFromCondition = MemberConditionBuilder.GetCondition(
             attributeInfo,
-            nameof(MapCompositePropertyAttribute.MapFromCondition)
+            "MapFromCondition"
         );
-        if (
-            mapToCondition is not MapMemberCondition.None
-            && direction.HasFlag(MapDirections.To)
-        )
+        if (mapToCondition is not MapMemberCondition.None && direction.HasFlag(MapDirections.To))
         {
             var unsupportedTargets = targetProperties
                 .Where(x => x.IsInitOnly || x.IsRequired)
@@ -168,7 +168,12 @@ internal sealed class CompositeMappingProcessor
         if (direction == 0)
             return;
         if (
-            _actions.TryReserveTargetProperties(mapTarget, propertySymbol, targetProperties, direction)
+            _actions.TryReserveTargetProperties(
+                mapTarget,
+                propertySymbol,
+                targetProperties,
+                direction
+            )
             is false
         )
             return;
@@ -189,7 +194,7 @@ internal sealed class CompositeMappingProcessor
             $"new global::HKW.Mapper.MapCompositeConvertArgs({MapTargetInfo.SourceParamName}, {MapTargetInfo.TargetParamName}, \"{propertySymbol.AccessPath}\", new global::System.String[] {{ {targetPropertyNameLiterals} }})";
         mapTarget.MapToMethod.Contents.Add("{");
         mapTarget.MapToMethod.Contents.Add(
-            $"var result = {converterExpression}.{nameof(IMapCompositeConverter<object, ValueTuple>.Convert)}({sourceValue}, {convertArgs});"
+            $"var result = {converterExpression}.Convert({sourceValue}, {convertArgs});"
         );
         for (var i = 0; i < targetProperties.Count; i++)
         {
@@ -217,7 +222,7 @@ internal sealed class CompositeMappingProcessor
             )
         );
         var convertedSourceValue =
-            $"{converterExpression}.{nameof(IMapCompositeConverter<object, ValueTuple>.ConvertBack)}(({targetValues}), {convertArgs})";
+            $"{converterExpression}.ConvertBack(({targetValues}), {convertArgs})";
         mapTarget.MapFromMethod.Contents.Add(
             $"{MapTargetInfo.SourceParamName}.{propertySymbol.AccessPath} = {_converters.ConvertExpression(convertedSourceValue, converterSourceType, propertySymbol.Type)};"
         );
@@ -242,10 +247,7 @@ internal sealed class CompositeMappingProcessor
             targetProperties
         );
         _actions.AddAfterPropertyAction(mapTarget, actionProperty);
-        if (
-            direction.HasFlag(MapDirections.To)
-            && targetProperties.Any(x => x.IsInitOnly)
-        )
+        if (direction.HasFlag(MapDirections.To) && targetProperties.Any(x => x.IsInitOnly))
         {
             mapTarget.MapToMethod.Contents.RemoveRange(
                 mapToContentStart,
@@ -293,20 +295,20 @@ internal sealed class CompositeMappingProcessor
             mapTarget,
             attributeInfo,
             attribute,
-            nameof(MapCompositePropertyAttribute.Direction)
+            "Direction"
         );
         if (direction == 0)
             return;
 
         var sourceProperty = propertySymbol;
-        if (
-            attributeInfo.TryGetParam<string>(
-                nameof(MapCompositePropertyAttribute.SourcePath),
-                out var sourcePath
-            )
-        )
+        if (attributeInfo.TryGetParam<string>("SourcePath", out var sourcePath))
         {
-            sourceProperty = _resolver.ResolveSourcePath(mapTarget, propertySymbol, sourcePath, direction);
+            sourceProperty = _resolver.ResolveSourcePath(
+                mapTarget,
+                propertySymbol,
+                sourcePath,
+                direction
+            );
             if (sourceProperty is null)
                 return;
         }
@@ -344,7 +346,10 @@ internal sealed class CompositeMappingProcessor
             return;
         }
         var converterSourceType = converterInterface.TypeArguments[0];
-        if (_converters.AreConverterTypesCompatible(converterSourceType, sourceProperty.Type) is false)
+        if (
+            _converters.AreConverterTypesCompatible(converterSourceType, sourceProperty.Type)
+            is false
+        )
         {
             var diagnostic = Diagnostic.Create(
                 Descriptors.CompositeSourceTypeMismatch,

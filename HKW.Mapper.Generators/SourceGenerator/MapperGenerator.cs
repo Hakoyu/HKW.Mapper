@@ -30,7 +30,14 @@ internal sealed class MapperGenerator
         var collections = new CollectionMappingProcessor(_context);
         var composites = new CompositeMappingProcessor(_context, _actions, converters, resolver);
         _creationFinalizer = new CreationMethodFinalizer(_context);
-        _memberMappings = new MemberMappingProcessor(_context, _actions, collections, composites, converters, resolver);
+        _memberMappings = new MemberMappingProcessor(
+            _context,
+            _actions,
+            collections,
+            composites,
+            converters,
+            resolver
+        );
     }
 
     private void Execute()

@@ -32,17 +32,19 @@ internal sealed class CreationMethodFinalizer
             }
         }
 
-        var requiredMembers = mapTarget.MemberByName.Values
-            .Where(x => x.IsRequired)
+        var requiredMembers = mapTarget
+            .MemberByName.Values.Where(x => x.IsRequired)
             .Distinct()
             .ToArray();
         foreach (var constructorInfo in mapTarget.Constructors)
         {
             var constructor = constructorInfo.Constructor;
-            var setsRequiredMembers = constructor.GetAttributes().Any(x =>
-                x.AttributeClass?.GetGlobalFullName()
+            var setsRequiredMembers = constructor
+                .GetAttributes()
+                .Any(x =>
+                    x.AttributeClass?.GetGlobalFullName()
                     == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"
-            );
+                );
             var missingRequired = setsRequiredMembers
                 ? []
                 : requiredMembers

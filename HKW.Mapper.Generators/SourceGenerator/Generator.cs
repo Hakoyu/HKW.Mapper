@@ -12,16 +12,15 @@ internal partial class Generator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         GeneratorHelper.Initialize();
-        var mapTargetCandidates = GetCandidates(context, typeof(MapTargetAttribute).GetFullName());
-        var mapSourceCandidates = GetCandidates(context, typeof(MapSourceAttribute).GetFullName());
+        var mapTargetCandidates = GetCandidates(context, TypeFullNames.MapTargetAttributeFullName);
+        var mapSourceCandidates = GetCandidates(context, TypeFullNames.MapSourceAttributeFullName);
         var mapSourceConstructorCandidates = GetCandidates(
             context,
-            typeof(MapSourceConstructorAttribute).GetFullName()
+            TypeFullNames.MapSourceConstructorAttributeFullName
         );
 
-        context.RegisterSourceOutput(
-            mapSourceConstructorCandidates,
-            static (spc, candidates) => ValidateMapSourceConstructors(spc, candidates)
+        context.RegisterSourceOutput(mapSourceConstructorCandidates, static (spc, candidates) =>
+            ValidateMapSourceConstructors(spc, candidates)
         );
 
         context.RegisterSourceOutput(
@@ -36,12 +35,18 @@ internal partial class Generator : IIncrementalGenerator
 
                 foreach (var candidate in input.Right.Left)
                 {
-                    var attributes = candidate.Symbol.GetAttributes()
-                        .Where(x => x.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapTargetAttribute)
+                    var attributes = candidate
+                        .Symbol.GetAttributes()
+                        .Where(x =>
+                            x.AttributeClass?.GetGlobalFullName()
+                            == TypeFullNames.MapTargetAttribute
+                        )
                         .ToList();
                     if (attributes.Count == 0)
                         continue;
-                    classInfos.Add(new(spc, compilation, candidate.Syntax, candidate.Symbol, attributes));
+                    classInfos.Add(
+                        new(spc, compilation, candidate.Syntax, candidate.Symbol, attributes)
+                    );
                     declaredNames[candidate.Symbol] = new HashSet<string>(
                         attributes.Select(GetTargetName),
                         StringComparer.Ordinal
@@ -50,8 +55,12 @@ internal partial class Generator : IIncrementalGenerator
 
                 foreach (var candidate in input.Right.Right)
                 {
-                    var attributes = candidate.Symbol.GetAttributes()
-                        .Where(x => x.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapSourceAttribute)
+                    var attributes = candidate
+                        .Symbol.GetAttributes()
+                        .Where(x =>
+                            x.AttributeClass?.GetGlobalFullName()
+                            == TypeFullNames.MapSourceAttribute
+                        )
                         .ToList();
                     if (attributes.Count == 0)
                         continue;
@@ -67,7 +76,12 @@ internal partial class Generator : IIncrementalGenerator
                         continue;
                     }
 
-                    foreach (var sourceGroup in attributes.GroupBy(GetSourceType, SymbolEqualityComparer.Default))
+                    foreach (
+                        var sourceGroup in attributes.GroupBy(
+                            GetSourceType,
+                            SymbolEqualityComparer.Default
+                        )
+                    )
                     {
                         if (sourceGroup.Key is not INamedTypeSymbol sourceType)
                             continue;
@@ -96,8 +110,8 @@ internal partial class Generator : IIncrementalGenerator
                         }
                         if (validAttributes.Count == 0)
                             continue;
-                        var sourceSyntax = sourceType.DeclaringSyntaxReferences
-                            .Select(x => x.GetSyntax())
+                        var sourceSyntax = sourceType
+                            .DeclaringSyntaxReferences.Select(x => x.GetSyntax())
                             .OfType<TypeDeclarationSyntax>()
                             .FirstOrDefault();
                         classInfos.Add(
@@ -117,7 +131,12 @@ internal partial class Generator : IIncrementalGenerator
                 var mapTargetDic = new Dictionary<INamedTypeSymbol, HashSet<MapTargetInfo>>(
                     SymbolEqualityComparer.Default
                 );
-                foreach (var sourceGroup in classInfos.GroupBy(x => x.ClassSymbol, SymbolEqualityComparer.Default))
+                foreach (
+                    var sourceGroup in classInfos.GroupBy(
+                        x => x.ClassSymbol,
+                        SymbolEqualityComparer.Default
+                    )
+                )
                 {
                     if (sourceGroup.Key is INamedTypeSymbol sourceType)
                         mapTargetDic[sourceType] = new(sourceGroup.SelectMany(x => x.MapTargets));
@@ -136,7 +155,8 @@ internal partial class Generator : IIncrementalGenerator
         IncrementalGeneratorInitializationContext context,
         string attributeName
     ) =>
-        context.SyntaxProvider.ForAttributeWithMetadataName(
+        context
+            .SyntaxProvider.ForAttributeWithMetadataName(
                 attributeName,
                 static (node, _) => node is TypeDeclarationSyntax,
                 static (attributeContext, _) =>
@@ -163,14 +183,18 @@ internal partial class Generator : IIncrementalGenerator
     {
         foreach (var candidate in candidates)
         {
-            var constructors = candidate.Symbol.GetAttributes()
+            var constructors = candidate
+                .Symbol.GetAttributes()
                 .Where(x =>
                     x.AttributeClass?.GetGlobalFullName()
                     == TypeFullNames.MapSourceConstructorAttribute
                 )
                 .ToArray();
-            var mapSources = candidate.Symbol.GetAttributes()
-                .Where(x => x.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapSourceAttribute)
+            var mapSources = candidate
+                .Symbol.GetAttributes()
+                .Where(x =>
+                    x.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapSourceAttribute
+                )
                 .ToArray();
             if (IsValidMapSourceContainer(candidate) is false || mapSources.Length == 0)
             {
@@ -209,12 +233,20 @@ internal partial class Generator : IIncrementalGenerator
 
     private static string GetTargetName(AttributeData attribute)
     {
-        var explicitName = attribute.NamedArguments.FirstOrDefault(x => x.Key == nameof(MapTargetAttribute.TargetName)).Value.Value as string;
-        var targetIndex = attribute.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapSourceAttribute ? 1 : 0;
-        var targetType = attribute.ConstructorArguments.Length > targetIndex
-            ? attribute.ConstructorArguments[targetIndex].Value as INamedTypeSymbol
-            : null;
-        return string.IsNullOrWhiteSpace(explicitName) ? targetType?.Name ?? string.Empty : explicitName!;
+        var explicitName =
+            attribute.NamedArguments.FirstOrDefault(x => x.Key == "TargetName").Value.Value
+            as string;
+        var targetIndex =
+            attribute.AttributeClass?.GetGlobalFullName() == TypeFullNames.MapSourceAttribute
+                ? 1
+                : 0;
+        var targetType =
+            attribute.ConstructorArguments.Length > targetIndex
+                ? attribute.ConstructorArguments[targetIndex].Value as INamedTypeSymbol
+                : null;
+        return string.IsNullOrWhiteSpace(explicitName)
+            ? targetType?.Name ?? string.Empty
+            : explicitName!;
     }
 
     private static Location GetLocation(AttributeData attribute) =>

@@ -525,7 +525,7 @@ public sealed class OrderMapperConfig : MapperConfig<Order, OrderDto>
 
 ## 从源码构建
 
-仓库包含库项目、MSTest 测试项目和 BenchmarkDotNet 基准项目。需要安装 .NET SDK 10.0 或兼容当前测试项目的 SDK：
+仓库包含运行时库项目（`HKW.Mapper`）、Roslyn 源生成器项目（`HKW.Mapper.Generators`）和 MSTest 测试项目（`HKW.MapperTest`）。需要安装 .NET SDK 10.0 或兼容当前测试项目的 SDK：
 
 ```bash
 dotnet restore HKW.Mapper.sln
@@ -533,7 +533,7 @@ dotnet build HKW.Mapper.sln --configuration Release
 dotnet test HKW.Mapper.sln
 ```
 
-库项目目标框架为 `netstandard2.0`，测试项目当前目标框架为 `net10.0`。构建库项目还会生成 NuGet 包，包内包含 README 和源生成器分析器组件。
+运行时库和源生成器项目目标框架均为 `netstandard2.0`，测试项目当前目标框架为 `net10.0`。构建 `HKW.Mapper` 会自动生成 NuGet 包：运行时程序集打入 `lib/netstandard2.0/`（零 Roslyn 依赖，兼容 AOT 与裁剪），源生成器与辅助组件打入 `analyzers/dotnet/cs/`。
 
 ## 许可证
 

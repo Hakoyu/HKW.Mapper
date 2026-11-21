@@ -8,6 +8,33 @@ namespace HKW.MapperTest;
 public sealed class DescriptorsTests
 {
     [TestMethod]
+    public void RuntimeAssembly_DoesNotReferenceRoslynOrContainGenerators()
+    {
+        var runtimeAssembly = typeof(MapTargetAttribute).Assembly;
+        var referencedNames = runtimeAssembly
+            .GetReferencedAssemblies()
+            .Select(static assemblyName => assemblyName.Name)
+            .ToArray();
+
+        Assert.IsFalse(
+            referencedNames.Any(static name =>
+                name is not null
+                && (
+                    name.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal)
+                    || string.Equals(name, "HKW.SourceGeneratorUtils", StringComparison.Ordinal)
+                )
+            ),
+            $"Runtime assembly should not reference Roslyn or HKW.SourceGeneratorUtils, actual: {string.Join(", ", referencedNames)}"
+        );
+
+        var allTypes = runtimeAssembly.GetTypes();
+        Assert.IsFalse(
+            allTypes.Any(static type => typeof(IIncrementalGenerator).IsAssignableFrom(type)),
+            "Runtime assembly should not contain Roslyn source generator types."
+        );
+    }
+
+    [TestMethod]
     public void MAP0001_ReportsDuplicateTargetName()
     {
         AssertDiagnostic(
@@ -106,7 +133,7 @@ public sealed class DescriptorsTests
                 public int Field;
             }
 
-            public sealed class Config : MapperConfig<Source, Target>
+            public sealed class Config : MapperConfigBase<Source, Target>
             {
                 public Config(Source source, Target target) : base(source, target) { }
 
@@ -380,7 +407,7 @@ public sealed class DescriptorsTests
             public sealed class Source;
             public sealed class OtherSource;
             public sealed class Target;
-            public sealed class Config : MapperConfig<OtherSource, Target>
+            public sealed class Config : MapperConfigBase<OtherSource, Target>
             {
                 public Config(OtherSource source, Target target) : base(source, target) { }
             }
@@ -604,7 +631,7 @@ public sealed class DescriptorsTests
             [MapTarget(typeof(Target), typeof(Config))]
             public sealed class Source { public int Value { get; set; } }
             public sealed class Target { public int Value { get; set; } }
-            public sealed class Config : MapperConfig<Source, Target>
+            public sealed class Config : MapperConfigBase<Source, Target>
             {
                 public Config(Source source, Target target) : base(source, target) { }
                 public string[] IgnoreProperties { get; } = [nameof(Source.Value)];
@@ -1373,7 +1400,7 @@ public sealed class DescriptorsTests
                 public required object Obj { get; set; }
             }
 
-            public sealed class Config : MapperConfig<Model, Model>
+            public sealed class Config : MapperConfigBase<Model, Model>
             {
                 public Config(Model source, Model target) : base(source, target) { }
 
@@ -1390,44 +1417,44 @@ public sealed class DescriptorsTests
         var sources = new[]
         {
             """
-            [MapTarget(typeof(Model), MapFields = true)]
-            public sealed partial class Model
-            {
-                public Model() { }
-                [MapIgnoreField]
-                public required object Value;
-            }
-            """,
+                [MapTarget(typeof(Model), MapFields = true)]
+                public sealed partial class Model
+                {
+                    public Model() { }
+                    [MapIgnoreField]
+                    public required object Value;
+                }
+                """,
             """
-            [MapTarget(typeof(Model), MapFields = true, IgnoreFields = new[] { nameof(Model.Value) })]
-            public sealed partial class Model
-            {
-                public Model() { }
-                public required object Value;
-            }
-            """,
+                [MapTarget(typeof(Model), MapFields = true, IgnoreFields = new[] { nameof(Model.Value) })]
+                public sealed partial class Model
+                {
+                    public Model() { }
+                    public required object Value;
+                }
+                """,
             """
-            [MapTarget(typeof(Model), typeof(Config), MapFields = true)]
-            public sealed partial class Model
-            {
-                public Model() { }
-                public required object Value;
-            }
-            public sealed class Config : MapperConfig<Model, Model>
-            {
-                public Config(Model source, Model target) : base(source, target) { }
-                public string[] IgnoreFields { get; } = [nameof(Model.Value)];
-            }
-            """,
+                [MapTarget(typeof(Model), typeof(Config), MapFields = true)]
+                public sealed partial class Model
+                {
+                    public Model() { }
+                    public required object Value;
+                }
+                public sealed class Config : MapperConfigBase<Model, Model>
+                {
+                    public Config(Model source, Model target) : base(source, target) { }
+                    public string[] IgnoreFields { get; } = [nameof(Model.Value)];
+                }
+                """,
             """
-            [MapTarget(typeof(Model), MapFields = true)]
-            public sealed partial class Model
-            {
-                public Model() { }
-                [MapField(typeof(Model), Ignore = true)]
-                public required object Value;
-            }
-            """,
+                [MapTarget(typeof(Model), MapFields = true)]
+                public sealed partial class Model
+                {
+                    public Model() { }
+                    [MapField(typeof(Model), Ignore = true)]
+                    public required object Value;
+                }
+                """,
         };
 
         foreach (var source in sources)
@@ -1644,7 +1671,7 @@ public sealed class DescriptorsTests
             [MapTarget(typeof(Target), typeof(Config))]
             public sealed class Source { public int Value { get; set; } }
             public sealed class Target { public int Value { get; set; } }
-            public sealed class Config : MapperConfig<Source, Target>
+            public sealed class Config : MapperConfigBase<Source, Target>
             {
                 public Config(Source source, Target target) : base(source, target) { }
                 public string[] IgnoreProperties { get; } = GetIgnored();
@@ -1811,7 +1838,7 @@ public sealed class DescriptorsTests
             [MapTarget(typeof(Target), typeof(Config))]
             public sealed class Source { {{sourceMember}} }
             public sealed class Target { {{targetMembers}} }
-            public sealed class Config : MapperConfig<Source, Target>
+            public sealed class Config : MapperConfigBase<Source, Target>
             {
                 public Config(Source source, Target target) : base(source, target) { }
                 {{member}}
@@ -1883,12 +1910,7 @@ public sealed class DescriptorsTests
             string.Join(Environment.NewLine, inputErrors.Select(d => d.ToString()))
         );
 
-        var generatorType = typeof(MapTargetAttribute).Assembly.GetType(
-            "HKW.Mapper.SourceGenerator.Generator",
-            throwOnError: true
-        )!;
-        var generator = (IIncrementalGenerator)
-            Activator.CreateInstance(generatorType, nonPublic: true)!;
+        var generator = new HKW.Mapper.SourceGenerator.Generator();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [generator.AsSourceGenerator()],
             parseOptions: parseOptions

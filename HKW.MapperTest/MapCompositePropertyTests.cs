@@ -37,30 +37,21 @@ public sealed class MapCompositePropertyTests
     [TestMethod]
     public void CompositePropertySupportsFullSourcePathBothDirections()
     {
-        var source = new CompositePropertySourcePathSource
-        {
-            Node = new() { Value = new(23, 29) },
-        };
+        var source = new CompositePropertySourcePathSource { Node = new() { Value = new(23, 29) } };
         var target = new CompositePropertySourcePathTarget();
 
         source.MapTo(target);
 
         Assert.AreEqual(23, target.Low);
         Assert.AreEqual(29, target.High);
-        Assert.AreEqual(
-            "Node.Value",
-            CompositePropertySourcePathConverter.LastSourcePropertyName
-        );
+        Assert.AreEqual("Node.Value", CompositePropertySourcePathConverter.LastSourcePropertyName);
 
         target.Low = 31;
         target.High = 37;
         source.MapFrom(target);
 
         Assert.AreEqual(new CompositePropertySourcePathValue(31, 37), source.Node.Value);
-        Assert.AreEqual(
-            "Node.Value",
-            CompositePropertySourcePathConverter.LastSourcePropertyName
-        );
+        Assert.AreEqual("Node.Value", CompositePropertySourcePathConverter.LastSourcePropertyName);
     }
 
     [TestMethod]
@@ -123,10 +114,7 @@ public sealed class MapCompositePropertyTests
 public readonly record struct CompositePropertySelectionValue(int First, int Second);
 
 [MapTarget(typeof(CompositePropertyTypeSelectionTarget))]
-[MapTarget(
-    typeof(CompositePropertyNameSelectionTarget),
-    TargetName = "CompositePropertyNamed"
-)]
+[MapTarget(typeof(CompositePropertyNameSelectionTarget), TargetName = "CompositePropertyNamed")]
 public sealed class CompositePropertySelectionSource
 {
     [MapCompositeProperty(
@@ -220,11 +208,7 @@ public sealed class CompositePropertySourcePathConverter
     }
 }
 
-public readonly record struct CompositePropertyWiringValue(
-    int Number,
-    string Text,
-    bool Enabled
-);
+public readonly record struct CompositePropertyWiringValue(int Number, string Text, bool Enabled);
 
 [MapTarget(typeof(CompositePropertyWiringTarget))]
 public sealed class CompositePropertyWiringSource

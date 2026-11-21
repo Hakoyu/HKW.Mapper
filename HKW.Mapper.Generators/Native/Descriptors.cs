@@ -160,14 +160,15 @@ internal static class Descriptors
         isEnabledByDefault: true
     );
 
-    public static readonly DiagnosticDescriptor ConverterDoesNotImplementIMapCompositeConverter = new(
-        id: "MAP0019",
-        title: "Converter does not implement IMapCompositeConverter",
-        messageFormat: "Converter '{0}' must implement IMapCompositeConverter<TSourceValue, TTargetValues>.",
-        category: _category,
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true
-    );
+    public static readonly DiagnosticDescriptor ConverterDoesNotImplementIMapCompositeConverter =
+        new(
+            id: "MAP0019",
+            title: "Converter does not implement IMapCompositeConverter",
+            messageFormat: "Converter '{0}' must implement IMapCompositeConverter<TSourceValue, TTargetValues>.",
+            category: _category,
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true
+        );
     public static readonly DiagnosticDescriptor CompositeConverterRequiresTuple = new(
         id: "MAP0020",
         title: "Composite converter requires a tuple",

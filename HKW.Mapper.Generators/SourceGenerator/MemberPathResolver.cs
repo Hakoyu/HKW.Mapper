@@ -57,11 +57,7 @@ internal sealed class MemberPathResolver
             ReportTargetAccessorDiagnostic(property, targetProperty, "field");
             return null;
         }
-        if (
-            property.IsField
-            && direction.HasFlag(MapDirections.From)
-            && property.IsReadOnly
-        )
+        if (property.IsField && direction.HasFlag(MapDirections.From) && property.IsReadOnly)
         {
             _context.ClassInfo.ProductionContext.ReportDiagnostic(
                 Diagnostic.Create(

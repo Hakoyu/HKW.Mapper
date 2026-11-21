@@ -18,8 +18,9 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\HKW.Mapper\HKW.Mapper.csproj" />
     <ProjectReference
-      Include="..\HKW.Mapper\HKW.Mapper.csproj"
+      Include="..\HKW.Mapper.Generators\HKW.Mapper.Generators.csproj"
       OutputItemType="Analyzer"
       ReferenceOutputAssembly="true"
     />
